@@ -1,0 +1,43 @@
+{% extends 'admin/master.html' %}
+{% block body %}
+<div class="container" style="max-width:640px; margin-top:20px;">
+  <h2>Adjust Stock — {{ product.name }} ({{ product.sku }})</h2>
+  <p>Current stock: <strong>{{ product.stock }}</strong></p>
+
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% for category, message in messages %}
+      <div class="alert alert-{{ 'danger' if category == 'error' else 'success' }}">{{ message }}</div>
+    {% endfor %}
+  {% endwith %}
+
+  <form method="post" class="form">
+    <div class="form-group">
+      <label>Quantity change</label>
+      <input type="number" name="change_qty" class="form-control" placeholder="e.g. 50 to add, -3 to remove" required>
+      <small class="form-text text-muted">Positive number adds stock (new stock in). Negative number removes stock (damaged, correction, etc).</small>
+    </div>
+    <div class="form-group">
+      <label>Reason</label>
+      <input type="text" name="reason" class="form-control" placeholder="e.g. New Stock, Damaged, Correction">
+    </div>
+    <button type="submit" class="btn btn-primary">Save Adjustment</button>
+    <a href="{{ url_for('product.index_view') }}" class="btn btn-default">Cancel</a>
+  </form>
+
+  <h4 style="margin-top:24px;">Recent stock log</h4>
+  <table class="table table-striped">
+    <thead><tr><th>Date</th><th>Change</th><th>Reason</th></tr></thead>
+    <tbody>
+      {% for log in logs %}
+      <tr>
+        <td>{{ log.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
+        <td>{{ log.change_qty }}</td>
+        <td>{{ log.reason }}</td>
+      </tr>
+      {% else %}
+      <tr><td colspan="3">No stock movements yet.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}
