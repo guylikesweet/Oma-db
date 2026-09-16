@@ -1,0 +1,74 @@
+{% extends 'base_standalone.html' %}
+{% block title %}Sale #{{ sale.id }}{% endblock %}
+{% block body %}
+<div class="container" style="max-width:900px; margin-top:20px;">
+  <h2>Sale #{{ sale.id }} — {{ sale.customer_name }}</h2>
+
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% for category, message in messages %}
+      <div class="alert alert-{{ 'danger' if category == 'error' else 'success' }}">{{ message }}</div>
+    {% endfor %}
+  {% endwith %}
+
+  <table class="table table-borderless" style="max-width:500px;">
+    <tr><th>Status</th><td><span class="label label-info">{{ sale.order_status }}</span></td></tr>
+    <tr><th>Payment</th><td>{{ sale.payment_status }}</td></tr>
+    <tr><th>Phone</th><td>{{ sale.customer_phone }}</td></tr>
+    <tr><th>Address</th><td>{{ sale.customer_address }}</td></tr>
+    <tr><th>State</th><td>{{ sale.customer_state }}</td></tr>
+    <tr><th>Notes</th><td>{{ sale.notes }}</td></tr>
+  </table>
+
+  <h4>Items</h4>
+  <table class="table table-striped">
+    <thead>
+      <tr><th>Product</th><th>Qty</th><th>Unit Price</th><th>Unit Cost</th><th>Line CBM</th><th>Line Shipping Est.</th></tr>
+    </thead>
+    <tbody>
+      {% for item in sale.items %}
+      <tr>
+        <td>{{ item.product.name if item.product else 'Product #' ~ item.product_id }}</td>
+        <td>{{ item.qty }}</td>
+        <td>{{ item.unit_price }}</td>
+        <td>{{ item.unit_cost }}</td>
+        <td>{{ item.line_cbm }}</td>
+        <td>{{ item.line_shipping_estimate }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <table class="table table-borderless" style="max-width:400px;">
+    <tr><th>Subtotal</th><td>{{ sale.subtotal_amount }}</td></tr>
+    <tr><th>Estimated Shipping</th><td>{{ sale.estimated_shipping_cost }}</td></tr>
+    <tr><th>Total</th><td><strong>{{ sale.total_amount }}</strong></td></tr>
+    <tr><th>Profit</th><td>{{ sale.profit }}</td></tr>
+  </table>
+
+  <h4 style="margin-top:20px;">Shipping</h4>
+  {% if sale.shipping %}
+  <p>
+    Status: <span class="badge badge-info">{{ sale.shipping.shipping_status }}</span>
+    &nbsp; Tracking: {{ sale.shipping.tracking_number or '—' }}
+    &nbsp; <a href="{{ url_for('shipping.shipping_detail', shipping_id=sale.shipping.id) }}">View / Update</a>
+  </p>
+  {% elif sale.order_status == 'Packed' %}
+  <p><a href="{{ url_for('shipping.new_shipping', sale_id=sale.id) }}" class="btn btn-primary btn-sm">Create Shipment</a></p>
+  {% else %}
+  <p class="text-muted">Sale must be marked "Packed" before a shipment can be created.</p>
+  {% endif %}
+
+  <h4 style="margin-top:20px;">Update Status</h4>
+  <form method="post" action="{{ url_for('sales.set_status', sale_id=sale.id) }}" style="display:inline-block; margin-right:8px;">
+    <input type="hidden" name="order_status" value="Packed">
+    <button type="submit" class="btn btn-default btn-sm" {{ 'disabled' if sale.order_status in ('Cancelled','Packed','Shipped','Delivered') }}>Mark Packed</button>
+  </form>
+  <form method="post" action="{{ url_for('sales.set_status', sale_id=sale.id) }}" style="display:inline-block;">
+    <input type="hidden" name="order_status" value="Cancelled">
+    <button type="submit" class="btn btn-danger btn-sm" {{ 'disabled' if sale.order_status in ('Cancelled','Delivered') }}
+      onclick="return confirm('Cancel this sale? Stock will be restored.');">Cancel Sale (restock)</button>
+  </form>
+
+  <p style="margin-top:20px;"><a href="{{ url_for('sale.index_view') }}">&larr; Back to Sales list</a></p>
+</div>
+{% endblock %}
