@@ -1,0 +1,48 @@
+{% extends 'base_standalone.html' %}
+{% block title %}Reports{% endblock %}
+{% block body %}
+<div class="container" style="max-width:1000px; margin-top:20px;">
+  <h2>Sales Report</h2>
+
+  <form method="get" class="form-inline" style="margin-bottom:16px;">
+    <label style="margin-right:6px;">From</label>
+    <input type="date" name="start_date" class="form-control" value="{{ start_date.isoformat() }}" style="margin-right:12px;">
+    <label style="margin-right:6px;">To</label>
+    <input type="date" name="end_date" class="form-control" value="{{ end_date.isoformat() }}" style="margin-right:12px;">
+    <button type="submit" class="btn btn-primary">Filter</button>
+  </form>
+
+  <div style="margin-bottom:16px;">
+    <a class="btn btn-default btn-sm" href="{{ url_for('reports.sales_csv', start_date=start_date.isoformat(), end_date=end_date.isoformat()) }}">Export Sales CSV (this range)</a>
+    <a class="btn btn-default btn-sm" href="{{ url_for('reports.shipping_csv') }}">Export Shipping CSV (all)</a>
+    <a class="btn btn-default btn-sm" href="{{ url_for('reports.inventory_csv') }}">Export Inventory CSV (all)</a>
+  </div>
+
+  <table class="table table-borderless" style="max-width:600px;">
+    <tr><th>Subtotal</th><td>{{ '{:,.2f}'.format(totals.subtotal) }}</td></tr>
+    <tr><th>Estimated Shipping</th><td>{{ '{:,.2f}'.format(totals.shipping) }}</td></tr>
+    <tr><th>Total</th><td><strong>{{ '{:,.2f}'.format(totals.total) }}</strong></td></tr>
+    <tr><th>Profit</th><td>{{ '{:,.2f}'.format(totals.profit) }}</td></tr>
+  </table>
+
+  <table class="table table-striped">
+    <thead>
+      <tr><th>Date</th><th>Customer</th><th>State</th><th>Status</th><th>Total</th><th>Profit</th></tr>
+    </thead>
+    <tbody>
+      {% for s in sales %}
+      <tr>
+        <td>{{ s.sale_date }}</td>
+        <td><a href="{{ url_for('sales.sale_detail', sale_id=s.id) }}">{{ s.customer_name }}</a></td>
+        <td>{{ s.customer_state }}</td>
+        <td>{{ s.order_status }}</td>
+        <td>{{ s.total_amount }}</td>
+        <td>{{ s.profit }}</td>
+      </tr>
+      {% else %}
+      <tr><td colspan="6">No sales in this range.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}
