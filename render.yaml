@@ -1,0 +1,19 @@
+services:
+  - type: web
+    name: logistics-app
+    env: python
+    plan: free
+    buildCommand: "pip install -r requirements.txt && flask db upgrade"
+    startCommand: "gunicorn run:app"
+    healthCheckPath: /healthz
+    envVars:
+      - key: FLASK_APP
+        value: run.py
+      - key: SECRET_KEY
+        sync: false          # set manually in Render dashboard — do not commit real value
+      - key: DATABASE_URL
+        sync: false          # your Neon connection string — set manually in Render dashboard
+      - key: ADMIN_USERNAME
+        sync: false
+      - key: ADMIN_PASSWORD
+        sync: false          # after first deploy, run `flask seed-admin` once via Render Shell
