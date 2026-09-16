@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>{% block title %}Sales{% endblock %}</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/4.6.2/css/bootstrap.min.css">
+  <style>
+    body { background:#f4f5f7; }
+    .topbar { background:#212529; padding:10px 20px; margin-bottom:10px; }
+    .topbar a { color:#fff; text-decoration:none; margin-right:16px; font-size:14px; }
+    .topbar a:hover { color:#9ec5fe; }
+  </style>
+</head>
+<body>
+  <div class="topbar">
+    <a href="{{ url_for('admin.index') }}">&larr; Admin Home</a>
+    <a href="{{ url_for('product.index_view') }}">Products</a>
+    <a href="{{ url_for('sale.index_view') }}">Sales</a>
+    <a href="{{ url_for('sales.new_sale') }}">+ New Sale</a>
+    <a href="{{ url_for('shipping.search') }}">Track Shipment</a>
+    <a href="{{ url_for('reports.index') }}">Reports</a>
+  </div>
+  {% block body %}{% endblock %}
+</body>
+</html>
