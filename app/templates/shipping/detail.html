@@ -1,0 +1,46 @@
+{% extends 'base_standalone.html' %}
+{% block title %}Shipment #{{ shipping.id }}{% endblock %}
+{% block body %}
+<div class="container" style="max-width:700px; margin-top:20px;">
+  <h2>Shipment #{{ shipping.id }} — Sale #{{ shipping.sale_id }}</h2>
+
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% for category, message in messages %}
+      <div class="alert alert-{{ 'danger' if category == 'error' else 'success' }}">{{ message }}</div>
+    {% endfor %}
+  {% endwith %}
+
+  <table class="table table-borderless" style="max-width:500px;">
+    <tr><th>Status</th><td><span class="label label-info">{{ shipping.shipping_status }}</span></td></tr>
+    <tr><th>Total CBM</th><td>{{ shipping.total_cbm }}</td></tr>
+    <tr><th>Chargeable Weight (kg)</th><td>{{ shipping.chargeable_weight_kg }}</td></tr>
+    <tr><th>Shipped At</th><td>{{ shipping.shipped_at }}</td></tr>
+    <tr><th>Delivered At</th><td>{{ shipping.delivered_at or '—' }}</td></tr>
+  </table>
+
+  <form method="post" action="{{ url_for('shipping.update', shipping_id=shipping.id) }}">
+    <div class="form-group">
+      <label>Courier</label>
+      <input type="text" name="courier" class="form-control" value="{{ shipping.courier or '' }}">
+    </div>
+    <div class="form-group">
+      <label>Tracking Number</label>
+      <input type="text" name="tracking_number" class="form-control" value="{{ shipping.tracking_number or '' }}">
+    </div>
+    <div class="form-group">
+      <label>Status</label>
+      <select name="shipping_status" class="form-control">
+        {% for s in ['Processing', 'Shipped', 'In Transit', 'Delivered'] %}
+        <option value="{{ s }}" {{ 'selected' if shipping.shipping_status == s }}>{{ s }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="form-group">
+      <label>Notes</label>
+      <input type="text" name="notes" class="form-control" value="{{ shipping.notes or '' }}">
+    </div>
+    <button type="submit" class="btn btn-primary">Save</button>
+    <a href="{{ url_for('sales.sale_detail', sale_id=shipping.sale_id) }}" class="btn btn-default">Back to Sale</a>
+  </form>
+</div>
+{% endblock %}
