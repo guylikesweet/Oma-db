@@ -1,4 +1,4 @@
-from flask import Flask
+from flask import Flask, redirect, url_for
 from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
 from flask_login import LoginManager
@@ -23,10 +23,27 @@ def create_app(config_object="config.Config"):
         from app.auth import auth_bp
         app.register_blueprint(auth_bp)
 
+        from app.sales import sales_bp
+        app.register_blueprint(sales_bp)
+
+        from app.shipping import shipping_bp
+        app.register_blueprint(shipping_bp)
+
+        from app.reports import reports_bp
+        app.register_blueprint(reports_bp)
+
         from app.admin_views import init_admin
         init_admin(app)
 
         register_cli(app)
+
+    @app.route("/")
+    def root():
+        return redirect(url_for("admin.index"))
+
+    @app.route("/healthz")
+    def healthz():
+        return {"status": "ok"}, 200
 
     return app
 

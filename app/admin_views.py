@@ -1,6 +1,7 @@
 from flask import redirect, url_for, request, flash
 from flask_admin import Admin, AdminIndexView, expose
 from flask_admin.contrib.sqla import ModelView
+from flask_admin.menu import MenuLink
 from flask_login import current_user
 from werkzeug.security import generate_password_hash
 from markupsafe import Markup
@@ -34,6 +35,21 @@ class SecureAdminIndexView(AdminIndexView):
 
     def inaccessible_callback(self, name, **kwargs):
         return redirect(url_for("auth.login", next=request.url))
+
+    @expose("/")
+    def index(self):
+        if not self.is_accessible():
+            return self.inaccessible_callback("index")
+
+        from app.services.dashboard import get_kpis, get_sales_last_30_days
+        kpis = get_kpis()
+        chart_labels, chart_values = get_sales_last_30_days()
+        return self.render(
+            "admin/dashboard.html",
+            kpis=kpis,
+            chart_labels=chart_labels,
+            chart_values=chart_values,
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -126,30 +142,58 @@ class CourierRateView(SecureModelView):
 class SaleView(SecureModelView):
     column_list = (
         "id", "sale_date", "customer_name", "customer_state", "order_status",
-        "subtotal_amount", "estimated_shipping_cost", "total_amount", "profit", "payment_status",
+        "subtotal_amount", "estimated_shipping_cost", "total_amount", "profit",
+        "payment_status", "sale_link",
     )
+    column_labels = {"sale_link": "Details"}
     column_searchable_list = ("customer_name", "customer_phone")
     column_filters = ("order_status", "payment_status", "customer_state", "sale_date")
-    # Full item-line creation logic (Module D) arrives in Stage 3.
-    form_columns = (
-        "customer_name", "customer_phone", "customer_address", "customer_state",
-        "order_status", "payment_status", "notes",
-    )
+
+    # Sales must be created through /sales/new so totals, stock deduction, and the
+    # stock_log audit trail all happen atomically via app/services/sales.py.
+    # Editing totals directly here would desync them from the actual line items.
+    can_create = False
+    can_edit = False
+    can_delete = False
+
+    def _sale_link_formatter(view, context, model, name):
+        url = url_for("sales.sale_detail", sale_id=model.id)
+        return Markup(f'<a href="{url}" class="btn btn-xs btn-primary">View / Update Status</a>')
+
+    column_formatters = {"sale_link": _sale_link_formatter}
+
+    @expose("/new-redirect")
+    def new_redirect(self):
+        return redirect(url_for("sales.new_sale"))
 
 
 class SaleItemView(SecureModelView):
     column_list = ("id", "sale_id", "product_id", "qty", "unit_cost", "unit_price", "line_shipping_estimate")
-    form_columns = ("sale_id", "product_id", "qty", "unit_cost", "unit_price")
+    can_create = False  # items are only ever written by app/services/sales.create_sale
+    can_edit = False
+    can_delete = False
 
 
 class ShippingView(SecureModelView):
     column_list = (
         "id", "sale_id", "courier", "tracking_number",
-        "chargeable_weight_kg", "total_cbm", "shipping_status", "shipped_at", "delivered_at",
+        "chargeable_weight_kg", "total_cbm", "shipping_status", "shipped_at", "delivered_at", "shipping_link",
     )
-    form_columns = ("sale_id", "courier", "tracking_number", "shipping_status", "notes")
+    column_labels = {"shipping_link": "Details"}
     column_filters = ("shipping_status",)
     column_searchable_list = ("tracking_number",)
+
+    # Shipments are created from a Packed sale (auto-fills total_cbm / chargeable_weight_kg)
+    # and updated via app/services/shipping.py, never hand-edited here.
+    can_create = False
+    can_edit = False
+    can_delete = False
+
+    def _shipping_link_formatter(view, context, model, name):
+        url = url_for("shipping.shipping_detail", shipping_id=model.id)
+        return Markup(f'<a href="{url}" class="btn btn-xs btn-primary">View / Update</a>')
+
+    column_formatters = {"shipping_link": _shipping_link_formatter}
 
 
 class StockLogView(SecureModelView):
@@ -168,9 +212,12 @@ def init_admin(app):
     )
 
     admin.add_view(ProductView(Product, db.session, name="Products", endpoint="product"))
+    admin.add_link(MenuLink(name="+ New Sale", url="/sales/new"))
     admin.add_view(SaleView(Sale, db.session, name="Sales"))
     admin.add_view(SaleItemView(SaleItem, db.session, name="Sale Items"))
-    admin.add_view(ShippingView(Shipping, db.session, name="Shipping"))
+    admin.add_view(ShippingView(Shipping, db.session, name="Shipping", endpoint="shippingadmin"))
+    admin.add_link(MenuLink(name="Track Shipment", url="/shipping/search"))
+    admin.add_link(MenuLink(name="Reports", url="/reports/"))
     admin.add_view(CourierRateView(CourierRate, db.session, name="Courier Rates"))
     admin.add_view(StockLogView(StockLog, db.session, name="Stock Log"))
     admin.add_view(UserView(User, db.session, name="Admin Users"))
