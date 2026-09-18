@@ -1,0 +1,60 @@
+{% extends 'base_standalone.html' %}
+{% block title %}Delivery #{{ delivery.id }}{% endblock %}
+{% block body %}
+<div class="container" style="max-width:900px; margin-top:20px;">
+  <h2>Delivery #{{ delivery.id }}</h2>
+  <p>
+    <span class="label label-info">{{ delivery.status }}</span>
+    {% if delivery.is_consolidated %}
+    <span class="label label-warning">Consolidated ({{ delivery.consolidation_type }})</span>
+    {% endif %}
+  </p>
+
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% for category, message in messages %}
+      <div class="alert alert-{{ 'danger' if category == 'error' else 'success' }}">{{ message }}</div>
+    {% endfor %}
+  {% endwith %}
+
+  <table class="table table-borderless" style="max-width:500px;">
+    <tr><th>Method</th><td>{{ delivery.method }}</td></tr>
+    <tr><th>Delivery Address</th><td>{{ delivery.delivery_address }}</td></tr>
+    <tr><th>Created</th><td>{{ delivery.created_at }}</td></tr>
+    <tr><th>Delivered At</th><td>{{ delivery.delivered_at or '—' }}</td></tr>
+    <tr><th>Notes</th><td>{{ delivery.notes or '—' }}</td></tr>
+  </table>
+
+  <div style="margin-bottom:16px;">
+    <form method="post" action="{{ url_for('delivery.set_status', delivery_id=delivery.id) }}" style="display:inline-block; margin-right:8px;">
+      <input type="hidden" name="status" value="Out for Delivery">
+      <button type="submit" class="btn btn-default btn-sm" {{ 'disabled' if delivery.status != 'Pending' }}>Mark Out for Delivery</button>
+    </form>
+    <form method="post" action="{{ url_for('delivery.set_status', delivery_id=delivery.id) }}" style="display:inline-block;">
+      <input type="hidden" name="status" value="Delivered">
+      <button type="submit" class="btn btn-primary btn-sm" {{ 'disabled' if delivery.status == 'Delivered' }}>Mark Delivered</button>
+    </form>
+  </div>
+
+  <h4>Sales in this parcel ({{ delivery.sales|length }})</h4>
+  {% for sale in delivery.sales %}
+  <div style="border:1px solid #eee; border-radius:6px; padding:10px; margin-bottom:10px;">
+    <strong><a href="{{ url_for('sales.sale_detail', sale_id=sale.id) }}">Sale #{{ sale.id }}</a></strong>
+    — {{ sale.customer_name }} ({{ sale.customer_phone }}), {{ sale.customer_state }}
+    <table class="table table-sm" style="margin-top:6px;">
+      <thead><tr><th>Product</th><th>Variant</th><th>Qty</th></tr></thead>
+      <tbody>
+        {% for item in sale.items %}
+        <tr>
+          <td>{{ item.product.name if item.product else item.product_id }}</td>
+          <td>{{ item.variant_note or '—' }}</td>
+          <td>{{ item.qty }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endfor %}
+
+  <p><a href="{{ url_for('delivery.ready') }}">&larr; Back to Ready for Delivery</a></p>
+</div>
+{% endblock %}
