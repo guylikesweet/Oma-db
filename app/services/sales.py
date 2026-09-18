@@ -8,6 +8,7 @@ Implements the Key Logic Rules exactly:
   6. sales.profit                   = subtotal_amount - SUM(unit_cost*qty) - estimated_shipping_cost
 """
 from decimal import Decimal
+from datetime import date, timedelta
 
 from app import db
 from app.models import Sale, SaleItem, Product, CourierRate, StockLog
@@ -27,7 +28,7 @@ def _get_rate_for_state(state):
 def create_sale(customer_name, customer_phone, customer_address, customer_state,
                  payment_status, notes, line_items):
     """
-    line_items: list of dicts: {"product_id": int, "qty": int, "unit_price": Decimal}
+    line_items: list of dicts: {"product_id": int, "qty": int, "unit_price": Decimal, "variant_note": str (optional)}
     Returns the created Sale. Raises SaleValidationError on any problem — nothing
     is written to the database if validation fails (atomic).
     """
@@ -61,6 +62,9 @@ def create_sale(customer_name, customer_phone, customer_address, customer_state,
         notes=notes,
         order_status="New",
     )
+    sale.sale_date = date.today()
+    sale.estimated_arrival_start = sale.sale_date + timedelta(days=60)
+    sale.estimated_arrival_end = sale.sale_date + timedelta(days=70)
     db.session.add(sale)
     db.session.flush()  # assigns sale.id, needed for stock_log "Sale #<id>" reason
 
@@ -87,6 +91,7 @@ def create_sale(customer_name, customer_phone, customer_address, customer_state,
             line_cbm=line_cbm,
             line_volumetric_kg=line_volumetric_kg,
             line_shipping_estimate=line_shipping_estimate,
+            variant_note=line.get("variant_note") or None,
         ))
 
         # Deduct stock + audit trail
