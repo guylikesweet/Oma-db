@@ -1,3 +1,4 @@
+from itertools import zip_longest
 from flask import Blueprint, render_template, request, redirect, url_for, flash
 from flask_login import login_required
 
@@ -14,9 +15,10 @@ def new_sale():
         product_ids = request.form.getlist("product_id[]")
         qtys = request.form.getlist("qty[]")
         unit_prices = request.form.getlist("unit_price[]")
+        variant_notes = request.form.getlist("variant_note[]")
 
         line_items = []
-        for pid, qty, price in zip(product_ids, qtys, unit_prices):
+        for pid, qty, price, variant_note in zip_longest(product_ids, qtys, unit_prices, variant_notes, fillvalue=""):
             if not pid:
                 continue
             try:
@@ -24,6 +26,7 @@ def new_sale():
                     "product_id": int(pid),
                     "qty": int(qty),
                     "unit_price": price,
+                    "variant_note": variant_note.strip() if variant_note else None,
                 })
             except (ValueError, TypeError):
                 flash("Every line needs a valid quantity and price.", "error")

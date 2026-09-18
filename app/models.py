@@ -54,6 +54,11 @@ class Product(db.Model):
     stock = db.Column(db.Integer, default=0)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
+    # Stage 6: reference-only estimate using a flat default rate (not state-specific).
+    # Recomputed in app code (not a Postgres GENERATED column) because it depends on
+    # MonthlyShippingRate, a separate table — see app/services/rates.py.
+    estimated_shipping_cost = db.Column(db.Numeric(12, 2))
+
     sale_items = db.relationship("SaleItem", backref="product", lazy=True)
     stock_logs = db.relationship("StockLog", backref="product", lazy=True)
 
@@ -73,6 +78,82 @@ class CourierRate(db.Model):
 
     def __repr__(self):
         return f"<CourierRate {self.state}: {self.rate_per_cbm}>"
+
+
+# ---------------------------------------------------------------------------
+# MONTHLY_SHIPPING_RATES — Stage 6. The flat CBM rate changes month to month;
+# this table lets it be recorded per month so the correct historical rate can
+# be looked up later (e.g. when a batch arrives and the final cost is locked in).
+# ---------------------------------------------------------------------------
+class MonthlyShippingRate(db.Model):
+    __tablename__ = "monthly_shipping_rates"
+
+    id = db.Column(db.Integer, primary_key=True)
+    month = db.Column(db.Date, nullable=False, unique=True)  # always stored as the 1st of the month
+    rate_per_cbm = db.Column(db.Numeric(12, 2), nullable=False)
+
+    def __repr__(self):
+        return f"<MonthlyShippingRate {self.month.strftime('%Y-%m')}: {self.rate_per_cbm}>"
+
+
+# ---------------------------------------------------------------------------
+# SHIPMENT_BATCHES — Stage 6. An inbound consignment from the supplier
+# containing many customers' sales, arriving together (60-70 day window).
+# ---------------------------------------------------------------------------
+class ShipmentBatch(db.Model):
+    __tablename__ = "shipment_batches"
+
+    STATUS_IN_TRANSIT = "In Transit"
+    STATUS_ARRIVED = "Arrived - Awaiting Shipping Payment"
+    STATUS_SETTLED = "Payment Settled - Ready for Delivery"
+
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(255), nullable=False)
+    status = db.Column(db.String(50), default=STATUS_IN_TRANSIT)
+    departed_at = db.Column(db.DateTime)
+    arrived_at = db.Column(db.DateTime)
+    payment_settled_at = db.Column(db.DateTime)
+    notes = db.Column(db.Text)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    sales = db.relationship("Sale", backref="batch", lazy=True)
+
+    def __repr__(self):
+        return f"<ShipmentBatch {self.name}: {self.status}>"
+
+
+# ---------------------------------------------------------------------------
+# DELIVERIES — Stage 7. Created once a sale's batch is "Payment Settled -
+# Ready for Delivery". One Delivery can cover multiple sales when consolidated
+# (same customer phone across orders, or same destination state) into one parcel.
+# ---------------------------------------------------------------------------
+class Delivery(db.Model):
+    __tablename__ = "deliveries"
+
+    STATUS_PENDING = "Pending"
+    STATUS_OUT_FOR_DELIVERY = "Out for Delivery"
+    STATUS_DELIVERED = "Delivered"
+
+    id = db.Column(db.Integer, primary_key=True)
+    method = db.Column(db.String(100))  # e.g. Dispatch Rider, Self Pickup, Interstate Courier
+    status = db.Column(db.String(50), default=STATUS_PENDING)
+
+    is_consolidated = db.Column(db.Boolean, default=False)
+    # 'phone', 'location', or None (single, unconsolidated sale)
+    consolidation_type = db.Column(db.String(20))
+
+    # Defaults to the (first) sale's address but is editable — useful when
+    # consolidating by location, where the drop-off point may differ slightly.
+    delivery_address = db.Column(db.Text)
+
+    notes = db.Column(db.Text)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    delivered_at = db.Column(db.DateTime)
+
+    sales = db.relationship("Sale", backref="delivery", lazy=True)
+
+    def __repr__(self):
+        return f"<Delivery #{self.id} {self.status}>"
 
 
 # ---------------------------------------------------------------------------
@@ -98,6 +179,17 @@ class Sale(db.Model):
     payment_status = db.Column(db.String(50), default="Paid")  # Paid, Pending, Refunded
     notes = db.Column(db.Text)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    # Stage 6
+    estimated_arrival_start = db.Column(db.Date)  # sale_date + 60 days
+    estimated_arrival_end = db.Column(db.Date)    # sale_date + 70 days
+    batch_id = db.Column(db.Integer, db.ForeignKey("shipment_batches.id"), nullable=True)
+    # Locked in only when the batch arrives, using that month's MonthlyShippingRate.
+    # Distinct from estimated_shipping_cost (the by-state estimate made at order time).
+    actual_shipping_cost = db.Column(db.Numeric(12, 2))
+    # Stage 7: set once this sale is migrated into a Delivery record (possibly
+    # consolidated with other sales sharing the same phone number or state).
+    delivery_id = db.Column(db.Integer, db.ForeignKey("deliveries.id"), nullable=True)
 
     items = db.relationship("SaleItem", backref="sale", lazy=True, cascade="all, delete-orphan")
     shipping = db.relationship("Shipping", backref="sale", uselist=False, cascade="all, delete-orphan")
@@ -126,6 +218,10 @@ class SaleItem(db.Model):
     line_cbm = db.Column(db.Numeric(12, 6))
     line_volumetric_kg = db.Column(db.Numeric(12, 3))
     line_shipping_estimate = db.Column(db.Numeric(12, 2))
+
+    # Stage 6: which variant/color was ordered on this line, so the right
+    # item reaches the right person. Carries through to Delivery in Stage 7.
+    variant_note = db.Column(db.String(255))
 
     def __repr__(self):
         return f"<SaleItem sale={self.sale_id} product={self.product_id} qty={self.qty}>"

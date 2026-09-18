@@ -29,6 +29,12 @@ def create_app(config_object="config.Config"):
         from app.shipping import shipping_bp
         app.register_blueprint(shipping_bp)
 
+        from app.batches import batches_bp
+        app.register_blueprint(batches_bp)
+
+        from app.delivery import delivery_bp
+        app.register_blueprint(delivery_bp)
+
         from app.reports import reports_bp
         app.register_blueprint(reports_bp)
 
