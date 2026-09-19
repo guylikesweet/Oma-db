@@ -1,0 +1,36 @@
+{% extends 'base_standalone.html' %}
+{% block title %}Clear Test Data{% endblock %}
+{% block body %}
+<div class="container" style="max-width:600px; margin-top:20px;">
+  <h2>Clear Test Data</h2>
+
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% for category, message in messages %}
+      <div class="alert alert-{{ 'danger' if category == 'error' else 'success' }}">{{ message }}</div>
+    {% endfor %}
+  {% endwith %}
+
+  <div class="alert alert-warning">
+    <strong>This cannot be undone.</strong> It permanently deletes every row in the tables below.
+    <strong>Products are never touched.</strong>
+  </div>
+
+  <table class="table table-striped">
+    <thead><tr><th>Table</th><th>Rows that will be deleted</th></tr></thead>
+    <tbody>
+      {% for label, count in row_counts %}
+      <tr><td>{{ label }}</td><td>{{ count }}</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <form method="post" onsubmit="return confirm('Really delete all of this? This cannot be undone.');">
+    <div class="form-group">
+      <label>Type <code>{{ confirmation_phrase }}</code> exactly to confirm:</label>
+      <input type="text" name="confirmation" class="form-control" autocomplete="off" required>
+    </div>
+    <button type="submit" class="btn btn-danger">Clear Test Data</button>
+    <a href="{{ url_for('admin.index') }}" class="btn btn-default">Cancel</a>
+  </form>
+</div>
+{% endblock %}
