@@ -23,7 +23,7 @@
   <h4>Items</h4>
   <table class="table table-striped">
     <thead>
-      <tr><th>Product</th><th>Variant</th><th>Qty</th><th>Unit Price</th><th>Unit Cost</th><th>Line CBM</th></tr>
+      <tr><th>Product</th><th>Variant</th><th>Qty</th><th>Unit Price</th><th>Line CBM</th></tr>
     </thead>
     <tbody>
       {% for item in sale.items %}
@@ -32,7 +32,6 @@
         <td>{{ item.variant_note or '—' }}</td>
         <td>{{ item.qty }}</td>
         <td>{{ item.unit_price }}</td>
-        <td>{{ item.unit_cost }}</td>
         <td>{{ item.line_cbm }}</td>
       </tr>
       {% endfor %}
@@ -40,21 +39,19 @@
   </table>
 
   <table class="table table-borderless" style="max-width:450px;">
-    <tr><th>Subtotal (goods)</th><td>{{ sale.subtotal_amount }}</td></tr>
-    {% if sale.shipping_payment_settled %}
-    <tr><th>Shipping (settled {{ sale.shipping_payment_settled_at.strftime('%Y-%m-%d') }})</th><td>{{ sale.actual_shipping_cost }}</td></tr>
-    <tr><th>Total (goods + shipping)</th><td><strong>{{ sale.total_amount }}</strong></td></tr>
-    <tr><th>Profit (final)</th><td><strong>{{ sale.profit }}</strong></td></tr>
-    {% else %}
-    {% if sale.preview_shipping_cost is defined %}
-    <tr><th>Shipping (live estimate)</th><td>~{{ '%.2f' | format(sale.preview_shipping_cost) }} <span class="text-muted">— recalculates until settled</span></td></tr>
-    <tr><th>Total so far</th><td>{{ sale.total_amount }} <span class="text-muted">(goods only; locks in once settled)</span></td></tr>
-    {% else %}
-    <tr><th>Shipping</th><td><span class="text-muted">Pending — visible once the batch arrives, settled once this order's shipping payment is settled</span></td></tr>
-    <tr><th>Total so far</th><td>{{ sale.total_amount }} <span class="text-muted">(goods only; shipping not yet added)</span></td></tr>
+    <tr><th>Subtotal</th><td>{{ sale.subtotal_amount }}</td></tr>
+    <tr><th>Estimated Shipping</th><td>{{ sale.estimated_shipping_cost if sale.estimated_shipping_cost is not none else '—' }}</td></tr>
+    {% if sale.actual_shipping_cost is not none %}
+    <tr><th>Actual Shipping (calculated at arrival)</th><td><strong>{{ sale.actual_shipping_cost }}</strong></td></tr>
+    <tr><th>Shipping Payment</th><td>
+      {% if sale.shipping_payment_settled %}
+      <span class="label label-success">Settled {{ sale.shipping_payment_settled_at.strftime('%Y-%m-%d') }}</span>
+      {% else %}
+      <span class="label label-default">Pending</span>
+      {% endif %}
+    </td></tr>
     {% endif %}
-    <tr><th>Profit</th><td><span class="text-muted">Pending</span></td></tr>
-    {% endif %}
+    <tr><th>Total</th><td><strong>{{ sale.total_amount }}</strong></td></tr>
     <tr><th>Shipment Batch</th><td>
       {% if sale.batch %}
         <a href="{{ url_for('batches.batch_detail', batch_id=sale.batch.id) }}">{{ sale.batch.name }}</a> ({{ sale.batch.status }})
@@ -63,19 +60,6 @@
       {% endif %}
     </td></tr>
   </table>
-
-  <h4 style="margin-top:20px;">Shipping</h4>
-  {% if sale.shipping %}
-  <p>
-    Status: <span class="badge badge-info">{{ sale.shipping.shipping_status }}</span>
-    &nbsp; Tracking: {{ sale.shipping.tracking_number or '—' }}
-    &nbsp; <a href="{{ url_for('shipping.shipping_detail', shipping_id=sale.shipping.id) }}">View / Update</a>
-  </p>
-  {% elif sale.order_status == 'Packed' %}
-  <p><a href="{{ url_for('shipping.new_shipping', sale_id=sale.id) }}" class="btn btn-primary btn-sm">Create Shipment</a></p>
-  {% else %}
-  <p class="text-muted">Sale must be marked "Packed" before a shipment can be created.</p>
-  {% endif %}
 
   <h4 style="margin-top:20px;">Update Status</h4>
   <form method="post" action="{{ url_for('sales.set_status', sale_id=sale.id) }}" style="display:inline-block; margin-right:8px;">
