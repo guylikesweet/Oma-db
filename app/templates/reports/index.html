@@ -20,14 +20,14 @@
 
   <table class="table table-borderless" style="max-width:600px;">
     <tr><th>Subtotal</th><td>{{ '{:,.2f}'.format(totals.subtotal) }}</td></tr>
-    <tr><th>Estimated Shipping</th><td>{{ '{:,.2f}'.format(totals.shipping) }}</td></tr>
+    <tr><th>Estimated Shipping</th><td>{{ '{:,.2f}'.format(totals.estimated_shipping) }}</td></tr>
+    <tr><th>Actual Shipping</th><td>{{ '{:,.2f}'.format(totals.actual_shipping) }}</td></tr>
     <tr><th>Total</th><td><strong>{{ '{:,.2f}'.format(totals.total) }}</strong></td></tr>
-    <tr><th>Profit</th><td>{{ '{:,.2f}'.format(totals.profit) }}</td></tr>
   </table>
 
   <table class="table table-striped">
     <thead>
-      <tr><th>Date</th><th>Customer</th><th>State</th><th>Status</th><th>Total</th><th>Profit</th></tr>
+      <tr><th>Date</th><th>Customer</th><th>State</th><th>Status</th><th>Total</th></tr>
     </thead>
     <tbody>
       {% for s in sales %}
@@ -37,10 +37,9 @@
         <td>{{ s.customer_state }}</td>
         <td>{{ s.order_status }}</td>
         <td>{{ s.total_amount }}</td>
-        <td>{{ s.profit }}</td>
       </tr>
       {% else %}
-      <tr><td colspan="6">No sales in this range.</td></tr>
+      <tr><td colspan="5">No sales in this range.</td></tr>
       {% endfor %}
     </tbody>
   </table>
