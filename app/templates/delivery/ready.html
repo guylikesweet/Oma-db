@@ -31,6 +31,26 @@
   {% endfor %}
   {% endif %}
 
+  {% if name_matches %}
+  <h4>Same customer name, multiple orders — consolidate?</h4>
+  {% for cname, group_sales in name_matches.items() %}
+  <div class="well" style="background:#f8f9fa; padding:12px; border-radius:6px; margin-bottom:10px;">
+    <strong>{{ cname }}</strong> — {{ group_sales|length }} orders:
+    {% for s in group_sales %}#{{ s.id }} ({{ s.customer_phone or 'no phone' }}){% if not loop.last %}, {% endif %}{% endfor %}
+    <form method="post" action="{{ url_for('delivery.create') }}" class="form-inline" style="margin-top:8px;">
+      {% for s in group_sales %}<input type="hidden" name="sale_ids[]" value="{{ s.id }}">{% endfor %}
+      <input type="hidden" name="consolidation_type" value="name">
+      <select name="method" class="form-control" style="margin-right:8px;">
+        <option value="Dispatch Rider">Dispatch Rider</option>
+        <option value="Self Pickup">Self Pickup</option>
+        <option value="Interstate Courier">Interstate Courier</option>
+      </select>
+      <button type="submit" class="btn btn-primary btn-sm">Consolidate into one parcel</button>
+    </form>
+  </div>
+  {% endfor %}
+  {% endif %}
+
   {% if location_matches %}
   <h4>Same destination — consolidate to cut delivery cost?</h4>
   {% for state, group_sales in location_matches.items() %}
@@ -54,7 +74,7 @@
   <h4 style="margin-top:24px;">All sales ready for delivery ({{ sales|length }})</h4>
   <form method="post" action="{{ url_for('delivery.create') }}">
     <table class="table table-striped">
-      <thead><tr><th></th><th>Sale</th><th>Customer</th><th>Phone</th><th>State</th><th>Actual Shipping</th></tr></thead>
+      <thead><tr><th></th><th>Sale</th><th>Customer</th><th>Phone</th><th>State</th><th>Actual Shipping</th><th>Profit</th></tr></thead>
       <tbody>
         {% for s in sales %}
         <tr>
@@ -64,9 +84,10 @@
           <td>{{ s.customer_phone }}</td>
           <td>{{ s.customer_state }}</td>
           <td>{{ s.actual_shipping_cost }}</td>
+          <td>{{ s.profit }}</td>
         </tr>
         {% else %}
-        <tr><td colspan="6">No sales are ready for delivery yet — a batch must reach "Payment Settled" first.</td></tr>
+        <tr><td colspan="7">No sales are ready for delivery yet — settle an order's shipping payment first.</td></tr>
         {% endfor %}
       </tbody>
     </table>
