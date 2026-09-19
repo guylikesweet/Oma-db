@@ -46,8 +46,13 @@
     <tr><th>Total (goods + shipping)</th><td><strong>{{ sale.total_amount }}</strong></td></tr>
     <tr><th>Profit (final)</th><td><strong>{{ sale.profit }}</strong></td></tr>
     {% else %}
-    <tr><th>Shipping</th><td><span class="text-muted">Pending — settled once the batch arrives and this order's shipping payment is settled</span></td></tr>
+    {% if sale.preview_shipping_cost is defined %}
+    <tr><th>Shipping (live estimate)</th><td>~{{ '%.2f' | format(sale.preview_shipping_cost) }} <span class="text-muted">— recalculates until settled</span></td></tr>
+    <tr><th>Total so far</th><td>{{ sale.total_amount }} <span class="text-muted">(goods only; locks in once settled)</span></td></tr>
+    {% else %}
+    <tr><th>Shipping</th><td><span class="text-muted">Pending — visible once the batch arrives, settled once this order's shipping payment is settled</span></td></tr>
     <tr><th>Total so far</th><td>{{ sale.total_amount }} <span class="text-muted">(goods only; shipping not yet added)</span></td></tr>
+    {% endif %}
     <tr><th>Profit</th><td><span class="text-muted">Pending</span></td></tr>
     {% endif %}
     <tr><th>Shipment Batch</th><td>
