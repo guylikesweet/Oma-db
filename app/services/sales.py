@@ -1,23 +1,18 @@
 """
-Sales business logic — Module D from the blueprint.
-
-Stage 8 change: shipping cost is NOT estimated or subtracted at sale creation
-anymore. The customer isn't charged shipping until the order's shipping
-payment is actually settled (per-order, in app/services/shipment_batches.py),
-using whichever MonthlyShippingRate is current at that moment. Calculating
-it early risked over/undercharging if the rate moved before settlement.
+Sales business logic (simplified — no profit/loss tracking anywhere).
 
 At creation:
-  sales.subtotal_amount = SUM(unit_price * qty)
-  sales.total_amount    = subtotal_amount (goods only; shipping added at settlement)
-  sales.profit          = None (pending — unknown until shipping is settled)
-  sale_items.line_cbm   = product.cbm * qty  (still needed later for actual_shipping_cost)
+  sales.subtotal_amount        = SUM(unit_price * qty)
+  sales.estimated_shipping_cost = total_cbm * MonthlyShippingRate for the CURRENT month
+                                   (a rough estimate only — recalculated for real at batch arrival)
+  sales.total_amount           = subtotal_amount (goods only; shipping added once the batch arrives)
 """
 from decimal import Decimal
 from datetime import date, timedelta
 
 from app import db
 from app.models import Sale, SaleItem, Product, StockLog
+from app.services.rates import get_rate_for_month
 
 
 class SaleValidationError(Exception):
@@ -66,6 +61,7 @@ def create_sale(customer_name, customer_phone, customer_address, customer_state,
     db.session.flush()  # assigns sale.id, needed for stock_log "Sale #<id>" reason
 
     subtotal = Decimal("0")
+    total_cbm = Decimal("0")
 
     for line in line_items:
         product = products[line["product_id"]]
@@ -84,7 +80,6 @@ def create_sale(customer_name, customer_phone, customer_address, customer_state,
             unit_price=unit_price,
             line_cbm=line_cbm,
             line_volumetric_kg=line_volumetric_kg,
-            line_shipping_estimate=None,  # deprecated Stage 8 — no estimate calculated up front
             variant_note=line.get("variant_note") or None,
         ))
 
@@ -93,11 +88,13 @@ def create_sale(customer_name, customer_phone, customer_address, customer_state,
         db.session.add(StockLog(product_id=product.id, change_qty=-qty, reason=f"Sale #{sale.id}"))
 
         subtotal += unit_price * qty
+        total_cbm += line_cbm
+
+    rate = get_rate_for_month(date.today())
 
     sale.subtotal_amount = subtotal
-    sale.estimated_shipping_cost = None  # deprecated Stage 8 — see module docstring
-    sale.total_amount = subtotal         # goods only for now; shipping added at settlement
-    sale.profit = None                   # pending — unknown until shipping is settled
+    sale.estimated_shipping_cost = total_cbm * rate  # rough estimate only
+    sale.total_amount = subtotal  # goods only; actual shipping added once the batch arrives
 
     db.session.commit()
     return sale

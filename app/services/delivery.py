@@ -58,16 +58,6 @@ def find_name_matches():
     }
 
 
-def find_location_matches():
-    """Groups ready-for-delivery sales by customer_state where 2+ different sales share it."""
-    ready = get_ready_for_delivery_sales()
-    by_state = defaultdict(list)
-    for sale in ready:
-        if sale.customer_state:
-            by_state[sale.customer_state].append(sale)
-    return {state: sales for state, sales in by_state.items() if len(sales) > 1}
-
-
 def create_delivery(sale_ids, method, consolidation_type=None, delivery_address=None, notes=None):
     """
     sale_ids: list of Sale ids to include in this delivery (1 = single, 2+ = consolidated).

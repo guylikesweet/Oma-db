@@ -1,9 +1,10 @@
 """
-Reports / Settings logic — Module F from the blueprint.
+Reports logic. No profit/loss anywhere — subtotal, shipping estimate/actual,
+and total only.
 """
 from datetime import date, timedelta
 
-from app.models import Sale, Shipping, Product
+from app.models import Sale, Product
 
 
 def get_sales_in_range(start_date, end_date):
@@ -25,9 +26,9 @@ def sales_report(start_date=None, end_date=None):
 
     totals = {
         "subtotal": sum((s.subtotal_amount or 0) for s in sales),
-        "shipping": sum((s.estimated_shipping_cost or 0) for s in sales),
+        "estimated_shipping": sum((s.estimated_shipping_cost or 0) for s in sales),
+        "actual_shipping": sum((s.actual_shipping_cost or 0) for s in sales),
         "total": sum((s.total_amount or 0) for s in sales),
-        "profit": sum((s.profit or 0) for s in sales),
     }
 
     return {
@@ -41,7 +42,7 @@ def sales_report(start_date=None, end_date=None):
 SALES_CSV_HEADERS = [
     "id", "sale_date", "customer_name", "customer_phone", "customer_state",
     "order_status", "payment_status", "subtotal_amount", "estimated_shipping_cost",
-    "total_amount", "profit",
+    "actual_shipping_cost", "shipping_payment_settled", "total_amount",
 ]
 
 
@@ -55,26 +56,28 @@ def sales_csv_rows(start_date=None, end_date=None):
         yield [
             s.id, s.sale_date, s.customer_name, s.customer_phone, s.customer_state,
             s.order_status, s.payment_status, s.subtotal_amount, s.estimated_shipping_cost,
-            s.total_amount, s.profit,
+            s.actual_shipping_cost, s.shipping_payment_settled, s.total_amount,
         ]
 
 
 SHIPPING_CSV_HEADERS = [
-    "id", "sale_id", "courier", "tracking_number", "chargeable_weight_kg",
-    "total_cbm", "shipping_status", "shipped_at", "delivered_at",
+    "sale_id", "customer_name", "batch_name", "batch_status",
+    "estimated_shipping_cost", "actual_shipping_cost", "shipping_payment_settled",
 ]
 
 
 def shipping_csv_rows():
-    for s in Shipping.query.order_by(Shipping.id).all():
+    """Shipping-cost data sourced from Sale + its ShipmentBatch (the old, separate
+    per-sale Shipping/tracking module has been removed — batches replaced it)."""
+    for s in Sale.query.filter(Sale.batch_id.isnot(None)).order_by(Sale.id).all():
         yield [
-            s.id, s.sale_id, s.courier, s.tracking_number, s.chargeable_weight_kg,
-            s.total_cbm, s.shipping_status, s.shipped_at, s.delivered_at,
+            s.id, s.customer_name, s.batch.name if s.batch else "", s.batch.status if s.batch else "",
+            s.estimated_shipping_cost, s.actual_shipping_cost, s.shipping_payment_settled,
         ]
 
 
 INVENTORY_CSV_HEADERS = [
-    "id", "name", "sku", "cost", "length_cm", "width_cm", "height_cm",
+    "id", "name", "sku", "length_cm", "width_cm", "height_cm",
     "cbm", "volumetric_kg", "actual_weight_kg", "stock",
 ]
 
@@ -82,6 +85,6 @@ INVENTORY_CSV_HEADERS = [
 def inventory_csv_rows():
     for p in Product.query.order_by(Product.name).all():
         yield [
-            p.id, p.name, p.sku, p.cost, p.length_cm, p.width_cm, p.height_cm,
+            p.id, p.name, p.sku, p.length_cm, p.width_cm, p.height_cm,
             p.cbm, p.volumetric_kg, p.actual_weight_kg, p.stock,
         ]

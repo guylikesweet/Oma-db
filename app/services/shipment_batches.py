@@ -1,16 +1,12 @@
 """
-Shipment batch logic — Stage 6, reworked in Stage 8.
+Shipment batch logic (simplified).
 
-A batch is an inbound consignment from the supplier containing many
-customers' sales, arriving together after the 60-70 day window.
-
-Stage 8 change: settlement is per-order, not per-batch. A batch arriving
-("In Transit" -> "Arrived") is a physical, whole-batch event, but each
-sale's shipping payment is settled individually (settle_sale_shipping),
-locking in that sale's actual_shipping_cost and final profit using
-whichever MonthlyShippingRate is current AT THE MOMENT of that specific
-settlement — not the rate when the batch physically arrived, since
-settlement can happen later (even in a different month) per order.
+A batch is an inbound consignment containing many customers' sales,
+arriving together. When it arrives, EVERY sale in it gets its
+actual_shipping_cost calculated at once, using that month's rate
+(the month of arrival). Settling a sale's shipping payment afterward is
+just a confirmation flag — it doesn't recalculate anything — and it's
+what individually unlocks that one sale for delivery, not the whole batch.
 """
 from datetime import date, datetime
 from decimal import Decimal
@@ -61,9 +57,8 @@ def remove_sale_from_batch(sale_id):
 
 def mark_arrived(batch_id):
     """
-    Marks the batch as physically arrived. Does NOT touch any sale's shipping
-    cost or profit — that only happens per-sale, via settle_sale_shipping,
-    whenever each order's shipping payment is actually settled.
+    Marks the batch arrived and, using THIS month's rate (the arrival month),
+    calculates actual_shipping_cost + total_amount for every sale in it, all at once.
     """
     batch = ShipmentBatch.query.get(batch_id)
     if not batch:
@@ -73,6 +68,13 @@ def mark_arrived(batch_id):
     if not batch.sales:
         raise BatchValidationError("Batch has no sales assigned.")
 
+    rate = get_rate_for_month(date.today())
+
+    for sale in batch.sales:
+        total_cbm = sum((item.line_cbm or Decimal("0")) for item in sale.items)
+        sale.actual_shipping_cost = total_cbm * rate
+        sale.total_amount = (sale.subtotal_amount or Decimal("0")) + sale.actual_shipping_cost
+
     batch.arrived_at = datetime.utcnow()
     batch.status = ShipmentBatch.STATUS_ARRIVED
     db.session.commit()
@@ -81,10 +83,9 @@ def mark_arrived(batch_id):
 
 def settle_sale_shipping(sale_id):
     """
-    Settles ONE sale's shipping payment. Locks in actual_shipping_cost and the
-    final profit using the MonthlyShippingRate for the CURRENT month (i.e. the
-    month this settlement happens), regardless of when the batch arrived or
-    when other sales in the same batch get settled.
+    Confirms this ONE sale's shipping payment as received. Does not recalculate
+    anything (that already happened for the whole batch at arrival) — it just
+    flags the sale as settled, which is what unlocks it for delivery.
     """
     sale = Sale.query.get(sale_id)
     if not sale:
@@ -98,13 +99,6 @@ def settle_sale_shipping(sale_id):
     if sale.shipping_payment_settled:
         raise BatchValidationError(f"Sale #{sale.id}'s shipping payment is already settled.")
 
-    total_cbm = sum((item.line_cbm or Decimal("0")) for item in sale.items)
-    total_cost = sum((item.unit_cost or Decimal("0")) * item.qty for item in sale.items)
-    rate = get_rate_for_month(date.today())
-
-    sale.actual_shipping_cost = total_cbm * rate
-    sale.total_amount = (sale.subtotal_amount or Decimal("0")) + sale.actual_shipping_cost
-    sale.profit = (sale.subtotal_amount or Decimal("0")) - total_cost - sale.actual_shipping_cost
     sale.shipping_payment_settled = True
     sale.shipping_payment_settled_at = datetime.utcnow()
 
