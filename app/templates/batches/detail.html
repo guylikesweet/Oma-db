@@ -20,40 +20,31 @@
   <div style="margin-bottom:16px;">
     {% if batch.status == 'In Transit' %}
     <form method="post" action="{{ url_for('batches.mark_arrived_route', batch_id=batch.id) }}" style="display:inline-block;">
-      <button type="submit" class="btn btn-primary btn-sm">Mark Arrived</button>
+      <button type="submit" class="btn btn-primary btn-sm">Mark Arrived (calculates actual shipping for everyone in this batch)</button>
     </form>
-    <span class="text-muted" style="margin-left:8px;">Shipping cost is settled per order below, not all at once.</span>
     {% else %}
-    <span class="text-muted">Batch has arrived. Settle each order's shipping payment individually below — only settled orders become eligible for delivery.</span>
+    <span class="text-muted">Batch has arrived — actual shipping cost is set below. Settle each order's payment individually; only settled orders become eligible for delivery.</span>
     {% endif %}
   </div>
 
   <h4>Sales in this batch ({{ batch.sales|length }})</h4>
   <table class="table table-striped">
-    <thead><tr><th>Sale</th><th>Customer</th><th>State</th><th>Shipping Payment</th><th>Shipping Cost</th><th>Profit</th><th></th></tr></thead>
+    <thead><tr><th>Sale</th><th>Customer</th><th>State</th><th>Estimated</th><th>Actual Shipping</th><th>Payment</th><th></th></tr></thead>
     <tbody>
       {% for sale in batch.sales %}
       <tr>
         <td><a href="{{ url_for('sales.sale_detail', sale_id=sale.id) }}">#{{ sale.id }}</a></td>
         <td>{{ sale.customer_name }}</td>
         <td>{{ sale.customer_state }}</td>
+        <td>{{ sale.estimated_shipping_cost if sale.estimated_shipping_cost is not none else '—' }}</td>
+        <td>{{ sale.actual_shipping_cost if sale.actual_shipping_cost is not none else '—' }}</td>
         <td>
           {% if sale.shipping_payment_settled %}
-          <span class="label label-success">Settled {{ sale.shipping_payment_settled_at.strftime('%Y-%m-%d') }}</span>
+          <span class="label label-success">Settled</span>
           {% else %}
           <span class="label label-default">Pending</span>
           {% endif %}
         </td>
-        <td>
-          {% if sale.actual_shipping_cost is not none %}
-            {{ sale.actual_shipping_cost }}
-          {% elif sale.preview_shipping_cost is defined %}
-            <span title="Live estimate — recalculates until settled">~{{ '%.2f' | format(sale.preview_shipping_cost) }}</span>
-          {% else %}
-            —
-          {% endif %}
-        </td>
-        <td>{{ sale.profit if sale.profit is not none else '—' }}</td>
         <td>
           {% if batch.status == 'In Transit' %}
           <form method="post" action="{{ url_for('batches.remove_sale', batch_id=batch.id, sale_id=sale.id) }}" style="display:inline;">
