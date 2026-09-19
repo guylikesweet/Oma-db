@@ -23,7 +23,7 @@
   <h4>Items</h4>
   <table class="table table-striped">
     <thead>
-      <tr><th>Product</th><th>Variant</th><th>Qty</th><th>Unit Price</th><th>Unit Cost</th><th>Line CBM</th><th>Line Shipping Est.</th></tr>
+      <tr><th>Product</th><th>Variant</th><th>Qty</th><th>Unit Price</th><th>Unit Cost</th><th>Line CBM</th></tr>
     </thead>
     <tbody>
       {% for item in sale.items %}
@@ -34,20 +34,22 @@
         <td>{{ item.unit_price }}</td>
         <td>{{ item.unit_cost }}</td>
         <td>{{ item.line_cbm }}</td>
-        <td>{{ item.line_shipping_estimate }}</td>
       </tr>
       {% endfor %}
     </tbody>
   </table>
 
-  <table class="table table-borderless" style="max-width:400px;">
-    <tr><th>Subtotal</th><td>{{ sale.subtotal_amount }}</td></tr>
-    <tr><th>Estimated Shipping</th><td>{{ sale.estimated_shipping_cost }}</td></tr>
-    {% if sale.actual_shipping_cost is not none %}
-    <tr><th>Actual Shipping (locked in)</th><td><strong>{{ sale.actual_shipping_cost }}</strong></td></tr>
+  <table class="table table-borderless" style="max-width:450px;">
+    <tr><th>Subtotal (goods)</th><td>{{ sale.subtotal_amount }}</td></tr>
+    {% if sale.shipping_payment_settled %}
+    <tr><th>Shipping (settled {{ sale.shipping_payment_settled_at.strftime('%Y-%m-%d') }})</th><td>{{ sale.actual_shipping_cost }}</td></tr>
+    <tr><th>Total (goods + shipping)</th><td><strong>{{ sale.total_amount }}</strong></td></tr>
+    <tr><th>Profit (final)</th><td><strong>{{ sale.profit }}</strong></td></tr>
+    {% else %}
+    <tr><th>Shipping</th><td><span class="text-muted">Pending — settled once the batch arrives and this order's shipping payment is settled</span></td></tr>
+    <tr><th>Total so far</th><td>{{ sale.total_amount }} <span class="text-muted">(goods only; shipping not yet added)</span></td></tr>
+    <tr><th>Profit</th><td><span class="text-muted">Pending</span></td></tr>
     {% endif %}
-    <tr><th>Total</th><td><strong>{{ sale.total_amount }}</strong></td></tr>
-    <tr><th>Profit</th><td>{{ sale.profit }}</td></tr>
     <tr><th>Shipment Batch</th><td>
       {% if sale.batch %}
         <a href="{{ url_for('batches.batch_detail', batch_id=sale.batch.id) }}">{{ sale.batch.name }}</a> ({{ sale.batch.status }})
