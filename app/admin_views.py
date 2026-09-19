@@ -155,7 +155,7 @@ class CourierRateView(SecureModelView):
 class SaleView(SecureModelView):
     column_list = (
         "id", "sale_date", "customer_name", "customer_state", "order_status",
-        "subtotal_amount", "estimated_shipping_cost", "total_amount", "profit",
+        "subtotal_amount", "shipping_payment_settled", "actual_shipping_cost", "total_amount", "profit",
         "payment_status", "sale_link",
     )
     column_labels = {"sale_link": "Details"}
@@ -286,6 +286,8 @@ def init_admin(app):
     admin.add_view(ShipmentBatchView(ShipmentBatch, db.session, name="Shipment Batches", endpoint="shipmentbatch"))
     admin.add_view(DeliveryView(Delivery, db.session, name="Deliveries", endpoint="deliveryadmin"))
     admin.add_link(MenuLink(name="Ready for Delivery", url="/delivery/ready"))
+    admin.add_link(MenuLink(name="Clear Test Data", url="/data-tools/clear"))
+    admin.add_link(MenuLink(name="⚠ Clear Test Data", url="/admin-tools/clear-data"))
     admin.add_view(StockLogView(StockLog, db.session, name="Stock Log"))
     admin.add_view(UserView(User, db.session, name="Admin Users"))
 

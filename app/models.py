@@ -105,6 +105,9 @@ class ShipmentBatch(db.Model):
 
     STATUS_IN_TRANSIT = "In Transit"
     STATUS_ARRIVED = "Arrived - Awaiting Shipping Payment"
+    # Stage 8: settlement moved to the individual Sale level (Sale.shipping_payment_settled).
+    # This constant/column is kept for backward compatibility with pre-Stage-8 data only —
+    # no new code sets a whole batch to this status.
     STATUS_SETTLED = "Payment Settled - Ready for Delivery"
 
     id = db.Column(db.Integer, primary_key=True)
@@ -172,9 +175,9 @@ class Sale(db.Model):
     order_status = db.Column(db.String(50), default="New")  # New, Packed, Shipped, Delivered, Cancelled
 
     subtotal_amount = db.Column(db.Numeric(12, 2), default=0.00)
-    estimated_shipping_cost = db.Column(db.Numeric(12, 2), default=0.00)
+    estimated_shipping_cost = db.Column(db.Numeric(12, 2))  # Stage 8: deprecated, no longer calculated
     total_amount = db.Column(db.Numeric(12, 2), default=0.00)
-    profit = db.Column(db.Numeric(12, 2), default=0.00)
+    profit = db.Column(db.Numeric(12, 2))  # Stage 8: NULL until shipping is settled (see services/sales.py)
 
     payment_status = db.Column(db.String(50), default="Paid")  # Paid, Pending, Refunded
     notes = db.Column(db.Text)
@@ -187,6 +190,11 @@ class Sale(db.Model):
     # Locked in only when the batch arrives, using that month's MonthlyShippingRate.
     # Distinct from estimated_shipping_cost (the by-state estimate made at order time).
     actual_shipping_cost = db.Column(db.Numeric(12, 2))
+    # Stage 8: settlement is per-order, not per-batch — a batch arrives as one unit,
+    # but each sale's shipping fee is settled (and its cost locked in) individually,
+    # using whatever the monthly rate is at the moment IT is settled.
+    shipping_payment_settled = db.Column(db.Boolean, default=False)
+    shipping_payment_settled_at = db.Column(db.DateTime)
     # Stage 7: set once this sale is migrated into a Delivery record (possibly
     # consolidated with other sales sharing the same phone number or state).
     delivery_id = db.Column(db.Integer, db.ForeignKey("deliveries.id"), nullable=True)

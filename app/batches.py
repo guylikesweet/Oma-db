@@ -3,7 +3,7 @@ from flask_login import login_required
 
 from app.models import ShipmentBatch, Sale
 from app.services.shipment_batches import (
-    add_sale_to_batch, remove_sale_from_batch, mark_arrived, mark_payment_settled, BatchValidationError,
+    add_sale_to_batch, remove_sale_from_batch, mark_arrived, settle_sale_shipping, BatchValidationError,
 )
 
 batches_bp = Blueprint("batches", __name__, url_prefix="/batches", template_folder="templates/batches")
@@ -53,18 +53,22 @@ def remove_sale(batch_id, sale_id):
 def mark_arrived_route(batch_id):
     try:
         batch = mark_arrived(batch_id)
-        flash(f"Batch '{batch.name}' marked arrived. Actual shipping cost locked in for {len(batch.sales)} sale(s).", "success")
+        flash(f"Batch '{batch.name}' marked arrived. Settle each order's shipping payment individually below.", "success")
     except BatchValidationError as e:
         flash(str(e), "error")
     return redirect(url_for("batches.batch_detail", batch_id=batch_id))
 
 
-@batches_bp.route("/<int:batch_id>/mark-settled", methods=("POST",))
+@batches_bp.route("/<int:batch_id>/settle-sale/<int:sale_id>", methods=("POST",))
 @login_required
-def mark_settled_route(batch_id):
+def settle_sale_route(batch_id, sale_id):
     try:
-        mark_payment_settled(batch_id)
-        flash("Batch marked as payment settled — ready for delivery.", "success")
+        sale = settle_sale_shipping(sale_id)
+        flash(
+            f"Sale #{sale.id} shipping settled at {sale.actual_shipping_cost} "
+            f"(this month's rate). Final profit: {sale.profit}.",
+            "success",
+        )
     except BatchValidationError as e:
         flash(str(e), "error")
     return redirect(url_for("batches.batch_detail", batch_id=batch_id))
