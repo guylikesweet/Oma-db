@@ -30,7 +30,7 @@
 
   <h4>Sales in this batch ({{ batch.sales|length }})</h4>
   <table class="table table-striped">
-    <thead><tr><th>Sale</th><th>Customer</th><th>State</th><th>Shipping Payment</th><th>Actual Shipping</th><th>Profit</th><th></th></tr></thead>
+    <thead><tr><th>Sale</th><th>Customer</th><th>State</th><th>Shipping Payment</th><th>Shipping Cost</th><th>Profit</th><th></th></tr></thead>
     <tbody>
       {% for sale in batch.sales %}
       <tr>
@@ -44,7 +44,15 @@
           <span class="label label-default">Pending</span>
           {% endif %}
         </td>
-        <td>{{ sale.actual_shipping_cost if sale.actual_shipping_cost is not none else '—' }}</td>
+        <td>
+          {% if sale.actual_shipping_cost is not none %}
+            {{ sale.actual_shipping_cost }}
+          {% elif sale.preview_shipping_cost is defined %}
+            <span title="Live estimate — recalculates until settled">~{{ '%.2f' | format(sale.preview_shipping_cost) }}</span>
+          {% else %}
+            —
+          {% endif %}
+        </td>
         <td>{{ sale.profit if sale.profit is not none else '—' }}</td>
         <td>
           {% if batch.status == 'In Transit' %}
