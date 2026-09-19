@@ -1,10 +1,16 @@
 """
-Shipment batch logic — Stage 6.
+Shipment batch logic — Stage 6, reworked in Stage 8.
 
 A batch is an inbound consignment from the supplier containing many
 customers' sales, arriving together after the 60-70 day window.
 
-Status flow: In Transit -> Arrived (awaiting shipping payment) -> Payment Settled (ready for delivery)
+Stage 8 change: settlement is per-order, not per-batch. A batch arriving
+("In Transit" -> "Arrived") is a physical, whole-batch event, but each
+sale's shipping payment is settled individually (settle_sale_shipping),
+locking in that sale's actual_shipping_cost and final profit using
+whichever MonthlyShippingRate is current AT THE MOMENT of that specific
+settlement — not the rate when the batch physically arrived, since
+settlement can happen later (even in a different month) per order.
 """
 from datetime import date, datetime
 from decimal import Decimal
@@ -55,9 +61,9 @@ def remove_sale_from_batch(sale_id):
 
 def mark_arrived(batch_id):
     """
-    Locks in the ACTUAL shipping cost for every sale in the batch, using the
-    MonthlyShippingRate for the month the batch arrives (today) — not the rate
-    that was in effect when the estimate was originally made.
+    Marks the batch as physically arrived. Does NOT touch any sale's shipping
+    cost or profit — that only happens per-sale, via settle_sale_shipping,
+    whenever each order's shipping payment is actually settled.
     """
     batch = ShipmentBatch.query.get(batch_id)
     if not batch:
@@ -65,14 +71,7 @@ def mark_arrived(batch_id):
     if batch.status != ShipmentBatch.STATUS_IN_TRANSIT:
         raise BatchValidationError(f"Batch must be 'In Transit' to mark arrived (currently '{batch.status}').")
     if not batch.sales:
-        raise BatchValidationError("Batch has no sales assigned — nothing to cost.")
-
-    arrival_date = date.today()
-    rate = get_rate_for_month(arrival_date)
-
-    for sale in batch.sales:
-        total_cbm = sum((item.line_cbm or Decimal("0")) for item in sale.items)
-        sale.actual_shipping_cost = total_cbm * rate
+        raise BatchValidationError("Batch has no sales assigned.")
 
     batch.arrived_at = datetime.utcnow()
     batch.status = ShipmentBatch.STATUS_ARRIVED
@@ -80,16 +79,34 @@ def mark_arrived(batch_id):
     return batch
 
 
-def mark_payment_settled(batch_id):
-    batch = ShipmentBatch.query.get(batch_id)
-    if not batch:
-        raise BatchValidationError("Batch not found.")
-    if batch.status != ShipmentBatch.STATUS_ARRIVED:
+def settle_sale_shipping(sale_id):
+    """
+    Settles ONE sale's shipping payment. Locks in actual_shipping_cost and the
+    final profit using the MonthlyShippingRate for the CURRENT month (i.e. the
+    month this settlement happens), regardless of when the batch arrived or
+    when other sales in the same batch get settled.
+    """
+    sale = Sale.query.get(sale_id)
+    if not sale:
+        raise BatchValidationError("Sale not found.")
+    if not sale.batch_id or not sale.batch:
+        raise BatchValidationError("This sale isn't part of a shipment batch yet.")
+    if sale.batch.status != ShipmentBatch.STATUS_ARRIVED:
         raise BatchValidationError(
-            f"Batch must be 'Arrived - Awaiting Shipping Payment' first (currently '{batch.status}')."
+            f"Batch must be 'Arrived' before shipping can be settled (currently '{sale.batch.status}')."
         )
+    if sale.shipping_payment_settled:
+        raise BatchValidationError(f"Sale #{sale.id}'s shipping payment is already settled.")
 
-    batch.payment_settled_at = datetime.utcnow()
-    batch.status = ShipmentBatch.STATUS_SETTLED
+    total_cbm = sum((item.line_cbm or Decimal("0")) for item in sale.items)
+    total_cost = sum((item.unit_cost or Decimal("0")) * item.qty for item in sale.items)
+    rate = get_rate_for_month(date.today())
+
+    sale.actual_shipping_cost = total_cbm * rate
+    sale.total_amount = (sale.subtotal_amount or Decimal("0")) + sale.actual_shipping_cost
+    sale.profit = (sale.subtotal_amount or Decimal("0")) - total_cost - sale.actual_shipping_cost
+    sale.shipping_payment_settled = True
+    sale.shipping_payment_settled_at = datetime.utcnow()
+
     db.session.commit()
-    return batch
+    return sale

@@ -1,18 +1,19 @@
 """
-Delivery logic — Stage 7.
+Delivery logic — Stage 7, eligibility reworked in Stage 8.
 
-A sale becomes eligible for delivery once its batch reaches
-ShipmentBatch.STATUS_SETTLED ("Payment Settled - Ready for Delivery").
-At that point it can be moved into a Delivery record either on its own,
-or consolidated with other eligible sales that share the same customer
-phone number or the same destination state — always as an explicit choice,
-never automatically, since the customer may have changed their mind.
+A sale becomes eligible for delivery once its OWN shipping payment has
+been settled (Sale.shipping_payment_settled) — not when its whole batch
+reaches some status. At that point it can be moved into a Delivery record
+either on its own, or consolidated with other eligible sales that share
+the same customer name/phone or the same destination state — always as
+an explicit choice, never automatic, since the customer may have changed
+their mind.
 """
 from datetime import datetime
 from collections import defaultdict
 
 from app import db
-from app.models import Sale, Delivery, ShipmentBatch
+from app.models import Sale, Delivery
 
 
 class DeliveryValidationError(Exception):
@@ -20,11 +21,10 @@ class DeliveryValidationError(Exception):
 
 
 def get_ready_for_delivery_sales():
-    """Sales whose batch has settled payment, not cancelled, not yet in a delivery."""
+    """Sales whose OWN shipping payment has been settled, not cancelled, not yet in a delivery."""
     return (
-        Sale.query.join(ShipmentBatch, Sale.batch_id == ShipmentBatch.id)
-        .filter(
-            ShipmentBatch.status == ShipmentBatch.STATUS_SETTLED,
+        Sale.query.filter(
+            Sale.shipping_payment_settled.is_(True),
             Sale.delivery_id.is_(None),
             Sale.order_status != "Cancelled",
         )
@@ -41,6 +41,21 @@ def find_phone_matches():
         if sale.customer_phone:
             by_phone[sale.customer_phone].append(sale)
     return {phone: sales for phone, sales in by_phone.items() if len(sales) > 1}
+
+
+def find_name_matches():
+    """Groups ready-for-delivery sales by customer_name (case/space-insensitive) where 2+ share it."""
+    ready = get_ready_for_delivery_sales()
+    by_name = defaultdict(list)
+    for sale in ready:
+        if sale.customer_name:
+            key = sale.customer_name.strip().lower()
+            by_name[key].append(sale)
+    return {
+        sales[0].customer_name: sales
+        for sales in by_name.values()
+        if len(sales) > 1
+    }
 
 
 def find_location_matches():
@@ -70,10 +85,9 @@ def create_delivery(sale_ids, method, consolidation_type=None, delivery_address=
     for sale in sales:
         if sale.delivery_id is not None:
             raise DeliveryValidationError(f"Sale #{sale.id} is already assigned to a delivery.")
-        if not sale.batch_id or sale.batch.status != ShipmentBatch.STATUS_SETTLED:
+        if not sale.shipping_payment_settled:
             raise DeliveryValidationError(
-                f"Sale #{sale.id} isn't ready for delivery yet (its batch hasn't reached "
-                f"'Payment Settled - Ready for Delivery')."
+                f"Sale #{sale.id} isn't ready for delivery yet — its shipping payment hasn't been settled."
             )
 
     delivery = Delivery(

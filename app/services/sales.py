@@ -1,28 +1,27 @@
 """
 Sales business logic — Module D from the blueprint.
 
-Implements the Key Logic Rules exactly:
-  3. sale_items.line_cbm            = product.cbm * qty
-  4. sale_items.line_shipping_estimate = line_cbm * courier_rates.rate_per_cbm (by customer_state)
-  5. sales.estimated_shipping_cost  = SUM(line_shipping_estimate)
-  6. sales.profit                   = subtotal_amount - SUM(unit_cost*qty) - estimated_shipping_cost
+Stage 8 change: shipping cost is NOT estimated or subtracted at sale creation
+anymore. The customer isn't charged shipping until the order's shipping
+payment is actually settled (per-order, in app/services/shipment_batches.py),
+using whichever MonthlyShippingRate is current at that moment. Calculating
+it early risked over/undercharging if the rate moved before settlement.
+
+At creation:
+  sales.subtotal_amount = SUM(unit_price * qty)
+  sales.total_amount    = subtotal_amount (goods only; shipping added at settlement)
+  sales.profit          = None (pending — unknown until shipping is settled)
+  sale_items.line_cbm   = product.cbm * qty  (still needed later for actual_shipping_cost)
 """
 from decimal import Decimal
 from datetime import date, timedelta
 
 from app import db
-from app.models import Sale, SaleItem, Product, CourierRate, StockLog
-
-DEFAULT_RATE_PER_CBM = Decimal("600000.00")
+from app.models import Sale, SaleItem, Product, StockLog
 
 
 class SaleValidationError(Exception):
     """Raised for any problem that should stop sale creation (bad input, insufficient stock)."""
-
-
-def _get_rate_for_state(state):
-    rate_row = CourierRate.query.filter_by(state=state).first()
-    return rate_row.rate_per_cbm if rate_row else DEFAULT_RATE_PER_CBM
 
 
 def create_sale(customer_name, customer_phone, customer_address, customer_state,
@@ -34,8 +33,6 @@ def create_sale(customer_name, customer_phone, customer_address, customer_state,
     """
     if not line_items:
         raise SaleValidationError("A sale needs at least one product line.")
-
-    rate_per_cbm = _get_rate_for_state(customer_state)
 
     products = {}
     for line in line_items:
@@ -69,8 +66,6 @@ def create_sale(customer_name, customer_phone, customer_address, customer_state,
     db.session.flush()  # assigns sale.id, needed for stock_log "Sale #<id>" reason
 
     subtotal = Decimal("0")
-    total_cost = Decimal("0")
-    total_shipping = Decimal("0")
 
     for line in line_items:
         product = products[line["product_id"]]
@@ -80,7 +75,6 @@ def create_sale(customer_name, customer_phone, customer_address, customer_state,
 
         line_cbm = (product.cbm or Decimal("0")) * qty
         line_volumetric_kg = (product.volumetric_kg or Decimal("0")) * qty
-        line_shipping_estimate = line_cbm * rate_per_cbm
 
         db.session.add(SaleItem(
             sale_id=sale.id,
@@ -90,7 +84,7 @@ def create_sale(customer_name, customer_phone, customer_address, customer_state,
             unit_price=unit_price,
             line_cbm=line_cbm,
             line_volumetric_kg=line_volumetric_kg,
-            line_shipping_estimate=line_shipping_estimate,
+            line_shipping_estimate=None,  # deprecated Stage 8 — no estimate calculated up front
             variant_note=line.get("variant_note") or None,
         ))
 
@@ -99,13 +93,11 @@ def create_sale(customer_name, customer_phone, customer_address, customer_state,
         db.session.add(StockLog(product_id=product.id, change_qty=-qty, reason=f"Sale #{sale.id}"))
 
         subtotal += unit_price * qty
-        total_cost += unit_cost * qty
-        total_shipping += line_shipping_estimate
 
     sale.subtotal_amount = subtotal
-    sale.estimated_shipping_cost = total_shipping
-    sale.total_amount = subtotal + total_shipping
-    sale.profit = subtotal - total_cost - total_shipping
+    sale.estimated_shipping_cost = None  # deprecated Stage 8 — see module docstring
+    sale.total_amount = subtotal         # goods only for now; shipping added at settlement
+    sale.profit = None                   # pending — unknown until shipping is settled
 
     db.session.commit()
     return sale
@@ -113,7 +105,7 @@ def create_sale(customer_name, customer_phone, customer_address, customer_state,
 
 def update_sale_status(sale_id, new_status):
     """
-    Handles New -> Packed -> Cancelled (and further transitions in Stage 4 for Shipped/Delivered).
+    Handles New -> Packed -> Cancelled (and further transitions for Shipped/Delivered).
     Cancelling a sale that hasn't already been cancelled restocks every line item and logs it.
     """
     sale = Sale.query.get(sale_id)
