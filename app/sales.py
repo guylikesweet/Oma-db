@@ -1,11 +1,9 @@
 from itertools import zip_longest
-from datetime import date
 from flask import Blueprint, render_template, request, redirect, url_for, flash
 from flask_login import login_required
 
-from app.models import Product, Sale, ShipmentBatch
+from app.models import Product, Sale
 from app.services.sales import create_sale, update_sale_status, SaleValidationError
-from app.services.rates import get_rate_for_month
 
 sales_bp = Blueprint("sales", __name__, url_prefix="/sales", template_folder="templates/sales")
 
@@ -44,7 +42,7 @@ def new_sale():
                 notes=request.form.get("notes", "").strip(),
                 line_items=line_items,
             )
-            flash(f"Sale #{sale.id} created. Total: {sale.total_amount}, Profit: {sale.profit}", "success")
+            flash(f"Sale #{sale.id} created. Estimated shipping: {sale.estimated_shipping_cost}", "success")
             return redirect(url_for("sales.sale_detail", sale_id=sale.id))
         except SaleValidationError as e:
             flash(str(e), "error")
@@ -58,11 +56,6 @@ def new_sale():
 @login_required
 def sale_detail(sale_id):
     sale = Sale.query.get_or_404(sale_id)
-    if (not sale.shipping_payment_settled and sale.batch
-            and sale.batch.status == ShipmentBatch.STATUS_ARRIVED):
-        rate = get_rate_for_month(date.today())
-        total_cbm = sum((item.line_cbm or 0) for item in sale.items)
-        sale.preview_shipping_cost = total_cbm * rate
     return render_template("sales/detail.html", sale=sale)
 
 

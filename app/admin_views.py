@@ -1,6 +1,7 @@
 from flask import redirect, url_for, request, flash
-from flask_admin import Admin, AdminIndexView, expose
+from flask_admin import Admin, AdminIndexView
 from flask_admin.contrib.sqla import ModelView
+from flask_admin import expose
 from flask_admin.menu import MenuLink
 from flask_login import current_user
 from werkzeug.security import generate_password_hash
@@ -10,17 +11,13 @@ from app import db
 from app.models import (
     User,
     Product,
-    CourierRate,
     Sale,
     SaleItem,
-    Shipping,
     StockLog,
     MonthlyShippingRate,
     ShipmentBatch,
     Delivery,
 )
-from app.services.rates import get_rate_for_month
-from datetime import date
 
 
 # ---------------------------------------------------------------------------
@@ -41,21 +38,6 @@ class SecureAdminIndexView(AdminIndexView):
     def inaccessible_callback(self, name, **kwargs):
         return redirect(url_for("auth.login", next=request.url))
 
-    @expose("/")
-    def index(self):
-        if not self.is_accessible():
-            return self.inaccessible_callback("index")
-
-        from app.services.dashboard import get_kpis, get_sales_last_30_days
-        kpis = get_kpis()
-        chart_labels, chart_values = get_sales_last_30_days()
-        return self.render(
-            "admin/dashboard.html",
-            kpis=kpis,
-            chart_labels=chart_labels,
-            chart_values=chart_values,
-        )
-
 
 # ---------------------------------------------------------------------------
 # USERS — never expose/edit password_hash directly; set via a plain field
@@ -63,9 +45,6 @@ class SecureAdminIndexView(AdminIndexView):
 class UserView(SecureModelView):
     column_list = ("id", "username", "created_at")
     form_columns = ("username",)
-    form_extra_fields = {}
-
-    can_view_details = True
 
     def on_model_change(self, form, model, is_created):
         # New users are created with a default password they must change on first login.
@@ -81,23 +60,15 @@ class UserView(SecureModelView):
 # ---------------------------------------------------------------------------
 class ProductView(SecureModelView):
     column_list = (
-        "id", "name", "sku", "cost", "length_cm", "width_cm", "height_cm",
-        "cbm", "volumetric_kg", "estimated_shipping_cost", "actual_weight_kg", "stock", "adjust_stock_link",
+        "id", "name", "sku", "length_cm", "width_cm", "height_cm",
+        "cbm", "volumetric_kg", "actual_weight_kg", "stock", "adjust_stock_link",
     )
-    column_labels = {"adjust_stock_link": "Stock Adjustment", "estimated_shipping_cost": "Est. Shipping (flat rate)"}
+    column_labels = {"adjust_stock_link": "Stock Adjustment"}
     form_columns = (
         "name", "sku", "cost", "length_cm", "width_cm", "height_cm", "actual_weight_kg",
     )
-    column_sortable_list = ("id", "name", "sku", "cost", "stock")
+    column_sortable_list = ("id", "name", "sku", "stock")
     column_searchable_list = ("name", "sku")
-
-    def after_model_change(self, form, model, is_created):
-        # cbm is a Postgres-generated column, only known after INSERT/UPDATE — refresh
-        # to read it back, then stamp the flat-rate estimate using this month's rate.
-        db.session.refresh(model)
-        rate = get_rate_for_month(date.today())
-        model.estimated_shipping_cost = (model.cbm or 0) * rate
-        db.session.commit()
 
     def _adjust_stock_formatter(view, context, model, name):
         url = url_for("product.adjust_stock_view", product_id=model.id)
@@ -140,31 +111,19 @@ class ProductView(SecureModelView):
 
 
 # ---------------------------------------------------------------------------
-# COURIER RATES
-# ---------------------------------------------------------------------------
-class CourierRateView(SecureModelView):
-    column_list = ("id", "state", "rate_per_cbm")
-    form_columns = ("state", "rate_per_cbm")
-    column_sortable_list = ("state", "rate_per_cbm")
-
-
-# ---------------------------------------------------------------------------
-# SALES, SALE ITEMS, SHIPPING, STOCK LOG — generic secured CRUD for now.
-# Sale-creation business logic (auto totals, stock deduction) lands in Stage 3.
+# SALES / SALE ITEMS — created only through /sales/new so CBM, the shipping
+# estimate, and stock deduction all happen atomically. No profit/loss tracked.
 # ---------------------------------------------------------------------------
 class SaleView(SecureModelView):
     column_list = (
         "id", "sale_date", "customer_name", "customer_state", "order_status",
-        "subtotal_amount", "shipping_payment_settled", "actual_shipping_cost", "total_amount", "profit",
-        "payment_status", "sale_link",
+        "subtotal_amount", "estimated_shipping_cost", "actual_shipping_cost",
+        "shipping_payment_settled", "total_amount", "payment_status", "sale_link",
     )
     column_labels = {"sale_link": "Details"}
     column_searchable_list = ("customer_name", "customer_phone")
     column_filters = ("order_status", "payment_status", "customer_state", "sale_date")
 
-    # Sales must be created through /sales/new so totals, stock deduction, and the
-    # stock_log audit trail all happen atomically via app/services/sales.py.
-    # Editing totals directly here would desync them from the actual line items.
     can_create = False
     can_edit = False
     can_delete = False
@@ -175,51 +134,24 @@ class SaleView(SecureModelView):
 
     column_formatters = {"sale_link": _sale_link_formatter}
 
-    @expose("/new-redirect")
-    def new_redirect(self):
-        return redirect(url_for("sales.new_sale"))
-
 
 class SaleItemView(SecureModelView):
-    column_list = ("id", "sale_id", "product_id", "qty", "unit_cost", "unit_price", "variant_note", "line_shipping_estimate")
+    column_list = ("id", "sale_id", "product_id", "qty", "unit_price", "variant_note", "line_cbm")
     can_create = False  # items are only ever written by app/services/sales.create_sale
     can_edit = False
     can_delete = False
 
 
-class ShippingView(SecureModelView):
-    column_list = (
-        "id", "sale_id", "courier", "tracking_number",
-        "chargeable_weight_kg", "total_cbm", "shipping_status", "shipped_at", "delivered_at", "shipping_link",
-    )
-    column_labels = {"shipping_link": "Details"}
-    column_filters = ("shipping_status",)
-    column_searchable_list = ("tracking_number",)
-
-    # Shipments are created from a Packed sale (auto-fills total_cbm / chargeable_weight_kg)
-    # and updated via app/services/shipping.py, never hand-edited here.
-    can_create = False
-    can_edit = False
-    can_delete = False
-
-    def _shipping_link_formatter(view, context, model, name):
-        url = url_for("shipping.shipping_detail", shipping_id=model.id)
-        return Markup(f'<a href="{url}" class="btn btn-xs btn-primary">View / Update</a>')
-
-    column_formatters = {"shipping_link": _shipping_link_formatter}
-
-
 class StockLogView(SecureModelView):
     column_list = ("id", "product_id", "change_qty", "reason", "created_at")
-    can_create = False  # entries are only written by adjust_stock_view / future sale logic
+    can_create = False
     can_edit = False
     can_delete = False
 
 
 # ---------------------------------------------------------------------------
-# MONTHLY SHIPPING RATES — Stage 6. Simple CRUD; admin records the flat rate
-# each month, looked up by app/services/rates.py wherever a flat estimate
-# or a batch-arrival cost needs computing.
+# MONTHLY SHIPPING RATES — admin records the flat rate each month, looked up
+# by app/services/rates.py for the sale-time estimate and the batch-arrival cost.
 # ---------------------------------------------------------------------------
 class MonthlyShippingRateView(SecureModelView):
     column_list = ("id", "month", "rate_per_cbm")
@@ -229,12 +161,11 @@ class MonthlyShippingRateView(SecureModelView):
 
 
 # ---------------------------------------------------------------------------
-# SHIPMENT BATCHES — Stage 6. Creation is simple (name/notes), but adding
-# sales and transitioning status (which locks in actual_shipping_cost) only
-# happens through the dedicated /batches/<id> page and its service functions.
+# SHIPMENT BATCHES — creation is simple (name/notes); adding sales and
+# transitioning status happens through the dedicated /batches/<id> page.
 # ---------------------------------------------------------------------------
 class ShipmentBatchView(SecureModelView):
-    column_list = ("id", "name", "status", "arrived_at", "payment_settled_at", "batch_link")
+    column_list = ("id", "name", "status", "arrived_at", "batch_link")
     column_labels = {"batch_link": "Manage"}
     form_columns = ("name", "notes")
     can_edit = False
@@ -248,9 +179,8 @@ class ShipmentBatchView(SecureModelView):
 
 
 # ---------------------------------------------------------------------------
-# DELIVERIES — Stage 7. Created only via /delivery/create (individually or
-# consolidated by phone/location); status changes only via the detail page
-# so a "Delivered" status can propagate back to the underlying sale(s).
+# DELIVERIES — created only via /delivery/create (individually or consolidated
+# by phone/name); status changes only via the detail page.
 # ---------------------------------------------------------------------------
 class DeliveryView(SecureModelView):
     column_list = ("id", "method", "status", "is_consolidated", "consolidation_type", "delivered_at", "delivery_link")
@@ -278,16 +208,12 @@ def init_admin(app):
     admin.add_link(MenuLink(name="+ New Sale", url="/sales/new"))
     admin.add_view(SaleView(Sale, db.session, name="Sales"))
     admin.add_view(SaleItemView(SaleItem, db.session, name="Sale Items"))
-    admin.add_view(ShippingView(Shipping, db.session, name="Shipping", endpoint="shippingadmin"))
-    admin.add_link(MenuLink(name="Track Shipment", url="/shipping/search"))
-    admin.add_link(MenuLink(name="Reports", url="/reports/"))
-    admin.add_view(CourierRateView(CourierRate, db.session, name="Courier Rates"))
     admin.add_view(MonthlyShippingRateView(MonthlyShippingRate, db.session, name="Monthly Shipping Rates"))
     admin.add_view(ShipmentBatchView(ShipmentBatch, db.session, name="Shipment Batches", endpoint="shipmentbatch"))
     admin.add_view(DeliveryView(Delivery, db.session, name="Deliveries", endpoint="deliveryadmin"))
     admin.add_link(MenuLink(name="Ready for Delivery", url="/delivery/ready"))
+    admin.add_link(MenuLink(name="Reports", url="/reports/"))
     admin.add_link(MenuLink(name="Clear Test Data", url="/data-tools/clear"))
-    admin.add_link(MenuLink(name="⚠ Clear Test Data", url="/admin-tools/clear-data"))
     admin.add_view(StockLogView(StockLog, db.session, name="Stock Log"))
     admin.add_view(UserView(User, db.session, name="Admin Users"))
 

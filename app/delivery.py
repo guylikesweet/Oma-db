@@ -3,7 +3,7 @@ from flask_login import login_required
 
 from app.models import Delivery
 from app.services.delivery import (
-    get_ready_for_delivery_sales, find_phone_matches, find_name_matches, find_location_matches,
+    get_ready_for_delivery_sales, find_phone_matches, find_name_matches,
     create_delivery, update_delivery_status, DeliveryValidationError,
 )
 
@@ -16,13 +16,11 @@ def ready():
     sales = get_ready_for_delivery_sales()
     phone_matches = find_phone_matches()
     name_matches = find_name_matches()
-    location_matches = find_location_matches()
     return render_template(
         "delivery/ready.html",
         sales=sales,
         phone_matches=phone_matches,
         name_matches=name_matches,
-        location_matches=location_matches,
     )
 
 

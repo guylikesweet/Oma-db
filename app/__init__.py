@@ -26,9 +26,6 @@ def create_app(config_object="config.Config"):
         from app.sales import sales_bp
         app.register_blueprint(sales_bp)
 
-        from app.shipping import shipping_bp
-        app.register_blueprint(shipping_bp)
-
         from app.batches import batches_bp
         app.register_blueprint(batches_bp)
 
@@ -37,9 +34,6 @@ def create_app(config_object="config.Config"):
 
         from app.data_tools import data_tools_bp
         app.register_blueprint(data_tools_bp)
-
-        from app.admin_tools import admin_tools_bp
-        app.register_blueprint(admin_tools_bp)
 
         from app.reports import reports_bp
         app.register_blueprint(reports_bp)
