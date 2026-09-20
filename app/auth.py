@@ -16,7 +16,7 @@ def load_user(user_id):
 @auth_bp.route("/login", methods=("GET", "POST"))
 def login():
     if current_user.is_authenticated:
-        return redirect(url_for("admin.index"))
+        return redirect(url_for("root"))
 
     if request.method == "POST":
         username = request.form.get("username", "").strip()
@@ -26,7 +26,7 @@ def login():
         if user and check_password_hash(user.password_hash, password):
             login_user(user)
             next_page = request.args.get("next")
-            return redirect(next_page or url_for("admin.index"))
+            return redirect(next_page or url_for("root"))
 
         flash("Invalid username or password.", "error")
 
@@ -59,6 +59,6 @@ def change_password():
             current_user.password_hash = generate_password_hash(new_password)
             db.session.commit()
             flash("Password updated successfully.", "success")
-            return redirect(url_for("admin.index"))
+            return redirect(url_for("root"))
 
     return render_template("auth/change_password.html")
