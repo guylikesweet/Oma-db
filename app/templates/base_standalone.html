@@ -5,22 +5,71 @@
   <title>{% block title %}Sales{% endblock %}</title>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/4.6.2/css/bootstrap.min.css">
   <style>
-    body { background:#f4f5f7; }
-    .topbar { background:#212529; padding:10px 20px; margin-bottom:10px; }
-    .topbar a { color:#fff; text-decoration:none; margin-right:16px; font-size:14px; }
-    .topbar a:hover { color:#9ec5fe; }
+    body { background:#f4f5f7; margin:0; }
+
+    /* Top bar with hamburger toggle only */
+    .topbar { background:#212529; padding:10px 16px; display:flex; align-items:center; }
+    .topbar a.home-link { color:#fff; text-decoration:none; font-size:15px; font-weight:600; margin-left:12px; }
+    #navToggle { background:none; border:none; color:#fff; font-size:22px; cursor:pointer; padding:4px 8px; line-height:1; }
+
+    /* Off-canvas side nav: hidden by default, slides in when open */
+    #sideNav {
+      position:fixed; top:0; left:0; height:100%; width:250px;
+      background:#1a1d21; transform:translateX(-100%);
+      transition:transform 0.22s ease; z-index:1050; overflow-y:auto;
+      box-shadow:2px 0 12px rgba(0,0,0,0.3);
+    }
+    #sideNav.open { transform:translateX(0); }
+    #sideNav .sidenav-header { padding:16px; border-bottom:1px solid #333; }
+    #sideNav .sidenav-header a { color:#fff; font-weight:700; text-decoration:none; font-size:16px; }
+    #sideNav a.nav-link-item {
+      display:block; color:#ccc; text-decoration:none; padding:13px 18px; font-size:15px;
+      border-bottom:1px solid #26292e;
+    }
+    #sideNav a.nav-link-item:hover { background:#26292e; color:#fff; }
+    #sideNav .close-btn {
+      position:absolute; top:10px; right:14px; color:#aaa; font-size:22px;
+      background:none; border:none; cursor:pointer;
+    }
+
+    /* Backdrop behind the open nav */
+    #navBackdrop {
+      display:none; position:fixed; inset:0; background:rgba(0,0,0,0.45); z-index:1040;
+    }
+    #navBackdrop.show { display:block; }
   </style>
 </head>
 <body>
   <div class="topbar">
-    <a href="{{ url_for('admin.index') }}">&larr; Admin Home</a>
-    <a href="{{ url_for('product.index_view') }}">Products</a>
-    <a href="{{ url_for('sale.index_view') }}">Sales</a>
-    <a href="{{ url_for('sales.new_sale') }}">+ New Sale</a>
-    <a href="{{ url_for('shipmentbatch.index_view') }}">Batches</a>
-    <a href="{{ url_for('delivery.ready') }}">Ready for Delivery</a>
-    <a href="{{ url_for('reports.index') }}">Reports</a>
+    <button id="navToggle" aria-label="Open menu">&#9776;</button>
+    <a class="home-link" href="{{ url_for('root') }}">Home</a>
   </div>
+
+  <div id="navBackdrop"></div>
+  <nav id="sideNav">
+    <button class="close-btn" id="navClose" aria-label="Close menu">&times;</button>
+    <div class="sidenav-header"><a href="{{ url_for('root') }}">Home</a></div>
+    <a class="nav-link-item" href="{{ url_for('product.index_view') }}">Products</a>
+    <a class="nav-link-item" href="{{ url_for('sales.new_sale') }}">+ New Sale</a>
+    <a class="nav-link-item" href="{{ url_for('sale.index_view') }}">Sales</a>
+    <a class="nav-link-item" href="{{ url_for('shipmentbatch.index_view') }}">Shipment Batches</a>
+    <a class="nav-link-item" href="{{ url_for('monthlyshippingrate.index_view') }}">Monthly Shipping Rates</a>
+    <a class="nav-link-item" href="{{ url_for('delivery.ready') }}">Ready for Delivery</a>
+    <a class="nav-link-item" href="{{ url_for('reports.index') }}">Reports</a>
+    <a class="nav-link-item" href="{{ url_for('data_tools.clear_form') }}">Clear Test Data</a>
+    <a class="nav-link-item" href="{{ url_for('auth.logout') }}">Log Out</a>
+  </nav>
+
   {% block body %}{% endblock %}
+
+  <script>
+    var sideNav = document.getElementById('sideNav');
+    var backdrop = document.getElementById('navBackdrop');
+    function openNav() { sideNav.classList.add('open'); backdrop.classList.add('show'); }
+    function closeNav() { sideNav.classList.remove('open'); backdrop.classList.remove('show'); }
+    document.getElementById('navToggle').addEventListener('click', openNav);
+    document.getElementById('navClose').addEventListener('click', closeNav);
+    backdrop.addEventListener('click', closeNav);
+  </script>
 </body>
 </html>
