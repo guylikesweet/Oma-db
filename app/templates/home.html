@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Home</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/4.6.2/css/bootstrap.min.css">
+  <style>
+    body { background:#f4f5f7; margin:0; }
+    .home-wrap { max-width:900px; margin:0 auto; padding:40px 20px; }
+    .home-title { font-size:24px; font-weight:700; margin-bottom:6px; }
+    .home-sub { color:#666; margin-bottom:28px; }
+    .action-grid {
+      display:grid; grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)); gap:16px;
+    }
+    .action-btn {
+      display:flex; flex-direction:column; align-items:center; justify-content:center;
+      background:#fff; border:1px solid #e2e2e2; border-radius:10px; padding:28px 16px;
+      text-decoration:none; color:#212529; font-weight:600; font-size:15px;
+      box-shadow:0 1px 3px rgba(0,0,0,0.06); transition:box-shadow 0.15s, transform 0.15s;
+      text-align:center;
+    }
+    .action-btn:hover { box-shadow:0 4px 14px rgba(0,0,0,0.12); transform:translateY(-2px); color:#212529; }
+    .action-btn .icon { font-size:30px; margin-bottom:10px; }
+    .action-btn.primary { background:#2563eb; color:#fff; border-color:#2563eb; }
+    .action-btn.primary:hover { color:#fff; }
+    .action-btn.danger { background:#fff5f5; border-color:#f5c2c2; color:#b02a2a; }
+    .logout-row { text-align:right; margin-top:24px; }
+    .logout-row a { color:#888; font-size:13px; text-decoration:none; }
+  </style>
+</head>
+<body>
+  <div class="home-wrap">
+    <div class="home-title">Omabuy Admin</div>
+    <div class="home-sub">Pick what you need to do.</div>
+
+    <div class="action-grid">
+      <a class="action-btn primary" href="{{ url_for('sales.new_sale') }}">
+        <span class="icon">&#128230;</span> New Sale
+      </a>
+      <a class="action-btn" href="{{ url_for('product.index_view') }}">
+        <span class="icon">&#128717;</span> Products
+      </a>
+      <a class="action-btn" href="{{ url_for('sale.index_view') }}">
+        <span class="icon">&#128203;</span> Sales
+      </a>
+      <a class="action-btn" href="{{ url_for('shipmentbatch.index_view') }}">
+        <span class="icon">&#128667;</span> Shipment Batches
+      </a>
+      <a class="action-btn" href="{{ url_for('delivery.ready') }}">
+        <span class="icon">&#128666;</span> Ready for Delivery
+      </a>
+      <a class="action-btn" href="{{ url_for('monthlyshippingrate.index_view') }}">
+        <span class="icon">&#128176;</span> Monthly Shipping Rates
+      </a>
+      <a class="action-btn" href="{{ url_for('reports.index') }}">
+        <span class="icon">&#128202;</span> Reports
+      </a>
+      <a class="action-btn danger" href="{{ url_for('data_tools.clear_form') }}">
+        <span class="icon">&#128465;</span> Clear Test Data
+      </a>
+    </div>
+
+    <div class="logout-row">
+      <a href="{{ url_for('auth.logout') }}">Log Out</a>
+    </div>
+  </div>
+</body>
+</html>
