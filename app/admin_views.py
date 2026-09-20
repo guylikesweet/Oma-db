@@ -159,6 +159,16 @@ class MonthlyShippingRateView(SecureModelView):
     column_sortable_list = ("month",)
     column_default_sort = ("month", True)
 
+    def on_model_change(self, form, model, is_created):
+        # Always store as the 1st of the month, whatever day was picked in the
+        # form — get_rate_for_month() matches by year+month regardless, but
+        # normalizing here keeps the "one row per calendar month" unique
+        # constraint meaningful (two different days in the same month would
+        # otherwise both pass it as "different" dates).
+        if model.month:
+            model.month = model.month.replace(day=1)
+        super().on_model_change(form, model, is_created)
+
 
 # ---------------------------------------------------------------------------
 # SHIPMENT BATCHES — creation is simple (name/notes); adding sales and
