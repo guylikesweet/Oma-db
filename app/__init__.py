@@ -1,7 +1,7 @@
-from flask import Flask, redirect, url_for
+from flask import Flask, redirect, url_for, render_template
 from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
-from flask_login import LoginManager
+from flask_login import LoginManager, login_required
 
 db = SQLAlchemy()
 migrate = Migrate()
@@ -44,8 +44,9 @@ def create_app(config_object="config.Config"):
         register_cli(app)
 
     @app.route("/")
+    @login_required
     def root():
-        return redirect(url_for("admin.index"))
+        return render_template("home.html")
 
     @app.route("/healthz")
     def healthz():
