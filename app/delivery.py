@@ -1,4 +1,4 @@
-from flask import Blueprint, render_template, request, redirect, url_for, flash
+from flask import Blueprint, render_template, request, redirect, url_for, flash, send_file
 from flask_login import login_required
 
 from app.models import Delivery
@@ -6,6 +6,7 @@ from app.services.delivery import (
     get_ready_for_delivery_sales, find_phone_matches, find_name_matches,
     create_delivery, update_delivery_status, DeliveryValidationError,
 )
+from app.services.labels import get_label_context, generate_label_pdf
 
 delivery_bp = Blueprint("delivery", __name__, url_prefix="/delivery", template_folder="templates/delivery")
 
@@ -64,3 +65,24 @@ def set_status(delivery_id):
     except DeliveryValidationError as e:
         flash(str(e), "error")
     return redirect(url_for("delivery.delivery_detail", delivery_id=delivery_id))
+
+
+@delivery_bp.route("/<int:delivery_id>/label")
+@login_required
+def label(delivery_id):
+    delivery = Delivery.query.get_or_404(delivery_id)
+    ctx = get_label_context(delivery)
+    return render_template("delivery/label.html", **ctx)
+
+
+@delivery_bp.route("/<int:delivery_id>/label.pdf")
+@login_required
+def label_pdf(delivery_id):
+    delivery = Delivery.query.get_or_404(delivery_id)
+    pdf_buf = generate_label_pdf(delivery)
+    return send_file(
+        pdf_buf,
+        mimetype="application/pdf",
+        as_attachment=True,
+        download_name=f"label-parcel-{delivery.id}.pdf",
+    )

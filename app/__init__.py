@@ -38,6 +38,12 @@ def create_app(config_object="config.Config"):
         from app.reports import reports_bp
         app.register_blueprint(reports_bp)
 
+        from app.api import api_bp
+        app.register_blueprint(api_bp)
+
+        from app.settings import settings_bp
+        app.register_blueprint(settings_bp)
+
         from app.admin_views import init_admin
         init_admin(app)
 
@@ -75,3 +81,22 @@ def register_cli(app):
             print(f"Created admin user '{username}'.")
 
         db.session.commit()
+
+    @app.cli.command("api-token")
+    def api_token():
+        """Show the admin user's API token (used by the mobile app), generating one if it doesn't exist yet."""
+        import secrets
+        from app.models import User
+
+        username = app.config["ADMIN_USERNAME"]
+        user = User.query.filter_by(username=username).first()
+        if not user:
+            print(f"No user '{username}' found — run `flask seed-admin` first.")
+            return
+
+        if not user.api_token:
+            user.api_token = secrets.token_hex(32)
+            db.session.commit()
+            print("Generated a new API token.")
+
+        print(f"API token for '{username}': {user.api_token}")

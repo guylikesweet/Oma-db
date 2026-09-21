@@ -14,6 +14,9 @@ class User(db.Model, UserMixin):
     username = db.Column(db.String(50), unique=True, nullable=False)
     password_hash = db.Column(db.String(255), nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    # Used by the mobile app to authenticate against /api/* — a long random
+    # string, not a password. See `flask api-token` CLI command.
+    api_token = db.Column(db.String(64), unique=True, nullable=True)
 
     def __repr__(self):
         return f"<User {self.username}>"
@@ -272,3 +275,24 @@ class StockLog(db.Model):
 
     def __repr__(self):
         return f"<StockLog product={self.product_id} change={self.change_qty}>"
+
+
+# ---------------------------------------------------------------------------
+# APP_SETTINGS — single row (id always 1). Shipping label size, business
+# info, and the logo image itself (stored as bytes, not a file on disk —
+# Render's filesystem is wiped on every deploy, so a disk file wouldn't survive).
+# ---------------------------------------------------------------------------
+class AppSettings(db.Model):
+    __tablename__ = "app_settings"
+
+    id = db.Column(db.Integer, primary_key=True)
+    label_width_mm = db.Column(db.Integer, default=100)
+    label_height_mm = db.Column(db.Integer, default=150)
+    business_name = db.Column(db.String(255))
+    business_phone = db.Column(db.String(50))
+    business_address = db.Column(db.Text)
+    logo_data = db.Column(db.LargeBinary)
+    logo_mimetype = db.Column(db.String(50))
+
+    def __repr__(self):
+        return f"<AppSettings {self.label_width_mm}x{self.label_height_mm}mm>"
