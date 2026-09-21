@@ -1,0 +1,60 @@
+{% extends 'base_standalone.html' %}
+{% block title %}Settings{% endblock %}
+{% block body %}
+<div class="container" style="max-width:600px; margin-top:20px;">
+  <h2>Settings</h2>
+
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% for category, message in messages %}
+      <div class="alert alert-{{ 'danger' if category == 'error' else 'success' }}">{{ message }}</div>
+    {% endfor %}
+  {% endwith %}
+
+  <form method="post" enctype="multipart/form-data">
+    <h4>Shipping Label Size</h4>
+    <div class="row">
+      <div class="col-6 form-group">
+        <label>Width (mm)</label>
+        <input type="number" name="label_width_mm" class="form-control" value="{{ settings.label_width_mm }}" min="1" required>
+      </div>
+      <div class="col-6 form-group">
+        <label>Height (mm)</label>
+        <input type="number" name="label_height_mm" class="form-control" value="{{ settings.label_height_mm }}" min="1" required>
+      </div>
+    </div>
+    <p class="text-muted" style="font-size:13px;">Common sizes: 100 &times; 150mm (standard 4&times;6&Prime; shipping label), 100 &times; 100mm, 210 &times; 297mm (A4).</p>
+
+    <h4 style="margin-top:20px;">Business Info (shown on the label)</h4>
+    <div class="form-group">
+      <label>Business Name</label>
+      <input type="text" name="business_name" class="form-control" value="{{ settings.business_name or '' }}">
+    </div>
+    <div class="form-group">
+      <label>Phone</label>
+      <input type="text" name="business_phone" class="form-control" value="{{ settings.business_phone or '' }}">
+    </div>
+    <div class="form-group">
+      <label>Address (return / sender address)</label>
+      <textarea name="business_address" class="form-control" rows="2">{{ settings.business_address or '' }}</textarea>
+    </div>
+
+    <h4 style="margin-top:20px;">Logo</h4>
+    {% if has_static_logo %}
+    <div class="alert alert-info" style="font-size:13px;">
+      Using the logo file at <code>app/static/logo.png</code> in the codebase — this takes priority over any logo uploaded below. To change it, replace that file and redeploy.
+    </div>
+    {% endif %}
+    {% if settings.logo_data %}
+    <p><img src="{{ url_for('settings.logo') }}" alt="Current logo" style="max-width:200px; max-height:100px; border:1px solid #eee; padding:4px;"></p>
+    {% else %}
+    <p class="text-muted">No logo uploaded here yet.</p>
+    {% endif %}
+    <div class="form-group">
+      <label>{{ 'Replace logo' if settings.logo_data else 'Upload logo' }}</label>
+      <input type="file" name="logo" class="form-control-file" accept="image/*">
+    </div>
+
+    <button type="submit" class="btn btn-primary" style="margin-top:10px;">Save Settings</button>
+  </form>
+</div>
+{% endblock %}
