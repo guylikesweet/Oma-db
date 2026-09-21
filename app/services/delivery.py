@@ -80,6 +80,19 @@ def create_delivery(sale_ids, method, consolidation_type=None, delivery_address=
                 f"Sale #{sale.id} isn't ready for delivery yet — its shipping payment hasn't been settled."
             )
 
+    if len(sales) > 1:
+        phones = {s.customer_phone for s in sales if s.customer_phone}
+        names = {(s.customer_name or "").strip().lower() for s in sales if s.customer_name}
+        # Consolidation only makes sense for the SAME customer (matched by phone or name) —
+        # the label shows one recipient for the whole parcel, so mixing different
+        # customers here would silently ship someone else's items under the wrong name/address.
+        if len(phones) > 1 and len(names) > 1:
+            raise DeliveryValidationError(
+                "These sales are for different customers (different name and phone) — "
+                "a consolidated parcel needs one label with one recipient. "
+                "Create separate deliveries instead."
+            )
+
     delivery = Delivery(
         method=method.strip(),
         status=Delivery.STATUS_PENDING,
