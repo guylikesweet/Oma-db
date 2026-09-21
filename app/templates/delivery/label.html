@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Label — Parcel #{{ delivery.id }}</title>
+  <style>
+    @page { size: {{ settings.label_width_mm }}mm {{ settings.label_height_mm }}mm; margin: 4mm; }
+    * { box-sizing: border-box; }
+    body { font-family: Arial, Helvetica, sans-serif; margin:0; color:#111; }
+    .toolbar { padding:12px; background:#212529; }
+    .toolbar button, .toolbar a {
+      display:inline-block; margin-right:8px; padding:8px 14px; border-radius:4px;
+      text-decoration:none; font-size:14px; border:none; cursor:pointer;
+    }
+    .btn-print { background:#2563eb; color:#fff; }
+    .btn-download { background:#16a34a; color:#fff; }
+    .btn-back { background:#444; color:#fff; }
+
+    .label-sheet {
+      width: {{ settings.label_width_mm }}mm;
+      min-height: {{ settings.label_height_mm }}mm;
+      margin: 20px auto; padding:4mm; border:1px solid #ccc; background:#fff;
+    }
+    .logo { max-width:100%; max-height:20mm; margin-bottom:6px; display:block; }
+    .business-name { font-weight:700; font-size:14px; margin:0 0 2px; }
+    .small { font-size:10px; color:#333; margin:0 0 2px; line-height:1.3; }
+    .section-label { font-size:10px; color:#888; text-transform:uppercase; margin:8px 0 2px; }
+    .recipient-name { font-size:16px; font-weight:700; margin:0 0 2px; }
+    table.items { width:100%; border-collapse:collapse; margin-top:8px; font-size:11px; }
+    table.items th, table.items td { border:1px solid #ccc; padding:4px 6px; text-align:left; }
+    table.items th { background:#f5f5f5; }
+
+    @media print {
+      .toolbar { display:none; }
+      .label-sheet { margin:0; border:none; width:100%; min-height:auto; }
+      body { margin:0; }
+    }
+  </style>
+</head>
+<body>
+  <div class="toolbar">
+    <button class="btn-print" onclick="window.print()">Print</button>
+    <a class="btn-download" href="{{ url_for('delivery.label_pdf', delivery_id=delivery.id) }}">Download PDF</a>
+    <a class="btn-back" href="{{ url_for('delivery.delivery_detail', delivery_id=delivery.id) }}">&larr; Back</a>
+  </div>
+
+  <div class="label-sheet">
+    {% if has_static_logo %}
+    <img class="logo" src="{{ url_for('static', filename='logo.png') }}" alt="Logo">
+    {% elif settings.logo_data %}
+    <img class="logo" src="{{ url_for('settings.logo') }}" alt="Logo">
+    {% endif %}
+    {% if settings.business_name %}<p class="business-name">{{ settings.business_name }}</p>{% endif %}
+    {% if settings.business_phone %}<p class="small">{{ settings.business_phone }}</p>{% endif %}
+    {% if settings.business_address %}<p class="small">{{ settings.business_address }}</p>{% endif %}
+
+    <p class="section-label">Ship To</p>
+    <p class="recipient-name">{{ recipient_name or '-' }}</p>
+    {% if recipient_phone %}<p class="small">{{ recipient_phone }}</p>{% endif %}
+    {% if delivery_address %}<p class="small">{{ delivery_address }}</p>{% endif %}
+    {% if recipient_state %}<p class="small">{{ recipient_state }}</p>{% endif %}
+
+    <p class="section-label">Parcel #{{ delivery.id }} — {{ delivery.method or '' }}</p>
+    <p class="small">Order(s): {% for sid in sale_ids %}#{{ sid }}{% if not loop.last %}, {% endif %}{% endfor %}</p>
+
+    <table class="items">
+      <thead><tr><th>Item</th><th>Variant</th><th>Qty</th></tr></thead>
+      <tbody>
+        {% for li in line_items %}
+        <tr><td>{{ li.product_name }}</td><td>{{ li.variant_note or '-' }}</td><td>{{ li.qty }}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</body>
+</html>

@@ -35,6 +35,10 @@
     </form>
   </div>
 
+  <div style="margin-bottom:16px;">
+    <a href="{{ url_for('delivery.label', delivery_id=delivery.id) }}" class="btn btn-default btn-sm">Print / Download Shipping Label</a>
+  </div>
+
   <h4>Sales in this parcel ({{ delivery.sales|length }})</h4>
   {% for sale in delivery.sales %}
   <div style="border:1px solid #eee; border-radius:6px; padding:10px; margin-bottom:10px;">
