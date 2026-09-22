@@ -9,10 +9,23 @@ At creation:
 """
 from decimal import Decimal
 from datetime import date, timedelta
+import random
+import string
 
 from app import db
 from app.models import Sale, SaleItem, Product, StockLog
 from app.services.rates import get_rate_for_month
+
+ORDER_ID_ALPHABET = string.ascii_uppercase + string.digits
+
+
+def generate_order_id():
+    """OMB- + 6 random alphanumeric chars, checked for uniqueness. Not sequential/guessable."""
+    for _ in range(50):  # practically always succeeds on the first try
+        candidate = "OMB-" + "".join(random.choices(ORDER_ID_ALPHABET, k=6))
+        if not Sale.query.filter_by(order_id=candidate).first():
+            return candidate
+    raise RuntimeError("Could not generate a unique order ID after 50 attempts.")
 
 
 class SaleValidationError(Exception):
@@ -54,6 +67,7 @@ def create_sale(customer_name, customer_phone, customer_address, customer_state,
         notes=notes,
         order_status="New",
     )
+    sale.order_id = generate_order_id()
     sale.sale_date = date.today()
     sale.estimated_arrival_start = sale.sale_date + timedelta(days=60)
     sale.estimated_arrival_end = sale.sale_date + timedelta(days=70)

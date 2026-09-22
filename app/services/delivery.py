@@ -121,6 +121,8 @@ def update_delivery_status(delivery_id, new_status):
         raise DeliveryValidationError(f"Invalid delivery status '{new_status}'.")
 
     delivery.status = new_status
+    if new_status == Delivery.STATUS_OUT_FOR_DELIVERY and not delivery.shipped_at:
+        delivery.shipped_at = datetime.utcnow()
     if new_status == Delivery.STATUS_DELIVERED:
         delivery.delivered_at = datetime.utcnow()
         for sale in delivery.sales:

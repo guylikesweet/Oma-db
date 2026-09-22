@@ -1,11 +1,20 @@
 """
 Shipping label generation — one label per Delivery (one per physical
 parcel), even when it consolidates multiple sales for the same customer.
+
+Field set is deliberately fixed to exactly what's needed on the label:
+sender (logo/phone/address from Settings), recipient (name/phone/address
+from the sale), Order ID + date of shipment (from the sale/delivery),
+and weight/dimensions/remarks captured fresh per label. Any missing value
+shows "N/A" rather than a blank.
 """
 import io
 import os
 
 from app.services.settings import get_settings
+from app.services.barcodes import generate_barcode_png
+
+NA = "N/A"
 
 # Preferred logo source: a file committed to the repo at this exact path.
 # Since it's part of the git repo (not a runtime upload), it survives every
@@ -27,46 +36,62 @@ def get_logo_bytes():
     return None, None
 
 
+def label_ready(delivery):
+    """Weight and dimensions must be captured before a label can be generated."""
+    return delivery.package_weight_kg is not None and bool(delivery.package_dimensions)
+
+
 def get_label_context(delivery):
     """Data needed to render a label, shared by the print-HTML page and the PDF."""
     settings = get_settings()
-    logo_bytes, logo_mimetype = get_logo_bytes()
-    has_static_logo = os.path.exists(STATIC_LOGO_PATH)
+    logo_bytes, _ = get_logo_bytes()
 
     # Consolidation is always same-customer (by name or phone), so every sale
-    # in a delivery shares one recipient — safe to read from the first sale.
+    # in a delivery shares one recipient. The FIRST sale is the label's
+    # primary order/tracking reference; additional consolidated sales are
+    # listed separately so nothing is lost, but only one barcode is printed.
     primary_sale = delivery.sales[0] if delivery.sales else None
+    other_order_ids = [s.order_id for s in delivery.sales[1:]] if len(delivery.sales) > 1 else []
 
     line_items = []
     for sale in delivery.sales:
         for item in sale.items:
             line_items.append({
-                "sale_id": sale.id,
                 "product_name": item.product.name if item.product else f"Product #{item.product_id}",
-                "variant_note": item.variant_note,
+                "variant_note": item.variant_note or NA,
                 "qty": item.qty,
             })
+
+    order_id = (primary_sale.order_id if primary_sale else None) or NA
+    barcode_png = generate_barcode_png(order_id) if order_id != NA else None
 
     return {
         "settings": settings,
         "delivery": delivery,
         "has_logo": logo_bytes is not None,
-        "has_static_logo": has_static_logo,
-        "recipient_name": primary_sale.customer_name if primary_sale else "",
-        "recipient_phone": primary_sale.customer_phone if primary_sale else "",
-        "recipient_state": primary_sale.customer_state if primary_sale else "",
-        "delivery_address": delivery.delivery_address or (primary_sale.customer_address if primary_sale else ""),
+        "company_phone": settings.business_phone or NA,
+        "company_address": settings.business_address or NA,
+        "order_id": order_id,
+        "other_order_ids": other_order_ids,
+        "date_of_shipment": delivery.shipped_at.strftime("%Y-%m-%d") if delivery.shipped_at else NA,
+        "recipient_name": (primary_sale.customer_name if primary_sale else None) or NA,
+        "recipient_phone": (primary_sale.customer_phone if primary_sale else None) or NA,
+        "delivery_address": delivery.delivery_address or (primary_sale.customer_address if primary_sale else None) or NA,
+        "weight": f"{delivery.package_weight_kg} kg" if delivery.package_weight_kg is not None else NA,
+        "dimensions": delivery.package_dimensions or NA,
+        "remarks": delivery.remarks or NA,
         "line_items": line_items,
-        "sale_ids": [s.id for s in delivery.sales],
+        "barcode_png": barcode_png,
     }
 
 
 def generate_label_pdf(delivery):
     from reportlab.lib.units import mm
-    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image
+    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image, HRFlowable
     from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
     from reportlab.lib import colors
     from reportlab.lib.utils import ImageReader
+    from reportlab.lib.enums import TA_CENTER
 
     ctx = get_label_context(delivery)
     settings = ctx["settings"]
@@ -74,6 +99,7 @@ def generate_label_pdf(delivery):
     width = settings.label_width_mm * mm
     height = settings.label_height_mm * mm
     margin = 4 * mm
+    content_width = width - 2 * margin
 
     buf = io.BytesIO()
     doc = SimpleDocTemplate(
@@ -82,61 +108,57 @@ def generate_label_pdf(delivery):
     )
 
     styles = getSampleStyleSheet()
-    business_style = ParagraphStyle("business", parent=styles["Heading3"], fontSize=11, spaceAfter=1)
-    small_style = ParagraphStyle("small", parent=styles["Normal"], fontSize=8, leading=10)
-    label_style = ParagraphStyle("label", parent=styles["Normal"], fontSize=9, spaceAfter=1, textColor=colors.grey)
-    recipient_style = ParagraphStyle("recipient", parent=styles["Normal"], fontSize=12, leading=14)
+    section_style = ParagraphStyle("section", parent=styles["Normal"], fontSize=8, textColor=colors.grey, spaceAfter=1)
+    normal_style = ParagraphStyle("normal", parent=styles["Normal"], fontSize=9, leading=12)
+    recipient_style = ParagraphStyle("recipient", parent=styles["Normal"], fontSize=13, leading=15)
+    order_id_style = ParagraphStyle("orderid", parent=styles["Normal"], fontSize=11, leading=14)
+    center_style = ParagraphStyle("center", parent=styles["Normal"], fontSize=9, alignment=TA_CENTER)
 
     story = []
 
+    # Sender: small logo (kept small deliberately, not the visual focus) + phone/address
     logo_bytes, _ = get_logo_bytes()
     if logo_bytes:
         try:
             img_reader = ImageReader(io.BytesIO(logo_bytes))
             iw, ih = img_reader.getSize()
-            max_w = width - 2 * margin
-            max_logo_h = 18 * mm
-            scale = min(max_w / iw, max_logo_h / ih)
+            max_logo_h = 10 * mm  # deliberately small — a corner mark, not a banner
+            max_logo_w = content_width * 0.4
+            scale = min(max_logo_w / iw, max_logo_h / ih)
             story.append(Image(io.BytesIO(logo_bytes), width=iw * scale, height=ih * scale))
-            story.append(Spacer(1, 3 * mm))
         except Exception:
-            pass  # bad/unreadable image data shouldn't block label generation
+            pass
+    story.append(Paragraph(f"Tel: {ctx['company_phone']}", normal_style))
+    story.append(Paragraph(ctx["company_address"], normal_style))
+    story.append(Spacer(1, 2 * mm))
+    story.append(HRFlowable(width="100%", color=colors.grey, thickness=0.75))
+    story.append(Spacer(1, 2 * mm))
 
-    if settings.business_name:
-        story.append(Paragraph(settings.business_name, business_style))
-    if settings.business_phone:
-        story.append(Paragraph(settings.business_phone, small_style))
-    if settings.business_address:
-        story.append(Paragraph(settings.business_address, small_style))
-    story.append(Spacer(1, 4 * mm))
+    # Recipient
+    story.append(Paragraph("TO", section_style))
+    story.append(Paragraph(ctx["recipient_name"], recipient_style))
+    story.append(Paragraph(ctx["recipient_phone"], normal_style))
+    story.append(Paragraph(ctx["delivery_address"], normal_style))
+    story.append(Spacer(1, 2 * mm))
+    story.append(HRFlowable(width="100%", color=colors.grey, thickness=0.75))
+    story.append(Spacer(1, 2 * mm))
 
-    story.append(Paragraph("SHIP TO", label_style))
-    story.append(Paragraph(ctx["recipient_name"] or "-", recipient_style))
-    if ctx["recipient_phone"]:
-        story.append(Paragraph(ctx["recipient_phone"], small_style))
-    if ctx["delivery_address"]:
-        story.append(Paragraph(ctx["delivery_address"], small_style))
-    if ctx["recipient_state"]:
-        story.append(Paragraph(ctx["recipient_state"], small_style))
-    story.append(Spacer(1, 4 * mm))
-
-    story.append(Paragraph(f"Parcel #{delivery.id} &mdash; {delivery.method or ''}", label_style))
-    order_ref = ", ".join(f"#{sid}" for sid in ctx["sale_ids"])
-    story.append(Paragraph(f"Order(s): {order_ref}", small_style))
+    # Order details
+    story.append(Paragraph(f"ORDER ID: {ctx['order_id']}", order_id_style))
+    if ctx["other_order_ids"]:
+        story.append(Paragraph("Also includes: " + ", ".join(ctx["other_order_ids"]), normal_style))
+    story.append(Paragraph(f"Date of Shipment: {ctx['date_of_shipment']}", normal_style))
+    story.append(Paragraph(f"Weight: {ctx['weight']}    Dimensions: {ctx['dimensions']}", normal_style))
+    story.append(Paragraph(f"Remarks: {ctx['remarks']}", normal_style))
     story.append(Spacer(1, 3 * mm))
 
-    table_data = [["Item", "Variant", "Qty"]]
-    for li in ctx["line_items"]:
-        table_data.append([li["product_name"], li["variant_note"] or "-", str(li["qty"])])
-
-    items_table = Table(table_data, colWidths=[(width - 2 * margin) * 0.5, (width - 2 * margin) * 0.3, (width - 2 * margin) * 0.2])
-    items_table.setStyle(TableStyle([
-        ("FONTSIZE", (0, 0), (-1, -1), 8),
-        ("GRID", (0, 0), (-1, -1), 0.5, colors.grey),
-        ("BACKGROUND", (0, 0), (-1, 0), colors.whitesmoke),
-        ("VALIGN", (0, 0), (-1, -1), "TOP"),
-    ]))
-    story.append(items_table)
+    # Barcode — bottom of the label, the last thing on it
+    if ctx["barcode_png"]:
+        bc_reader = ImageReader(io.BytesIO(ctx["barcode_png"]))
+        biw, bih = bc_reader.getSize()
+        bc_w = content_width * 0.9
+        bc_h = bih * (bc_w / biw)
+        story.append(Image(io.BytesIO(ctx["barcode_png"]), width=bc_w, height=bc_h))
 
     doc.build(story)
     buf.seek(0)
