@@ -1,0 +1,33 @@
+{% extends 'base_standalone.html' %}
+{% block title %}Prepare Label — Delivery #{{ delivery.id }}{% endblock %}
+{% block body %}
+<div class="container" style="max-width:600px; margin-top:20px;">
+  <h2>Prepare Shipping Label</h2>
+  <p class="text-muted">Enter the actual packed weight and dimensions — not the product's original dimensions, since repacking can change them.</p>
+
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% for category, message in messages %}
+      <div class="alert alert-{{ 'danger' if category == 'error' else 'success' }}">{{ message }}</div>
+    {% endfor %}
+  {% endwith %}
+
+  <form method="post">
+    <div class="form-group">
+      <label>Weight (kg)</label>
+      <input type="number" step="0.01" name="package_weight_kg" class="form-control"
+             value="{{ delivery.package_weight_kg or '' }}" required>
+    </div>
+    <div class="form-group">
+      <label>Dimensions</label>
+      <input type="text" name="package_dimensions" class="form-control" placeholder="e.g. 30 x 20 x 15 cm"
+             value="{{ delivery.package_dimensions or '' }}" required>
+    </div>
+    <div class="form-group">
+      <label>Remarks (optional)</label>
+      <textarea name="remarks" class="form-control" rows="2">{{ delivery.remarks or '' }}</textarea>
+    </div>
+    <button type="submit" class="btn btn-primary">Continue to Label</button>
+    <a href="{{ url_for('delivery.delivery_detail', delivery_id=delivery.id) }}" class="btn btn-default">Cancel</a>
+  </form>
+</div>
+{% endblock %}
