@@ -42,7 +42,7 @@
   <h4>Sales in this parcel ({{ delivery.sales|length }})</h4>
   {% for sale in delivery.sales %}
   <div style="border:1px solid #eee; border-radius:6px; padding:10px; margin-bottom:10px;">
-    <strong><a href="{{ url_for('sales.sale_detail', sale_id=sale.id) }}">Sale #{{ sale.id }}</a></strong>
+    <strong><a href="{{ url_for('sales.sale_detail', sale_id=sale.id) }}">{{ sale.order_id }}</a></strong>
     — {{ sale.customer_name }} ({{ sale.customer_phone }}), {{ sale.customer_state }}
     <table class="table table-sm" style="margin-top:6px;">
       <thead><tr><th>Product</th><th>Variant</th><th>Qty</th></tr></thead>

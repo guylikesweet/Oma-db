@@ -15,7 +15,7 @@
   {% for phone, group_sales in phone_matches.items() %}
   <div class="well" style="background:#f8f9fa; padding:12px; border-radius:6px; margin-bottom:10px;">
     <strong>{{ phone }}</strong> — {{ group_sales|length }} orders:
-    {% for s in group_sales %}#{{ s.id }} ({{ s.customer_name }}){% if not loop.last %}, {% endif %}{% endfor %}
+    {% for s in group_sales %}{{ s.order_id }} ({{ s.customer_name }}){% if not loop.last %}, {% endif %}{% endfor %}
     <form method="post" action="{{ url_for('delivery.create') }}" class="form-inline" style="margin-top:8px;">
       {% for s in group_sales %}<input type="hidden" name="sale_ids[]" value="{{ s.id }}">{% endfor %}
       <input type="hidden" name="consolidation_type" value="phone">
@@ -36,7 +36,7 @@
   {% for cname, group_sales in name_matches.items() %}
   <div class="well" style="background:#f8f9fa; padding:12px; border-radius:6px; margin-bottom:10px;">
     <strong>{{ cname }}</strong> — {{ group_sales|length }} orders:
-    {% for s in group_sales %}#{{ s.id }} ({{ s.customer_phone or 'no phone' }}){% if not loop.last %}, {% endif %}{% endfor %}
+    {% for s in group_sales %}{{ s.order_id }} ({{ s.customer_phone or 'no phone' }}){% if not loop.last %}, {% endif %}{% endfor %}
     <form method="post" action="{{ url_for('delivery.create') }}" class="form-inline" style="margin-top:8px;">
       {% for s in group_sales %}<input type="hidden" name="sale_ids[]" value="{{ s.id }}">{% endfor %}
       <input type="hidden" name="consolidation_type" value="name">
@@ -59,7 +59,7 @@
         {% for s in sales %}
         <tr>
           <td><input type="checkbox" name="sale_ids[]" value="{{ s.id }}"></td>
-          <td><a href="{{ url_for('sales.sale_detail', sale_id=s.id) }}">#{{ s.id }}</a></td>
+          <td><a href="{{ url_for('sales.sale_detail', sale_id=s.id) }}">{{ s.order_id }}</a></td>
           <td>{{ s.customer_name }}</td>
           <td>{{ s.customer_phone }}</td>
           <td>{{ s.customer_state }}</td>

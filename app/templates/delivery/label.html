@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <title>Label — Parcel #{{ delivery.id }}</title>
+  <title>Label — {{ order_id }}</title>
   <style>
     @page { size: {{ settings.label_width_mm }}mm {{ settings.label_height_mm }}mm; margin: 4mm; }
     * { box-sizing: border-box; }
@@ -21,14 +21,15 @@
       min-height: {{ settings.label_height_mm }}mm;
       margin: 20px auto; padding:4mm; border:1px solid #ccc; background:#fff;
     }
-    .logo { max-width:100%; max-height:20mm; margin-bottom:6px; display:block; }
-    .business-name { font-weight:700; font-size:14px; margin:0 0 2px; }
+    .logo { max-height:10mm; max-width:40%; display:block; margin-bottom:4px; }
     .small { font-size:10px; color:#333; margin:0 0 2px; line-height:1.3; }
-    .section-label { font-size:10px; color:#888; text-transform:uppercase; margin:8px 0 2px; }
-    .recipient-name { font-size:16px; font-weight:700; margin:0 0 2px; }
-    table.items { width:100%; border-collapse:collapse; margin-top:8px; font-size:11px; }
-    table.items th, table.items td { border:1px solid #ccc; padding:4px 6px; text-align:left; }
-    table.items th { background:#f5f5f5; }
+    hr.divider { border:none; border-top:1px solid #999; margin:6px 0; }
+    .section-label { font-size:9px; color:#888; text-transform:uppercase; margin:0 0 2px; letter-spacing:0.5px; }
+    .recipient-name { font-size:15px; font-weight:700; margin:0 0 2px; }
+    .order-id { font-size:13px; font-weight:700; margin:0 0 2px; }
+    .details p { margin:0 0 2px; font-size:10px; }
+    .barcode-wrap { text-align:center; margin-top:8px; }
+    .barcode-wrap img { max-width:100%; }
 
     @media print {
       .toolbar { display:none; }
@@ -45,32 +46,35 @@
   </div>
 
   <div class="label-sheet">
-    {% if has_static_logo %}
-    <img class="logo" src="{{ url_for('static', filename='logo.png') }}" alt="Logo">
-    {% elif settings.logo_data %}
-    <img class="logo" src="{{ url_for('settings.logo') }}" alt="Logo">
+    {% if has_logo %}
+    <img class="logo" src="{% if settings.logo_data or has_logo %}{{ url_for('static', filename='logo.png') }}{% endif %}" alt="Logo"
+         onerror="this.src='{{ url_for('settings.logo') }}'">
     {% endif %}
-    {% if settings.business_name %}<p class="business-name">{{ settings.business_name }}</p>{% endif %}
-    {% if settings.business_phone %}<p class="small">{{ settings.business_phone }}</p>{% endif %}
-    {% if settings.business_address %}<p class="small">{{ settings.business_address }}</p>{% endif %}
+    <p class="small">Tel: {{ company_phone }}</p>
+    <p class="small">{{ company_address }}</p>
+    <hr class="divider">
 
-    <p class="section-label">Ship To</p>
-    <p class="recipient-name">{{ recipient_name or '-' }}</p>
-    {% if recipient_phone %}<p class="small">{{ recipient_phone }}</p>{% endif %}
-    {% if delivery_address %}<p class="small">{{ delivery_address }}</p>{% endif %}
-    {% if recipient_state %}<p class="small">{{ recipient_state }}</p>{% endif %}
+    <p class="section-label">To</p>
+    <p class="recipient-name">{{ recipient_name }}</p>
+    <p class="small">{{ recipient_phone }}</p>
+    <p class="small">{{ delivery_address }}</p>
+    <hr class="divider">
 
-    <p class="section-label">Parcel #{{ delivery.id }} — {{ delivery.method or '' }}</p>
-    <p class="small">Order(s): {% for sid in sale_ids %}#{{ sid }}{% if not loop.last %}, {% endif %}{% endfor %}</p>
+    <div class="details">
+      <p class="order-id">Order ID: {{ order_id }}</p>
+      {% if other_order_ids %}
+      <p>Also includes: {{ other_order_ids|join(', ') }}</p>
+      {% endif %}
+      <p>Date of Shipment: {{ date_of_shipment }}</p>
+      <p>Weight: {{ weight }} &nbsp; Dimensions: {{ dimensions }}</p>
+      <p>Remarks: {{ remarks }}</p>
+    </div>
 
-    <table class="items">
-      <thead><tr><th>Item</th><th>Variant</th><th>Qty</th></tr></thead>
-      <tbody>
-        {% for li in line_items %}
-        <tr><td>{{ li.product_name }}</td><td>{{ li.variant_note or '-' }}</td><td>{{ li.qty }}</td></tr>
-        {% endfor %}
-      </tbody>
-    </table>
+    {% if barcode_b64 %}
+    <div class="barcode-wrap">
+      <img src="data:image/png;base64,{{ barcode_b64 }}" alt="Barcode {{ order_id }}">
+    </div>
+    {% endif %}
   </div>
 </body>
 </html>
