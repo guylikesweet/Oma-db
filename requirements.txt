@@ -9,3 +9,5 @@ python-dotenv==1.0.1
 gunicorn==22.0.0
 SQLAlchemy==2.0.35
 reportlab==4.2.5
+python-barcode==0.15.1
+Pillow==12.3.0
