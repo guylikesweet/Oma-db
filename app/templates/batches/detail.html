@@ -33,7 +33,7 @@
     <tbody>
       {% for sale in batch.sales %}
       <tr>
-        <td><a href="{{ url_for('sales.sale_detail', sale_id=sale.id) }}">#{{ sale.id }}</a></td>
+        <td><a href="{{ url_for('sales.sale_detail', sale_id=sale.id) }}">{{ sale.order_id }}</a></td>
         <td>{{ sale.customer_name }}</td>
         <td>{{ sale.customer_state }}</td>
         <td>{{ sale.estimated_shipping_cost if sale.estimated_shipping_cost is not none else '—' }}</td>
@@ -68,7 +68,7 @@
   <form method="post" action="{{ url_for('batches.add_sale', batch_id=batch.id) }}" class="form-inline">
     <select name="sale_id" class="form-control" style="margin-right:8px;">
       {% for s in eligible_sales %}
-      <option value="{{ s.id }}">#{{ s.id }} — {{ s.customer_name }} ({{ s.customer_state }}, {{ s.sale_date }})</option>
+      <option value="{{ s.id }}">{{ s.order_id }} — {{ s.customer_name }} ({{ s.customer_state }}, {{ s.sale_date }})</option>
       {% else %}
       <option value="">No eligible unassigned sales</option>
       {% endfor %}
