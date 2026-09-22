@@ -116,12 +116,12 @@ class ProductView(SecureModelView):
 # ---------------------------------------------------------------------------
 class SaleView(SecureModelView):
     column_list = (
-        "id", "sale_date", "customer_name", "customer_state", "order_status",
+        "id", "order_id", "sale_date", "customer_name", "customer_state", "order_status",
         "subtotal_amount", "estimated_shipping_cost", "actual_shipping_cost",
         "shipping_payment_settled", "total_amount", "payment_status", "sale_link",
     )
     column_labels = {"sale_link": "Details"}
-    column_searchable_list = ("customer_name", "customer_phone")
+    column_searchable_list = ("order_id", "customer_name", "customer_phone")
     column_filters = ("order_status", "payment_status", "customer_state", "sale_date")
 
     can_create = False

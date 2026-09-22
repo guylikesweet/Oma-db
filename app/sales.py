@@ -42,7 +42,7 @@ def new_sale():
                 notes=request.form.get("notes", "").strip(),
                 line_items=line_items,
             )
-            flash(f"Sale #{sale.id} created. Estimated shipping: {sale.estimated_shipping_cost}", "success")
+            flash(f"Order {sale.order_id} created. Estimated shipping: {sale.estimated_shipping_cost}", "success")
             return redirect(url_for("sales.sale_detail", sale_id=sale.id))
         except SaleValidationError as e:
             flash(str(e), "error")

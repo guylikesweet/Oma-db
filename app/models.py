@@ -154,7 +154,16 @@ class Delivery(db.Model):
 
     notes = db.Column(db.Text)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    # Set automatically the moment status becomes "Out for Delivery" — this is
+    # the label's "date of shipment", not when the delivery record was created.
+    shipped_at = db.Column(db.DateTime)
     delivered_at = db.Column(db.DateTime)
+
+    # Captured fresh per label (not pulled from product records) — the actual
+    # packed parcel may not match the original per-product dimensions.
+    package_weight_kg = db.Column(db.Numeric(10, 3))
+    package_dimensions = db.Column(db.String(100))
+    remarks = db.Column(db.Text)
 
     sales = db.relationship("Sale", backref="delivery", lazy=True)
 
@@ -169,6 +178,11 @@ class Sale(db.Model):
     __tablename__ = "sales"
 
     id = db.Column(db.Integer, primary_key=True)
+    # Customer-facing ID shown everywhere instead of the raw numeric id —
+    # "OMB-" + 6 random alphanumeric chars, not sequential (see
+    # app/services/sales.py generate_order_id). Also doubles as the label's
+    # tracking number.
+    order_id = db.Column(db.String(20), unique=True, nullable=True)
     sale_date = db.Column(db.Date, default=date.today)
     customer_name = db.Column(db.String(255))
     customer_phone = db.Column(db.String(50))
