@@ -1,0 +1,20 @@
+name: oma_mobile
+description: Offline-first mobile client for the Oma Flask application.
+publish_to: 'none'
+version: 0.1.0+1
+
+environment:
+  sdk: '>=3.3.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  http: ^1.2.2
+  sqflite: ^2.3.3+1
+  path: ^1.9.0
+  flutter_secure_storage: ^9.2.2
+  connectivity_plus: ^6.1.0
+  uuid: ^4.5.1
+
+flutter:
+  uses-material-design: true
