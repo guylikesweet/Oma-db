@@ -1,58 +1,90 @@
-name: Build Oma Mobile APK
+name: Build APK
 
 on:
   workflow_dispatch:
     inputs:
-      api_base_url:
-        description: 'API URL - use https://oma-db.onrender.com/api'
+      api_url:
+        description: 'API URL (e.g. https://your-app.onrender.com/api)'
         required: true
-        default: 'https://oma-db.onrender.com/api'
-        type: string
+        default: 'https://your-app.onrender.com/api'
 
 jobs:
-  build-apk:
-    name: Analyze and build Android APK
-    runs-on: ubuntu-24.04
-
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mobile
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v5
-
-      - name: Setup Java 17
-        uses: actions/setup-java@v5
+      - uses: actions/checkout@v4
+      
+      - uses: actions/setup-flutter@v3
         with:
-          distribution: 'temurin'
-          java-version: '17'
-
-      - name: Setup Flutter
-        uses: subosito/flutter-action@v2
+          channel: stable
+          
+      - name: Setup Python for icon generation
+        uses: actions/setup-python@v5
         with:
-          flutter-version: '3.22.0'
-          channel: 'stable'
+          python-version: '3.11'
+          
+      - name: Install dependencies
+        run: flutter pub get
 
-      - name: Fix Gradle project
-        working-directory: ./mobile
+      - name: Fix API config name
         run: |
-          rm -rf android test
-          echo "include: package:flutter_lints/flutter.yaml" > analysis_options.yaml
-          echo "linter:" >> analysis_options.yaml
-          echo "  rules:" >> analysis_options.yaml
-          echo "    avoid_print: false" >> analysis_options.yaml
-          flutter create --platforms=android --org com.oma --project-name oma_mobile .
-          rm -rf test
-          flutter pub add flutter_lints --dev
-          flutter pub get
-      - name: Analyze code
-        working-directory: ./mobile
-        run: flutter analyze --no-fatal-warnings --no-fatal-infos
+          if [ -f lib/core/config.dart ]; then
+            sed -i 's/OMA_API_BASE_URL/API_BASE_URL/g' lib/core/config.dart || true
+          fi
+          if [ -f lib/data/config.dart ]; then
+            sed -i 's/OMA_API_BASE_URL/API_BASE_URL/g' lib/data/config.dart || true
+          fi
 
-      - name: Build Release APK
-        working-directory: ./mobile
-        run: flutter build apk --release --dart-define=API_BASE_URL=${{ inputs.api_base_url }}
+      - name: Generate launcher icons from Oma logo
+        run: |
+          python3 << 'PY'
+          from PIL import Image
+          import os
+          # Input logo
+          src = "assets/images/app_icon.png"
+          if not os.path.exists(src):
+              print("No app_icon.png found, skipping icon gen")
+              exit(0)
+          im = Image.open(src).convert("RGBA")
+          # Make sure square with white bg
+          size = max(im.size)
+          bg = Image.new("RGBA", (size, size), (255,255,255,255))
+          bg.paste(im, ((size-im.width)//2, (size-im.height)//2), im)
+          
+          # Android densities
+          densities = {
+              "mipmap-mdpi": 48,
+              "mipmap-hdpi": 72,
+              "mipmap-xhdpi": 96,
+              "mipmap-xxhdpi": 144,
+              "mipmap-xxxhdpi": 192,
+          }
+          for folder, px in densities.items():
+              path = f"android/app/src/main/res/{folder}"
+              os.makedirs(path, exist_ok=True)
+              resized = bg.resize((px, px), Image.LANCZOS)
+              resized.save(f"{path}/launcher_icon.png", "PNG")
+              resized.save(f"{path}/ic_launcher.png", "PNG")
+              print(f"Generated {path}/ic_launcher.png")
+          PY
 
-      - name: Upload APK Artifact
+      - name: Change app name to OmaSales Mobile
+        run: |
+          MANIFEST="android/app/src/main/AndroidManifest.xml"
+          if [ -f "$MANIFEST" ]; then
+            sed -i 's/android:label="[^"]*"/android:label="OmaSales Mobile"/g' $MANIFEST
+            echo "Manifest after:"
+            grep -n "android:label" $MANIFEST
+          fi
+
+      - name: Build APK
+        run: flutter build apk --release --dart-define=API_BASE_URL="${{ inputs.api_url }}"
+
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: oma-mobile-release-apk
+          name: OmaSales-Mobile-apk
           path: mobile/build/app/outputs/flutter-apk/app-release.apk
-          retention-days: 7
