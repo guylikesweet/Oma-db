@@ -33,10 +33,15 @@ jobs:
       - name: Fix Gradle project
         working-directory: ./mobile
         run: |
-          rm -rf android
+          rm -rf android test
+          echo "include: package:flutter_lints/flutter.yaml" > analysis_options.yaml
+          echo "linter:" >> analysis_options.yaml
+          echo "  rules:" >> analysis_options.yaml
+          echo "    avoid_print: false" >> analysis_options.yaml
           flutter create --platforms=android --org com.oma --project-name oma_mobile .
+          rm -rf test
+          flutter pub add flutter_lints --dev
           flutter pub get
-
       - name: Analyze code
         working-directory: ./mobile
         run: flutter analyze --no-fatal-warnings --no-fatal-infos
