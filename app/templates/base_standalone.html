@@ -4,6 +4,7 @@
   <meta charset="utf-8">
   <title>{% block title %}Sales{% endblock %}</title>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/4.6.2/css/bootstrap.min.css">
+  <link rel="stylesheet" href="{{ url_for('static', filename='oma-theme.css') }}">
   <style>
     body { background:#f4f5f7; margin:0; }
 
@@ -64,6 +65,7 @@
 
   {% block body %}{% endblock %}
 
+  <script src="{{ url_for('static', filename='oma-theme.js') }}"></script>
   <script>
     var sideNav = document.getElementById('sideNav');
     var backdrop = document.getElementById('navBackdrop');
