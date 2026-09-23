@@ -15,7 +15,7 @@ class OmaMobileApp extends StatelessWidget {
   const OmaMobileApp({super.key});
   @override
   Widget build(BuildContext context) => MaterialApp(
-        title: 'Oma Mobile',
+        title: 'OmaSales Mobile',
         debugShowCheckedModeBanner: false,
         theme: ThemeData(useMaterial3: true, colorSchemeSeed: Colors.indigo),
         home: const SessionGate(),
