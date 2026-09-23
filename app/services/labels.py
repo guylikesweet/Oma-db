@@ -1,4 +1,3 @@
-```python
 """
 Shipping label generation — one label per Delivery (one per physical
 parcel), even when it consolidates multiple sales for the same customer.
