@@ -1,12 +1,11 @@
 name: Build APK
-
 on:
   workflow_dispatch:
     inputs:
       api_url:
-        description: 'API URL'
+        description: 'Your real Render URL e.g https://your-backend.onrender.com/api'
         required: true
-        default: 'https://your-app.onrender.com/api'
+        default: 'https://oma-sales.onrender.com/api'
 
 jobs:
   build:
@@ -16,7 +15,7 @@ jobs:
         working-directory: mobile
     steps:
       - uses: actions/checkout@v4
-      
+
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
@@ -26,76 +25,43 @@ jobs:
         with:
           distribution: 'temurin'
           java-version: '17'
-          
+
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
 
-      - name: Install Pillow
-        run: pip install Pillow
-          
-      - name: Install dependencies
-        run: flutter pub get
+      - run: pip install Pillow
 
-      - name: Recreate android if missing
+      - run: flutter pub get
+
+      - name: Create android and fix everything
         run: |
           if [ ! -d android ]; then
             flutter create --platforms=android .
           fi
-          ls android/app/src/main/
-
-      - name: Force fix to Android v2 embedding
-        run: |
           rm -rf android/app/src/main/java/io
-          PKG_PATH=$(find android/app/src/main/kotlin android/app/src/main/java -name "MainActivity.*" 2>/dev/null | head -1)
-          echo "Found: $PKG_PATH"
           mkdir -p android/app/src/main/kotlin/com/example/oma_mobile
-          cat > android/app/src/main/kotlin/com/example/oma_mobile/MainActivity.kt << 'KT'
-          package com.example.oma_mobile
+          echo 'package com.example.oma_mobile
           import io.flutter.embedding.android.FlutterActivity
-          class MainActivity: FlutterActivity()
-          KT
+          class MainActivity: FlutterActivity()' > android/app/src/main/kotlin/com/example/oma_mobile/MainActivity.kt
           find android/app/src/main -name "MainActivity.java" -delete || true
-          cat android/app/src/main/kotlin/com/example/oma_mobile/MainActivity.kt
-
-      - name: Generate launcher icons
-        run: |
+          sed -i 's/android:label=".*"/android:label="OmaSales Mobile"/' android/app/src/main/AndroidManifest.xml
           python3 << 'PY'
           from PIL import Image, ImageDraw
           import os
-          src = "assets/images/app_icon.png"
-          img_path = None
-          if os.path.exists(src):
-              try:
-                  with Image.open(src) as im:
-                      im.load()
-                  img_path = src
-              except: pass
-          if not img_path:
-              print("Generating fallback icon")
-              im = Image.new("RGBA", (512, 512), (255,255,255,255))
-              d = ImageDraw.Draw(im)
-              d.rounded_rectangle([50,50,462,462], radius=80, fill=(79,70,229))
-              im.save(src)
-              img_path = src
-          else:
-              im = Image.open(img_path).convert("RGBA")
-          size = max(im.size)
-          bg = Image.new("RGBA", (size, size), (255,255,255,255))
-          bg.paste(im, ((size-im.width)//2, (size-im.height)//2), im)
-          for folder, px in {"mipmap-mdpi":48,"mipmap-hdpi":72,"mipmap-xhdpi":96,"mipmap-xxhdpi":144,"mipmap-xxxhdpi":192}.items():
-              path = f"android/app/src/main/res/{folder}"
-              os.makedirs(path, exist_ok=True)
-              resized = bg.resize((px, px), Image.LANCZOS)
-              resized.save(f"{path}/launcher_icon.png", "PNG")
-              resized.save(f"{path}/ic_launcher.png", "PNG")
+          src="assets/images/app_icon.png"
+          if not os.path.exists(src):
+              im=Image.new("RGBA",(512,512),(255,255,255,255)); d=ImageDraw.Draw(im); d.rounded_rectangle([50,50,462,462],radius=80,fill=(79,70,229)); im.save(src)
+          im=Image.open(src).convert("RGBA")
+          s=max(im.size); bg=Image.new("RGBA",(s,s),(255,255,255,255)); bg.paste(im,((s-im.width)//2,(s-im.height)//2),im)
+          for f,p in {"mipmap-mdpi":48,"mipmap-hdpi":72,"mipmap-xhdpi":96,"mipmap-xxhdpi":144,"mipmap-xxxhdpi":192}.items():
+              path=f"android/app/src/main/res/{f}"; os.makedirs(path,exist_ok=True)
+              r=bg.resize((p,p),Image.LANCZOS); r.save(f"{path}/launcher_icon.png","PNG"); r.save(f"{path}/ic_launcher.png","PNG")
           PY
 
-      - name: Build APK
-        run: flutter build apk --release --dart-define=API_BASE_URL="${{ inputs.api_url }}"
+      - run: flutter build apk --release --dart-define=API_BASE_URL="${{ inputs.api_url }}"
 
-      - name: Upload APK
-        uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v4
         with:
           name: OmaSales-Mobile-apk
           path: mobile/build/app/outputs/flutter-apk/app-release.apk
