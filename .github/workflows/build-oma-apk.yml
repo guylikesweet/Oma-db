@@ -62,8 +62,50 @@ jobs:
                   path=f"android/app/src/main/res/{f}"; os.makedirs(path,exist_ok=True)
                   r=bg.resize((p,p),Image.LANCZOS); r.save(f"{path}/launcher_icon.png","PNG"); r.save(f"{path}/ic_launcher.png","PNG")
           PY
-      - run: flutter build apk --release --dart-define=API_BASE_URL="${{ inputs.api_url }}"
+      - name: Configure persistent Android release signing
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          if [ -z "$ANDROID_KEYSTORE_BASE64" ] || [ -z "$ANDROID_KEYSTORE_PASSWORD" ] || [ -z "$ANDROID_KEY_ALIAS" ] || [ -z "$ANDROID_KEY_PASSWORD" ]; then
+            echo "Missing Android release signing secrets."
+            echo "Configure ANDROID_KEYSTORE_BASE64, ANDROID_KEYSTORE_PASSWORD, ANDROID_KEY_ALIAS, and ANDROID_KEY_PASSWORD before building a production APK."
+            exit 1
+          fi
+          echo "$ANDROID_KEYSTORE_BASE64" | base64 --decode > android/oma-release.jks
+          cat > android/key.properties <<EOF
+          storePassword=$ANDROID_KEYSTORE_PASSWORD
+          keyPassword=$ANDROID_KEY_PASSWORD
+          keyAlias=$ANDROID_KEY_ALIAS
+          storeFile=oma-release.jks
+          EOF
+          python3 - <<'PY2'
+          from pathlib import Path
+          p=Path('android/app/build.gradle')
+          s=p.read_text()
+          marker='android {\n'
+          loader="""def keystoreProperties = new Properties()\ndef keystorePropertiesFile = rootProject.file('key.properties')\nif (keystorePropertiesFile.exists()) {\n    keystoreProperties.load(new FileInputStream(keystorePropertiesFile))\n}\n\n"""
+          if 'keystorePropertiesFile' not in s:
+              s=s.replace(marker, loader+marker, 1)
+          signing="""    signingConfigs {\n        release {\n            keyAlias keystoreProperties['keyAlias']\n            keyPassword keystoreProperties['keyPassword']\n            storeFile keystoreProperties['storeFile'] ? file(keystoreProperties['storeFile']) : null\n            storePassword keystoreProperties['storePassword']\n        }\n    }\n\n"""
+          if 'signingConfigs {' not in s:
+              s=s.replace(marker, marker+signing, 1)
+          s=s.replace('signingConfig = signingConfigs.debug', 'signingConfig = signingConfigs.release')
+          s=s.replace('signingConfig signingConfigs.debug', 'signingConfig signingConfigs.release')
+          p.write_text(s)
+          PY2
+      - run: flutter build apk --release --build-number="${{ github.run_number }}" --dart-define=API_BASE_URL="${{ inputs.api_url }}"
+      - run: flutter build appbundle --release --build-number="${{ github.run_number }}" --dart-define=API_BASE_URL="${{ inputs.api_url }}"
       - uses: actions/upload-artifact@v4
         with:
-          name: OmaSales-Mobile-apk-FIXED
+          name: OmaSales-Mobile-apk
           path: mobile/build/app/outputs/flutter-apk/app-release.apk
+      - uses: actions/upload-artifact@v4
+        with:
+          name: OmaSales-Mobile-aab
+          path: mobile/build/app/outputs/bundle/release/app-release.aab
+      - name: Remove signing material from runner
+        if: always()
+        run: rm -f android/oma-release.jks android/key.properties
