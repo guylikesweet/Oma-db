@@ -33,29 +33,37 @@ jobs:
           if [ ! -d android ]; then
             flutter create --platforms=android .
           fi
+          # Fix MainActivity v2 embedding
           rm -rf android/app/src/main/java/io
           mkdir -p android/app/src/main/kotlin/com/example/oma_mobile
           echo 'package com.example.oma_mobile
           import io.flutter.embedding.android.FlutterActivity
           class MainActivity: FlutterActivity()' > android/app/src/main/kotlin/com/example/oma_mobile/MainActivity.kt
           find android/app/src/main -name "MainActivity.java" -delete || true
+          # FIX 1: App Name
           sed -i 's/android:label=".*"/android:label="OmaSales Mobile"/' android/app/src/main/AndroidManifest.xml
-          grep -r "Oma Mobile" lib --include="*.dart" | head
-          sed -i 's/Oma Mobile/OmaSales Mobile/g' lib/main.dart lib/screens/*.dart lib/features/auth/presentation/pages/*.dart 2>/dev/null || true
+          # FIX 2: INTERNET PERMISSION - THIS IS WHY HOST LOOKUP FAILS
+          if ! grep -q "android.permission.INTERNET" android/app/src/main/AndroidManifest.xml; then
+            sed -i 's/<application/<uses-permission android:name="android.permission.INTERNET" \/>\n    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" \/>\n    <application/' android/app/src/main/AndroidManifest.xml
+          fi
+          cat android/app/src/main/AndroidManifest.xml
+          # Fix inner text Oma Mobile
+          sed -i 's/Oma Mobile/OmaSales Mobile/g' lib/main.dart 2>/dev/null || true
+          find lib -name "*.dart" -exec sed -i 's/Oma Mobile/OmaSales Mobile/g' {} \; || true
+          # Icon
           python3 << 'PY'
-          from PIL import Image, ImageDraw
+          from PIL import Image
           import os
           src="assets/images/app_icon.png"
-          if not os.path.exists(src):
-              im=Image.new("RGBA",(512,512),(255,255,255,255)); d=ImageDraw.Draw(im); d.rounded_rectangle([50,50,462,462],radius=80,fill=(79,70,229)); im.save(src)
-          im=Image.open(src).convert("RGBA")
-          s=max(im.size); bg=Image.new("RGBA",(s,s),(255,255,255,255)); bg.paste(im,((s-im.width)//2,(s-im.height)//2),im)
-          for f,p in {"mipmap-mdpi":48,"mipmap-hdpi":72,"mipmap-xhdpi":96,"mipmap-xxhdpi":144,"mipmap-xxxhdpi":192}.items():
-              path=f"android/app/src/main/res/{f}"; os.makedirs(path,exist_ok=True)
-              r=bg.resize((p,p),Image.LANCZOS); r.save(f"{path}/launcher_icon.png","PNG"); r.save(f"{path}/ic_launcher.png","PNG")
+          if os.path.exists(src):
+              im=Image.open(src).convert("RGBA")
+              s=max(im.size); bg=Image.new("RGBA",(s,s),(255,255,255,255)); bg.paste(im,((s-im.width)//2,(s-im.height)//2),im)
+              for f,p in {"mipmap-mdpi":48,"mipmap-hdpi":72,"mipmap-xhdpi":96,"mipmap-xxhdpi":144,"mipmap-xxxhdpi":192}.items():
+                  path=f"android/app/src/main/res/{f}"; os.makedirs(path,exist_ok=True)
+                  r=bg.resize((p,p),Image.LANCZOS); r.save(f"{path}/launcher_icon.png","PNG"); r.save(f"{path}/ic_launcher.png","PNG")
           PY
       - run: flutter build apk --release --dart-define=API_BASE_URL="${{ inputs.api_url }}"
       - uses: actions/upload-artifact@v4
         with:
-          name: OmaSales-Mobile-apk
+          name: OmaSales-Mobile-apk-FIXED
           path: mobile/build/app/outputs/flutter-apk/app-release.apk
