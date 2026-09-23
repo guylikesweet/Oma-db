@@ -87,11 +87,10 @@ def get_label_context(delivery):
 
 def generate_label_pdf(delivery):
     from reportlab.lib.units import mm
-    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image, HRFlowable
+    from reportlab.platypus import SimpleDocTemplate, Paragraph, Table, TableStyle, Image
     from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
     from reportlab.lib import colors
     from reportlab.lib.utils import ImageReader
-    from reportlab.lib.enums import TA_CENTER
 
     ctx = get_label_context(delivery)
     settings = ctx["settings"]
@@ -100,6 +99,8 @@ def generate_label_pdf(delivery):
     height = settings.label_height_mm * mm
     margin = 4 * mm
     content_width = width - 2 * margin
+    col_left = content_width * 0.4
+    col_right = content_width * 0.6
 
     buf = io.BytesIO()
     doc = SimpleDocTemplate(
@@ -108,58 +109,66 @@ def generate_label_pdf(delivery):
     )
 
     styles = getSampleStyleSheet()
-    section_style = ParagraphStyle("section", parent=styles["Normal"], fontSize=8, textColor=colors.grey, spaceAfter=1)
-    normal_style = ParagraphStyle("normal", parent=styles["Normal"], fontSize=9, leading=12)
-    recipient_style = ParagraphStyle("recipient", parent=styles["Normal"], fontSize=13, leading=15)
-    order_id_style = ParagraphStyle("orderid", parent=styles["Normal"], fontSize=11, leading=14)
-    center_style = ParagraphStyle("center", parent=styles["Normal"], fontSize=9, alignment=TA_CENTER)
+    section_style = ParagraphStyle("section", parent=styles["Normal"], fontSize=7, textColor=colors.grey, spaceAfter=1)
+    normal_style = ParagraphStyle("normal", parent=styles["Normal"], fontSize=8.5, leading=10.5)
+    recipient_style = ParagraphStyle("recipient", parent=styles["Normal"], fontSize=11, leading=13)
+    order_id_style = ParagraphStyle("orderid", parent=styles["Normal"], fontSize=10, leading=12)
 
-    story = []
+    def cell(*flowables):
+        return list(flowables)
 
-    # Sender: small logo (kept small deliberately, not the visual focus) + phone/address
-    logo_bytes, _ = get_logo_bytes()
-    if logo_bytes:
+    def logo_flowable():
+        logo_bytes, _ = get_logo_bytes()
+        if not logo_bytes:
+            return Paragraph(NA, normal_style)
         try:
             img_reader = ImageReader(io.BytesIO(logo_bytes))
             iw, ih = img_reader.getSize()
-            max_logo_h = 10 * mm  # deliberately small — a corner mark, not a banner
-            max_logo_w = content_width * 0.4
-            scale = min(max_logo_w / iw, max_logo_h / ih)
-            story.append(Image(io.BytesIO(logo_bytes), width=iw * scale, height=ih * scale))
+            max_h, max_w = 8 * mm, col_left - 4 * mm  # deliberately small — a corner mark, not a banner
+            scale = min(max_w / iw, max_h / ih)
+            img = Image(io.BytesIO(logo_bytes), width=iw * scale, height=ih * scale)
+            img.hAlign = "LEFT"
+            return img
         except Exception:
-            pass
-    story.append(Paragraph(f"Tel: {ctx['company_phone']}", normal_style))
-    story.append(Paragraph(ctx["company_address"], normal_style))
-    story.append(Spacer(1, 2 * mm))
-    story.append(HRFlowable(width="100%", color=colors.grey, thickness=0.75))
-    story.append(Spacer(1, 2 * mm))
+            return Paragraph(NA, normal_style)
 
-    # Recipient
-    story.append(Paragraph("TO", section_style))
-    story.append(Paragraph(ctx["recipient_name"], recipient_style))
-    story.append(Paragraph(ctx["recipient_phone"], normal_style))
-    story.append(Paragraph(ctx["delivery_address"], normal_style))
-    story.append(Spacer(1, 2 * mm))
-    story.append(HRFlowable(width="100%", color=colors.grey, thickness=0.75))
-    story.append(Spacer(1, 2 * mm))
-
-    # Order details
-    story.append(Paragraph(f"ORDER ID: {ctx['order_id']}", order_id_style))
-    if ctx["other_order_ids"]:
-        story.append(Paragraph("Also includes: " + ", ".join(ctx["other_order_ids"]), normal_style))
-    story.append(Paragraph(f"Date of Shipment: {ctx['date_of_shipment']}", normal_style))
-    story.append(Paragraph(f"Weight: {ctx['weight']}    Dimensions: {ctx['dimensions']}", normal_style))
-    story.append(Paragraph(f"Remarks: {ctx['remarks']}", normal_style))
-    story.append(Spacer(1, 3 * mm))
-
-    # Barcode — bottom of the label, the last thing on it
-    if ctx["barcode_png"]:
+    def barcode_flowable():
+        if not ctx["barcode_png"]:
+            return Paragraph(NA, normal_style)
         bc_reader = ImageReader(io.BytesIO(ctx["barcode_png"]))
         biw, bih = bc_reader.getSize()
-        bc_w = content_width * 0.9
-        bc_h = bih * (bc_w / biw)
-        story.append(Image(io.BytesIO(ctx["barcode_png"]), width=bc_w, height=bc_h))
+        max_h = 10 * mm  # confined to its own compact cell, not spanning the label
+        max_w = col_right - 4 * mm
+        scale = min(max_w / biw, max_h / bih)
+        img = Image(io.BytesIO(ctx["barcode_png"]), width=biw * scale, height=bih * scale)
+        img.hAlign = "CENTER"
+        return img
 
-    doc.build(story)
+    order_id_cell = [
+        Paragraph("ORDER ID", section_style),
+        Paragraph(ctx["order_id"], order_id_style),
+    ]
+    if ctx["other_order_ids"]:
+        order_id_cell.append(Paragraph("Also: " + ", ".join(ctx["other_order_ids"]), normal_style))
+
+    table_data = [
+        [cell(logo_flowable()), cell(Paragraph("FROM", section_style), Paragraph(f"Tel: {ctx['company_phone']}", normal_style), Paragraph(ctx["company_address"], normal_style))],
+        [cell(Paragraph("TO", section_style)), cell(Paragraph(ctx["recipient_name"], recipient_style), Paragraph(ctx["recipient_phone"], normal_style), Paragraph(ctx["delivery_address"], normal_style))],
+        [cell(Paragraph("WEIGHT", section_style), Paragraph(ctx["weight"], normal_style)), cell(Paragraph("DIMENSIONS", section_style), Paragraph(ctx["dimensions"], normal_style))],
+        [cell(Paragraph("DATE OF SHIPMENT", section_style), Paragraph(ctx["date_of_shipment"], normal_style)), cell(Paragraph("REMARKS", section_style), Paragraph(ctx["remarks"], normal_style))],
+        [order_id_cell, cell(barcode_flowable())],
+    ]
+
+    grid = Table(table_data, colWidths=[col_left, col_right])
+    grid.setStyle(TableStyle([
+        ("GRID", (0, 0), (-1, -1), 0.75, colors.HexColor("#666666")),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("LEFTPADDING", (0, 0), (-1, -1), 3),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 3),
+        ("TOPPADDING", (0, 0), (-1, -1), 2),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 2),
+    ]))
+
+    doc.build([grid])
     buf.seek(0)
     return buf
