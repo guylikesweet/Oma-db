@@ -74,7 +74,7 @@ jobs:
             echo "Configure ANDROID_KEYSTORE_BASE64, ANDROID_KEYSTORE_PASSWORD, ANDROID_KEY_ALIAS, and ANDROID_KEY_PASSWORD before building a production APK."
             exit 1
           fi
-          echo "$ANDROID_KEYSTORE_BASE64" | base64 --decode > android/oma-release.jks
+          echo "$ANDROID_KEYSTORE_BASE64" | base64 --decode > android/app/oma-release.jks
           cat > android/key.properties <<EOF
           storePassword=$ANDROID_KEYSTORE_PASSWORD
           keyPassword=$ANDROID_KEY_PASSWORD
@@ -108,4 +108,4 @@ jobs:
           path: mobile/build/app/outputs/bundle/release/app-release.aab
       - name: Remove signing material from runner
         if: always()
-        run: rm -f android/oma-release.jks android/key.properties
+        run: rm -f android/app/oma-release.jks android/key.properties
