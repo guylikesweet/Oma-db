@@ -39,6 +39,9 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
+      - name: Upgrade dependencies to fix v1 embedding
+        run: flutter pub upgrade --major-versions
+
       - name: Fix API config name
         run: |
           if [ -f lib/core/config.dart ]; then
@@ -50,62 +53,47 @@ jobs:
           if [ -f lib/config.dart ]; then
             sed -i 's/OMA_API_BASE_URL/API_BASE_URL/g' lib/config.dart || true
           fi
+          if [ -f lib/core/config/app_config.dart ]; then
+            sed -i 's/OMA_API_BASE_URL/API_BASE_URL/g' lib/core/config/app_config.dart || true
+          fi
 
       - name: Generate launcher icons from Oma logo
         run: |
           ls -lh assets/images/ || echo "no images folder"
-          file assets/images/app_icon.png || true
           python3 << 'PY'
           from PIL import Image
           import os
-
           src = "assets/images/app_icon.png"
           fallback = "assets/images/logo.png"
           img_path = None
-
-          if os.path.exists(src):
-              try:
-                  Image.open(src).verify()
-                  img_path = src
-                  print(f"Using {src}")
-              except Exception as e:
-                  print(f"app_icon.png invalid: {e}")
-
-          if not img_path and os.path.exists(fallback):
-              try:
-                  Image.open(fallback).verify()
-                  img_path = fallback
-                  print(f"Falling back to {fallback}")
-              except Exception as e:
-                  print(f"logo.png also invalid: {e}")
-
+          for p in [src, fallback]:
+              if os.path.exists(p):
+                  try:
+                      with Image.open(p) as im:
+                          im.load()
+                      img_path = p
+                      print(f"Using {p}")
+                      break
+                  except Exception as e:
+                      print(f"{p} invalid: {e}")
           if not img_path:
-              print("Both images invalid - generating fallback icon")
-              im = Image.new("RGBA", (512, 512), (255,255,255,255))
+              print("Generating fallback icon")
               from PIL import ImageDraw
+              im = Image.new("RGBA", (512, 512), (255,255,255,255))
               draw = ImageDraw.Draw(im)
               draw.rounded_rectangle([50,50,462,462], radius=80, fill=(79,70,229))
               try:
-                  draw.text((256,256), "Oma", anchor="mm", fill="white", font_size=120)
+                  draw.text((256,256), "Oma", anchor="mm", fill="white")
               except:
-                  draw.text((180,220), "Oma", fill="white")
+                  draw.text((200,230), "Oma", fill="white")
               im.save("assets/images/app_icon.png")
               img_path = "assets/images/app_icon.png"
           else:
               im = Image.open(img_path).convert("RGBA")
-
           size = max(im.size)
           bg = Image.new("RGBA", (size, size), (255,255,255,255))
           bg.paste(im, ((size-im.width)//2, (size-im.height)//2), im)
-
-          densities = {
-              "mipmap-mdpi": 48,
-              "mipmap-hdpi": 72,
-              "mipmap-xhdpi": 96,
-              "mipmap-xxhdpi": 144,
-              "mipmap-xxxhdpi": 192,
-          }
-          for folder, px in densities.items():
+          for folder, px in {"mipmap-mdpi":48,"mipmap-hdpi":72,"mipmap-xhdpi":96,"mipmap-xxhdpi":144,"mipmap-xxxhdpi":192}.items():
               path = f"android/app/src/main/res/{folder}"
               os.makedirs(path, exist_ok=True)
               resized = bg.resize((px, px), Image.LANCZOS)
@@ -121,6 +109,14 @@ jobs:
             sed -i 's/android:label="[^"]*"/android:label="OmaSales Mobile"/g' $MANIFEST
             grep -n "android:label" $MANIFEST
           fi
+
+      - name: Ensure Android v2 embedding
+        run: |
+          MANIFEST="android/app/src/main/AndroidManifest.xml"
+          if ! grep -q "flutterEmbedding" "$MANIFEST"; then
+            sed -i '/<application/a \        <meta-data android:name="flutterEmbedding" android:value="2" />' $MANIFEST
+          fi
+          cat $MANIFEST | grep -A2 -B2 flutterEmbedding || true
 
       - name: Build APK
         run: flutter build apk --release --dart-define=API_BASE_URL="${{ inputs.api_url }}"
