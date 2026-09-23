@@ -271,7 +271,7 @@ class SalesListPage extends StatelessWidget {
                 itemCount: rows.length,
                 itemBuilder: (_, i) {
                   final x = rows[i];
-                  final localOnly = (x['local_only'] as int??? 0) == 1;
+                  final localOnly = (x['local_only'] as int?? 0) == 1;
                   return ListTile(
                       leading: Icon(localOnly? Icons.cloud_upload : Icons.receipt_long),
                       title: Text('${x['customer_name']?? 'Customer'}'),
