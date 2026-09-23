@@ -73,3 +73,7 @@ Visit `http://127.0.0.1:5000/` — it redirects to `/admin/`, which redirects to
 - Sale/SaleItem/Shipping cannot be hand-created or hand-edited from the Flask-Admin
   CRUD screens — only through `/sales/new` and `/shipping/new/<sale_id>`, so totals,
   stock, and the audit trail (`stock_log`) can never drift out of sync.
+
+## Cloud Android build (phone/Chromebook friendly)
+
+The repository includes `.github/workflows/mobile-build.yml`. It builds the Flutter Android APK in GitHub Actions, so Android Studio/Flutter do not need to be installed locally. See `mobile/README_CLOUD_BUILD.md` for the exact phone/Chromebook procedure.
