@@ -1,5 +1,7 @@
 from datetime import datetime, date
-from sqlalchemy import Computed
+from decimal import Decimal
+from sqlalchemy import Computed, event
+from sqlalchemy.orm import Session
 from flask_login import UserMixin
 from app import db
 
@@ -292,6 +294,47 @@ class StockLog(db.Model):
 
 
 # ---------------------------------------------------------------------------
+# MOBILE SYNC
+# ---------------------------------------------------------------------------
+class SyncChange(db.Model):
+    """Append-only change feed consumed by the offline mobile client.
+
+    Each committed ORM mutation to a mobile-relevant model creates one row.
+    The monotonically increasing id is the mobile sync cursor.
+    """
+    __tablename__ = "sync_changes"
+
+    id = db.Column(db.BigInteger, primary_key=True, autoincrement=True)
+    entity = db.Column(db.String(80), nullable=False)
+    entity_id = db.Column(db.Integer, nullable=False)
+    action = db.Column(db.String(20), nullable=False)  # created, updated, deleted
+    payload = db.Column(db.JSON, nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+
+
+class ApiOperation(db.Model):
+    """Idempotency record for mobile write operations.
+
+    A phone may retry the same operation after a dropped connection. The
+    unique user/operation_id pair prevents the server from creating a second
+    sale when the first request actually succeeded but its response was lost.
+    """
+    __tablename__ = "api_operations"
+
+    id = db.Column(db.BigInteger, primary_key=True, autoincrement=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    operation_id = db.Column(db.String(64), nullable=False)
+    operation_type = db.Column(db.String(80), nullable=False)
+    status_code = db.Column(db.Integer, nullable=False)
+    response_json = db.Column(db.Text, nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+
+    __table_args__ = (
+        db.UniqueConstraint("user_id", "operation_id", name="uq_api_operations_user_operation"),
+    )
+
+
+# ---------------------------------------------------------------------------
 # APP_SETTINGS — single row (id always 1). Shipping label size, business
 # info, and the logo image itself (stored as bytes, not a file on disk —
 # Render's filesystem is wiped on every deploy, so a disk file wouldn't survive).
@@ -310,3 +353,75 @@ class AppSettings(db.Model):
 
     def __repr__(self):
         return f"<AppSettings {self.label_width_mm}x{self.label_height_mm}mm>"
+
+
+# Models whose changes are useful to the offline mobile client. Sensitive
+# account/settings data deliberately stays out of the mobile sync feed.
+_SYNC_MODELS = (
+    Product,
+    CourierRate,
+    MonthlyShippingRate,
+    ShipmentBatch,
+    Delivery,
+    Sale,
+    SaleItem,
+    Shipping,
+    StockLog,
+)
+
+
+def _json_value(value):
+    if isinstance(value, (datetime, date)):
+        return value.isoformat()
+    if isinstance(value, Decimal):
+        return float(value)
+    return value
+
+
+def _model_payload(obj):
+    return {
+        column.name: _json_value(getattr(obj, column.name))
+        for column in obj.__table__.columns
+    }
+
+
+@event.listens_for(Session, "after_flush")
+def _record_mobile_sync_changes(session, flush_context):
+    # Flask-SQLAlchemy's scoped session class is not guaranteed to be the same
+    # class across SQLAlchemy versions, so this listener is intentionally kept
+    # narrow. If the session is currently recording sync rows, do not record
+    # the SyncChange rows themselves.
+    if session.info.get("_recording_sync_changes"):
+        return
+
+    changes = []
+    for obj in list(session.new):
+        if isinstance(obj, _SYNC_MODELS):
+            changes.append((obj, "created"))
+
+    for obj in list(session.dirty):
+        if isinstance(obj, _SYNC_MODELS) and session.is_modified(obj, include_collections=False):
+            changes.append((obj, "updated"))
+
+    for obj in list(session.deleted):
+        if isinstance(obj, _SYNC_MODELS):
+            changes.append((obj, "deleted"))
+
+    if not changes:
+        return
+
+    session.info["_recording_sync_changes"] = True
+    try:
+        for obj, action in changes:
+            entity_id = getattr(obj, "id", None)
+            if entity_id is None:
+                continue
+            payload = None if action == "deleted" else _model_payload(obj)
+            session.add(SyncChange(
+                entity=obj.__tablename__,
+                entity_id=int(entity_id),
+                action=action,
+                payload=payload,
+            ))
+    finally:
+        session.info["_recording_sync_changes"] = False
