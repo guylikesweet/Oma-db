@@ -645,4 +645,3 @@ def generate_label_pdf(delivery):
     buf.seek(0)
 
     return buf
-```
