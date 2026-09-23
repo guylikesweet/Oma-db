@@ -4,125 +4,564 @@
   <meta charset="utf-8">
   <title>Label — {{ order_id }}</title>
   <style>
-    @page { size: {{ settings.label_width_mm }}mm {{ settings.label_height_mm }}mm; margin: 4mm; }
-    * { box-sizing: border-box; }
-    body { font-family: Arial, Helvetica, sans-serif; margin:0; color:#111; }
-    .toolbar { padding:12px; background:#212529; }
-    .toolbar button, .toolbar a {
-      display:inline-block; margin-right:8px; padding:8px 14px; border-radius:4px;
-      text-decoration:none; font-size:14px; border:none; cursor:pointer;
+    @page {
+      size: {{ settings.label_width_mm }}mm {{ settings.label_height_mm }}mm;
+      margin: 0;
     }
-    .btn-print { background:#2563eb; color:#fff; }
-    .btn-download { background:#16a34a; color:#fff; }
-    .btn-back { background:#444; color:#fff; }
 
+    * {
+      box-sizing: border-box;
+    }
+
+    html,
+    body {
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: Arial, Helvetica, sans-serif;
+      color: #111;
+      background: #fff;
+    }
+
+    .toolbar {
+      padding: 12px;
+      background: #212529;
+    }
+
+    .toolbar button,
+    .toolbar a {
+      display: inline-block;
+      margin-right: 8px;
+      padding: 8px 14px;
+      border-radius: 4px;
+      text-decoration: none;
+      font-size: 14px;
+      border: none;
+      cursor: pointer;
+    }
+
+    .btn-print {
+      background: #2563eb;
+      color: #fff;
+    }
+
+    .btn-download {
+      background: #16a34a;
+      color: #fff;
+    }
+
+    .btn-back {
+      background: #444;
+      color: #fff;
+    }
+
+    /*
+     * LABEL SIZE
+     *
+     * Use the exact dimensions configured in Settings.
+     * Unlike the original version, height is fixed rather than
+     * using min-height, so the label fills the complete paper.
+     */
     .label-sheet {
       width: {{ settings.label_width_mm }}mm;
+      height: {{ settings.label_height_mm }}mm;
+
+      min-width: {{ settings.label_width_mm }}mm;
       min-height: {{ settings.label_height_mm }}mm;
-      margin: 20px auto; background:#fff;
-      border:1.5px solid #333; border-radius:3mm; overflow:hidden;
+
+      max-width: {{ settings.label_width_mm }}mm;
+      max-height: {{ settings.label_height_mm }}mm;
+
+      margin: 20px auto;
+
+      background: #fff;
+
+      border: 1.5px solid #333;
+      border-radius: 3mm;
+
+      overflow: hidden;
+
+      /*
+       * Make the existing rows share the complete label height.
+       */
+      display: flex;
+      flex-direction: column;
     }
-    .grid-row { display:flex; border-bottom:1px solid #999; }
-    .grid-row:last-child { border-bottom:none; }
-    .cell { flex:1; padding:1.5mm 2mm; min-width:0; }
-    .cell + .cell { border-left:1px solid #999; }
-    .cell.wide { flex:1.4; }
-    .cell.narrow { flex:0.8; }
 
-    .logo { max-height:9mm; max-width:100%; display:block; }
-    .section-label { font-size:8px; color:#888; text-transform:uppercase; margin:0 0 1px; letter-spacing:0.4px; }
-    .val { font-size:9.5px; margin:0 0 1px; line-height:1.25; word-break:break-word; }
-    .recipient-name { font-size:13px; font-weight:700; margin:0 0 1px; }
-    .order-id { font-size:12px; font-weight:700; margin:0 0 1px; letter-spacing:0.3px; }
+    /*
+     * Each existing row now expands to use the available
+     * vertical space instead of staying only as tall as its content.
+     */
+    .grid-row {
+      display: flex;
 
-    .barcode-cell { display:flex; align-items:center; justify-content:center; padding:1mm; }
-    .barcode-cell img { max-width:100%; max-height:12mm; }
+      width: 100%;
 
+      flex: 1 1 0;
+
+      min-height: 0;
+
+      border-bottom: 1px solid #999;
+
+      /*
+       * Prevent long content from pushing the label outside
+       * the configured paper size.
+       */
+      overflow: hidden;
+    }
+
+    .grid-row:last-child {
+      border-bottom: none;
+    }
+
+    /*
+     * Give the existing five rows sensible proportions while
+     * still allowing the complete label height to be used.
+     */
+    .grid-row:nth-child(1) {
+      flex: 1.15 1 0;
+    }
+
+    .grid-row:nth-child(2) {
+      flex: 1.35 1 0;
+    }
+
+    .grid-row:nth-child(3) {
+      flex: 0.85 1 0;
+    }
+
+    .grid-row:nth-child(4) {
+      flex: 0.85 1 0;
+    }
+
+    .grid-row:nth-child(5) {
+      flex: 1.25 1 0;
+    }
+
+    .cell {
+      flex: 1 1 0;
+
+      padding: 1.5mm 2mm;
+
+      min-width: 0;
+      min-height: 0;
+
+      /*
+       * Keep the existing vertical alignment but allow the
+       * cell to occupy the expanded row.
+       */
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+
+      overflow: hidden;
+    }
+
+    .cell + .cell {
+      border-left: 1px solid #999;
+    }
+
+    .cell.wide {
+      flex: 1.4 1 0;
+    }
+
+    .cell.narrow {
+      flex: 0.8 1 0;
+    }
+
+    .logo {
+      max-height: 9mm;
+      max-width: 100%;
+      width: auto;
+      height: auto;
+      display: block;
+    }
+
+    .section-label {
+      font-size: 8px;
+      color: #888;
+      text-transform: uppercase;
+      margin: 0 0 1px;
+      letter-spacing: 0.4px;
+      line-height: 1.1;
+    }
+
+    .val {
+      font-size: 9.5px;
+      margin: 0 0 1px;
+      line-height: 1.25;
+
+      /*
+       * Long addresses/remarks must wrap instead of overflowing.
+       */
+      overflow-wrap: anywhere;
+      word-break: break-word;
+    }
+
+    .recipient-name {
+      font-size: 13px;
+      font-weight: 700;
+      margin: 0 0 1px;
+      line-height: 1.15;
+
+      overflow-wrap: anywhere;
+      word-break: break-word;
+    }
+
+    .order-id {
+      font-size: 12px;
+      font-weight: 700;
+      margin: 0 0 1px;
+      letter-spacing: 0.3px;
+      line-height: 1.15;
+
+      overflow-wrap: anywhere;
+      word-break: break-word;
+    }
+
+    .barcode-cell {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 1mm;
+
+      overflow: hidden;
+    }
+
+    .barcode-cell img {
+      max-width: 100%;
+      max-height: 12mm;
+      width: auto;
+      height: auto;
+      display: block;
+    }
+
+    /*
+     * NARROW LABELS
+     *
+     * Keep the same layout but reduce text slightly when the
+     * configured label width is small.
+     */
+    @media (max-width: 60mm) {
+
+      .cell {
+        padding: 1.2mm 1.5mm;
+      }
+
+      .section-label {
+        font-size: 6.5px;
+        letter-spacing: 0.25px;
+      }
+
+      .val {
+        font-size: 7.5px;
+        line-height: 1.2;
+      }
+
+      .recipient-name {
+        font-size: 9px;
+      }
+
+      .order-id {
+        font-size: 8.5px;
+      }
+
+      .logo {
+        max-height: 7mm;
+      }
+
+      .barcode-cell {
+        padding: 0.8mm;
+      }
+
+      .barcode-cell img {
+        max-height: 9mm;
+      }
+    }
+
+    /*
+     * MEDIUM LABELS
+     */
+    @media (min-width: 60mm) and (max-width: 80mm) {
+
+      .section-label {
+        font-size: 7px;
+      }
+
+      .val {
+        font-size: 8.5px;
+      }
+
+      .recipient-name {
+        font-size: 10.5px;
+      }
+
+      .order-id {
+        font-size: 9.5px;
+      }
+
+      .logo {
+        max-height: 8mm;
+      }
+    }
+
+    /*
+     * PRINT
+     *
+     * The original code changed the label to width:100% and
+     * min-height:auto during printing. That was defeating the
+     * configured paper size.
+     *
+     * Keep the exact Settings dimensions during printing.
+     */
     @media print {
-      .toolbar { display:none; }
-      .label-sheet { margin:0; border:1px solid #333; width:100%; min-height:auto; }
-      body { margin:0; }
+
+      .toolbar {
+        display: none;
+      }
+
+      html,
+      body {
+        width: {{ settings.label_width_mm }}mm;
+        height: {{ settings.label_height_mm }}mm;
+
+        margin: 0;
+        padding: 0;
+
+        background: #fff;
+      }
+
+      .label-sheet {
+        width: {{ settings.label_width_mm }}mm;
+        height: {{ settings.label_height_mm }}mm;
+
+        min-width: {{ settings.label_width_mm }}mm;
+        min-height: {{ settings.label_height_mm }}mm;
+
+        max-width: {{ settings.label_width_mm }}mm;
+        max-height: {{ settings.label_height_mm }}mm;
+
+        margin: 0;
+
+        border: 1px solid #333;
+        border-radius: 3mm;
+
+        overflow: hidden;
+
+        page-break-after: avoid;
+        break-after: avoid;
+      }
     }
   </style>
 </head>
+
 <body>
+
   <div class="toolbar">
-    <button class="btn-print" onclick="window.print()">Print</button>
-    <a class="btn-download" href="{{ url_for('delivery.label_pdf', delivery_id=delivery.id) }}">Download PDF</a>
-    <a class="btn-back" href="{{ url_for('delivery.delivery_detail', delivery_id=delivery.id) }}">&larr; Back</a>
+
+    <button
+      class="btn-print"
+      onclick="window.print()"
+    >
+      Print
+    </button>
+
+    <a
+      class="btn-download"
+      href="{{ url_for('delivery.label_pdf', delivery_id=delivery.id) }}"
+    >
+      Download PDF
+    </a>
+
+    <a
+      class="btn-back"
+      href="{{ url_for('delivery.delivery_detail', delivery_id=delivery.id) }}"
+    >
+      &larr; Back
+    </a>
+
   </div>
+
 
   <div class="label-sheet">
 
     <!-- Row 1: Logo | Sender phone + address -->
     <div class="grid-row">
+
       <div class="cell narrow">
+
         {% if has_logo %}
-        <img class="logo" src="{{ url_for('static', filename='logo.png') }}" alt="Logo"
-             onerror="this.src='{{ url_for('settings.logo') }}'">
+
+        <img
+          class="logo"
+          src="{{ url_for('static', filename='logo.png') }}"
+          alt="Logo"
+          onerror="this.src='{{ url_for('settings.logo') }}'"
+        >
+
         {% else %}
+
         <p class="val">N/A</p>
+
         {% endif %}
+
       </div>
+
+
       <div class="cell wide">
-        <p class="section-label">From</p>
-        <p class="val">Tel: {{ company_phone }}</p>
-        <p class="val">{{ company_address }}</p>
+
+        <p class="section-label">
+          From
+        </p>
+
+        <p class="val">
+          Tel: {{ company_phone }}
+        </p>
+
+        <p class="val">
+          {{ company_address }}
+        </p>
+
       </div>
+
     </div>
+
 
     <!-- Row 2: "TO" marker | recipient block -->
     <div class="grid-row">
+
       <div class="cell narrow">
-        <p class="section-label">To</p>
+
+        <p class="section-label">
+          To
+        </p>
+
       </div>
+
+
       <div class="cell wide">
-        <p class="recipient-name">{{ recipient_name }}</p>
-        <p class="val">{{ recipient_phone }}</p>
-        <p class="val">{{ delivery_address }}</p>
+
+        <p class="recipient-name">
+          {{ recipient_name }}
+        </p>
+
+        <p class="val">
+          {{ recipient_phone }}
+        </p>
+
+        <p class="val">
+          {{ delivery_address }}
+        </p>
+
       </div>
+
     </div>
+
 
     <!-- Row 3: Weight | Dimensions -->
     <div class="grid-row">
+
       <div class="cell">
-        <p class="section-label">Weight</p>
-        <p class="val">{{ weight }}</p>
+
+        <p class="section-label">
+          Weight
+        </p>
+
+        <p class="val">
+          {{ weight }}
+        </p>
+
       </div>
+
+
       <div class="cell">
-        <p class="section-label">Dimensions</p>
-        <p class="val">{{ dimensions }}</p>
+
+        <p class="section-label">
+          Dimensions
+        </p>
+
+        <p class="val">
+          {{ dimensions }}
+        </p>
+
       </div>
+
     </div>
+
 
     <!-- Row 4: Date of shipment | Remarks -->
     <div class="grid-row">
+
       <div class="cell">
-        <p class="section-label">Date of Shipment</p>
-        <p class="val">{{ date_of_shipment }}</p>
+
+        <p class="section-label">
+          Date of Shipment
+        </p>
+
+        <p class="val">
+          {{ date_of_shipment }}
+        </p>
+
       </div>
+
+
       <div class="cell">
-        <p class="section-label">Remarks</p>
-        <p class="val">{{ remarks }}</p>
+
+        <p class="section-label">
+          Remarks
+        </p>
+
+        <p class="val">
+          {{ remarks }}
+        </p>
+
       </div>
+
     </div>
+
 
     <!-- Row 5: Order ID (+ extra order ids) | compact barcode -->
     <div class="grid-row">
+
       <div class="cell wide">
-        <p class="section-label">Order ID</p>
-        <p class="order-id">{{ order_id }}</p>
+
+        <p class="section-label">
+          Order ID
+        </p>
+
+        <p class="order-id">
+          {{ order_id }}
+        </p>
+
         {% if other_order_ids %}
-        <p class="val">Also: {{ other_order_ids|join(', ') }}</p>
+
+        <p class="val">
+          Also: {{ other_order_ids|join(', ') }}
+        </p>
+
         {% endif %}
+
       </div>
+
+
       <div class="cell narrow barcode-cell">
+
         {% if barcode_b64 %}
-        <img src="data:image/png;base64,{{ barcode_b64 }}" alt="Barcode {{ order_id }}">
+
+        <img
+          src="data:image/png;base64,{{ barcode_b64 }}"
+          alt="Barcode {{ order_id }}"
+        >
+
         {% endif %}
+
       </div>
+
     </div>
 
   </div>
+
 </body>
 </html>
