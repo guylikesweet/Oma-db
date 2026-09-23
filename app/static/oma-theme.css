@@ -1,0 +1,46 @@
+/* Oma automatic day/night theme. The browser's local clock selects the mode. */
+:root {
+  --oma-bg: #f4f5f7;
+  --oma-surface: #ffffff;
+  --oma-text: #212529;
+  --oma-muted: #6c757d;
+  --oma-border: #dee2e6;
+  --oma-topbar: #212529;
+  --oma-nav: #1a1d21;
+  --oma-nav-border: #26292e;
+}
+
+html[data-oma-theme="dark"] {
+  --oma-bg: #121417;
+  --oma-surface: #1b1f24;
+  --oma-text: #f1f3f5;
+  --oma-muted: #adb5bd;
+  --oma-border: #343a40;
+  --oma-topbar: #0d0f11;
+  --oma-nav: #0d0f11;
+  --oma-nav-border: #252a30;
+}
+
+html, body { background: var(--oma-bg) !important; color: var(--oma-text); }
+body { transition: background-color .2s ease, color .2s ease; }
+
+.card, .modal-content, .dropdown-menu, .list-group-item, .table,
+.form-control, .custom-select, .input-group-text, .alert,
+.jumbotron { background-color: var(--oma-surface); color: var(--oma-text); border-color: var(--oma-border); }
+
+.table { --bs-table-bg: var(--oma-surface); }
+.table td, .table th { border-color: var(--oma-border); }
+.form-control, .custom-select { color: var(--oma-text); }
+.form-control::placeholder { color: var(--oma-muted); }
+a { color: inherit; }
+.text-muted { color: var(--oma-muted) !important; }
+
+.topbar { background: var(--oma-topbar) !important; }
+#sideNav { background: var(--oma-nav) !important; }
+#sideNav .sidenav-header { border-bottom-color: var(--oma-nav-border) !important; }
+#sideNav a.nav-link-item { border-bottom-color: var(--oma-nav-border) !important; }
+
+/* Respect the user's device setting while JavaScript determines the schedule. */
+@media (prefers-reduced-motion: reduce) {
+  body { transition: none; }
+}
