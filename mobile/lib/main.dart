@@ -75,7 +75,7 @@ class _LoginPageState extends State<LoginPage> {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Icon(Icons.storefront, size: 64),
+                  Image.asset('assets/images/logo.png', height: 80),
                   const SizedBox(height: 16),
                   Text('Oma Mobile', style: Theme.of(context).textTheme.headlineMedium),
                   const SizedBox(height: 28),
