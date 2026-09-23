@@ -11,13 +11,61 @@ void main() async {
   runApp(const OmaMobileApp());
 }
 
-class OmaMobileApp extends StatelessWidget {
+class OmaMobileApp extends StatefulWidget {
   const OmaMobileApp({super.key});
+  @override
+  State<OmaMobileApp> createState() => _OmaMobileAppState();
+}
+
+class _OmaMobileAppState extends State<OmaMobileApp> with WidgetsBindingObserver {
+  Timer? _themeTimer;
+  ThemeMode _themeMode = ThemeMode.light;
+
+  ThemeMode _themeForNow() {
+    final hour = DateTime.now().hour;
+    return (hour >= 6 && hour < 18) ? ThemeMode.light : ThemeMode.dark;
+  }
+
+  void _refreshTheme() {
+    final next = _themeForNow();
+    if (next != _themeMode && mounted) setState(() => _themeMode = next);
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _themeMode = _themeForNow();
+    _themeTimer = Timer.periodic(const Duration(minutes: 1), (_) => _refreshTheme());
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) _refreshTheme();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _themeTimer?.cancel();
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) => MaterialApp(
         title: 'OmaSales Mobile',
         debugShowCheckedModeBanner: false,
-        theme: ThemeData(useMaterial3: true, colorSchemeSeed: Colors.indigo),
+        themeMode: _themeMode,
+        theme: ThemeData(
+          useMaterial3: true,
+          colorSchemeSeed: Colors.indigo,
+          brightness: Brightness.light,
+        ),
+        darkTheme: ThemeData(
+          useMaterial3: true,
+          colorSchemeSeed: Colors.indigo,
+          brightness: Brightness.dark,
+        ),
         home: const SessionGate(),
       );
 }
