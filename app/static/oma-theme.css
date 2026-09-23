@@ -1,46 +1,50 @@
-/* Oma automatic day/night theme. The browser's local clock selects the mode. */
+/* Oma automatic day/night theme. 06:00-17:59 light, 18:00-05:59 dark. */
 :root {
-  --oma-bg: #f4f5f7;
-  --oma-surface: #ffffff;
-  --oma-text: #212529;
-  --oma-muted: #6c757d;
-  --oma-border: #dee2e6;
-  --oma-topbar: #212529;
-  --oma-nav: #1a1d21;
-  --oma-nav-border: #26292e;
+  --oma-bg:#f4f5f7; --oma-surface:#fff; --oma-surface-2:#f8f9fa;
+  --oma-text:#212529; --oma-muted:#6c757d; --oma-border:#dee2e6;
+  --oma-topbar:#212529; --oma-nav:#1a1d21; --oma-nav-border:#26292e;
+  --oma-input:#fff; --oma-link:#2563eb;
 }
-
 html[data-oma-theme="dark"] {
-  --oma-bg: #121417;
-  --oma-surface: #1b1f24;
-  --oma-text: #f1f3f5;
-  --oma-muted: #adb5bd;
-  --oma-border: #343a40;
-  --oma-topbar: #0d0f11;
-  --oma-nav: #0d0f11;
-  --oma-nav-border: #252a30;
+  --oma-bg:#121417; --oma-surface:#1b1f24; --oma-surface-2:#22272d;
+  --oma-text:#f1f3f5; --oma-muted:#adb5bd; --oma-border:#343a40;
+  --oma-topbar:#0d0f11; --oma-nav:#0d0f11; --oma-nav-border:#252a30;
+  --oma-input:#22272d; --oma-link:#7db2ff;
 }
-
-html, body { background: var(--oma-bg) !important; color: var(--oma-text); }
-body { transition: background-color .2s ease, color .2s ease; }
-
-.card, .modal-content, .dropdown-menu, .list-group-item, .table,
-.form-control, .custom-select, .input-group-text, .alert,
-.jumbotron { background-color: var(--oma-surface); color: var(--oma-text); border-color: var(--oma-border); }
-
-.table { --bs-table-bg: var(--oma-surface); }
-.table td, .table th { border-color: var(--oma-border); }
-.form-control, .custom-select { color: var(--oma-text); }
-.form-control::placeholder { color: var(--oma-muted); }
-a { color: inherit; }
-.text-muted { color: var(--oma-muted) !important; }
-
-.topbar { background: var(--oma-topbar) !important; }
-#sideNav { background: var(--oma-nav) !important; }
-#sideNav .sidenav-header { border-bottom-color: var(--oma-nav-border) !important; }
-#sideNav a.nav-link-item { border-bottom-color: var(--oma-nav-border) !important; }
-
-/* Respect the user's device setting while JavaScript determines the schedule. */
-@media (prefers-reduced-motion: reduce) {
-  body { transition: none; }
-}
+html,body { background:var(--oma-bg) !important; color:var(--oma-text) !important; }
+body { transition:background-color .2s ease,color .2s ease; }
+a { color:var(--oma-link); }
+.text-muted { color:var(--oma-muted) !important; }
+.card,.modal-content,.dropdown-menu,.list-group-item,.table,.alert,.jumbotron,
+.form-control,.custom-select,.input-group-text { background-color:var(--oma-surface) !important; color:var(--oma-text) !important; border-color:var(--oma-border) !important; }
+.table { --bs-table-bg:var(--oma-surface); }
+.table td,.table th { border-color:var(--oma-border) !important; }
+.form-control,.custom-select { color:var(--oma-text) !important; background-color:var(--oma-input) !important; }
+.form-control::placeholder { color:var(--oma-muted) !important; }
+.topbar { background:var(--oma-topbar) !important; }
+#sideNav { background:var(--oma-nav) !important; }
+#sideNav .sidenav-header { border-bottom-color:var(--oma-nav-border) !important; }
+#sideNav a.nav-link-item { border-bottom-color:var(--oma-nav-border) !important; }
+/* Home page */
+.home-wrap .home-sub { color:var(--oma-muted) !important; }
+.home-wrap .action-btn { background:var(--oma-surface) !important; color:var(--oma-text) !important; border-color:var(--oma-border) !important; }
+.home-wrap .action-btn.primary { background:#2563eb !important; color:#fff !important; border-color:#2563eb !important; }
+.home-wrap .action-btn.danger { background:var(--oma-surface) !important; color:#dc2626 !important; border-color:var(--oma-border) !important; }
+.logout-row a { color:var(--oma-muted) !important; }
+/* Login page */
+.login-page .box { background:var(--oma-surface) !important; color:var(--oma-text) !important; }
+.login-page label { color:var(--oma-text) !important; }
+.login-page input { background:var(--oma-input) !important; color:var(--oma-text) !important; border-color:var(--oma-border) !important; }
+/* Flask-Admin pages */
+.admin-page, .admin-page .navbar, .admin-page .sidebar-nav, .admin-page .table { color:var(--oma-text) !important; }
+html[data-oma-theme="dark"] .navbar-default,
+html[data-oma-theme="dark"] .navbar-inverse,
+html[data-oma-theme="dark"] .sidebar-nav,
+html[data-oma-theme="dark"] .nav-tabs,
+html[data-oma-theme="dark"] .breadcrumb { background-color:var(--oma-surface) !important; border-color:var(--oma-border) !important; }
+html[data-oma-theme="dark"] .well,
+html[data-oma-theme="dark"] .panel,
+html[data-oma-theme="dark"] .panel-heading,
+html[data-oma-theme="dark"] .panel-body { background-color:var(--oma-surface) !important; color:var(--oma-text) !important; border-color:var(--oma-border) !important; }
+html[data-oma-theme="dark"] .table-striped>tbody>tr:nth-of-type(odd) { background-color:var(--oma-surface-2) !important; }
+@media (prefers-reduced-motion:reduce) { body { transition:none; } }
