@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       api_url:
-        description: 'API URL (e.g. https://your-app.onrender.com/api)'
+        description: 'API URL'
         required: true
         default: 'https://your-app.onrender.com/api'
 
@@ -22,14 +22,12 @@ jobs:
           channel: stable
           flutter-version: '3.22.0'
 
-      - name: Setup Java
-        uses: actions/setup-java@v4
+      - uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
           java-version: '17'
           
-      - name: Setup Python
-        uses: actions/setup-python@v5
+      - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
 
@@ -39,55 +37,47 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
-      - name: Upgrade dependencies to fix v1 embedding
-        run: flutter pub upgrade --major-versions
-
-      - name: Fix API config name
+      - name: Recreate android if missing
         run: |
-          if [ -f lib/core/config.dart ]; then
-            sed -i 's/OMA_API_BASE_URL/API_BASE_URL/g' lib/core/config.dart || true
+          if [ ! -d android ]; then
+            flutter create --platforms=android .
           fi
-          if [ -f lib/data/config.dart ]; then
-            sed -i 's/OMA_API_BASE_URL/API_BASE_URL/g' lib/data/config.dart || true
-          fi
-          if [ -f lib/config.dart ]; then
-            sed -i 's/OMA_API_BASE_URL/API_BASE_URL/g' lib/config.dart || true
-          fi
-          if [ -f lib/core/config/app_config.dart ]; then
-            sed -i 's/OMA_API_BASE_URL/API_BASE_URL/g' lib/core/config/app_config.dart || true
-          fi
+          ls android/app/src/main/
 
-      - name: Generate launcher icons from Oma logo
+      - name: Force fix to Android v2 embedding
         run: |
-          ls -lh assets/images/ || echo "no images folder"
+          rm -rf android/app/src/main/java/io
+          PKG_PATH=$(find android/app/src/main/kotlin android/app/src/main/java -name "MainActivity.*" 2>/dev/null | head -1)
+          echo "Found: $PKG_PATH"
+          mkdir -p android/app/src/main/kotlin/com/example/oma_mobile
+          cat > android/app/src/main/kotlin/com/example/oma_mobile/MainActivity.kt << 'KT'
+          package com.example.oma_mobile
+          import io.flutter.embedding.android.FlutterActivity
+          class MainActivity: FlutterActivity()
+          KT
+          find android/app/src/main -name "MainActivity.java" -delete || true
+          cat android/app/src/main/kotlin/com/example/oma_mobile/MainActivity.kt
+
+      - name: Generate launcher icons
+        run: |
           python3 << 'PY'
-          from PIL import Image
+          from PIL import Image, ImageDraw
           import os
           src = "assets/images/app_icon.png"
-          fallback = "assets/images/logo.png"
           img_path = None
-          for p in [src, fallback]:
-              if os.path.exists(p):
-                  try:
-                      with Image.open(p) as im:
-                          im.load()
-                      img_path = p
-                      print(f"Using {p}")
-                      break
-                  except Exception as e:
-                      print(f"{p} invalid: {e}")
+          if os.path.exists(src):
+              try:
+                  with Image.open(src) as im:
+                      im.load()
+                  img_path = src
+              except: pass
           if not img_path:
               print("Generating fallback icon")
-              from PIL import ImageDraw
               im = Image.new("RGBA", (512, 512), (255,255,255,255))
-              draw = ImageDraw.Draw(im)
-              draw.rounded_rectangle([50,50,462,462], radius=80, fill=(79,70,229))
-              try:
-                  draw.text((256,256), "Oma", anchor="mm", fill="white")
-              except:
-                  draw.text((200,230), "Oma", fill="white")
-              im.save("assets/images/app_icon.png")
-              img_path = "assets/images/app_icon.png"
+              d = ImageDraw.Draw(im)
+              d.rounded_rectangle([50,50,462,462], radius=80, fill=(79,70,229))
+              im.save(src)
+              img_path = src
           else:
               im = Image.open(img_path).convert("RGBA")
           size = max(im.size)
@@ -99,24 +89,7 @@ jobs:
               resized = bg.resize((px, px), Image.LANCZOS)
               resized.save(f"{path}/launcher_icon.png", "PNG")
               resized.save(f"{path}/ic_launcher.png", "PNG")
-              print(f"Generated {path}/ic_launcher.png")
           PY
-
-      - name: Change app name to OmaSales Mobile
-        run: |
-          MANIFEST="android/app/src/main/AndroidManifest.xml"
-          if [ -f "$MANIFEST" ]; then
-            sed -i 's/android:label="[^"]*"/android:label="OmaSales Mobile"/g' $MANIFEST
-            grep -n "android:label" $MANIFEST
-          fi
-
-      - name: Ensure Android v2 embedding
-        run: |
-          MANIFEST="android/app/src/main/AndroidManifest.xml"
-          if ! grep -q "flutterEmbedding" "$MANIFEST"; then
-            sed -i '/<application/a \        <meta-data android:name="flutterEmbedding" android:value="2" />' $MANIFEST
-          fi
-          cat $MANIFEST | grep -A2 -B2 flutterEmbedding || true
 
       - name: Build APK
         run: flutter build apk --release --dart-define=API_BASE_URL="${{ inputs.api_url }}"
