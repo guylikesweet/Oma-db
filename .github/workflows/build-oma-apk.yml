@@ -3,9 +3,9 @@ on:
   workflow_dispatch:
     inputs:
       api_url:
-        description: 'Your real Render URL e.g https://your-backend.onrender.com/api'
+        description: 'Backend URL'
         required: true
-        default: 'https://oma-sales.onrender.com/api'
+        default: 'https://oma-db.onrender.com/api'
 
 jobs:
   build:
@@ -15,25 +15,19 @@ jobs:
         working-directory: mobile
     steps:
       - uses: actions/checkout@v4
-
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
           flutter-version: '3.22.0'
-
       - uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
           java-version: '17'
-
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-
       - run: pip install Pillow
-
       - run: flutter pub get
-
       - name: Create android and fix everything
         run: |
           if [ ! -d android ]; then
@@ -46,6 +40,8 @@ jobs:
           class MainActivity: FlutterActivity()' > android/app/src/main/kotlin/com/example/oma_mobile/MainActivity.kt
           find android/app/src/main -name "MainActivity.java" -delete || true
           sed -i 's/android:label=".*"/android:label="OmaSales Mobile"/' android/app/src/main/AndroidManifest.xml
+          grep -r "Oma Mobile" lib --include="*.dart" | head
+          sed -i 's/Oma Mobile/OmaSales Mobile/g' lib/main.dart lib/screens/*.dart lib/features/auth/presentation/pages/*.dart 2>/dev/null || true
           python3 << 'PY'
           from PIL import Image, ImageDraw
           import os
@@ -58,9 +54,7 @@ jobs:
               path=f"android/app/src/main/res/{f}"; os.makedirs(path,exist_ok=True)
               r=bg.resize((p,p),Image.LANCZOS); r.save(f"{path}/launcher_icon.png","PNG"); r.save(f"{path}/ic_launcher.png","PNG")
           PY
-
       - run: flutter build apk --release --dart-define=API_BASE_URL="${{ inputs.api_url }}"
-
       - uses: actions/upload-artifact@v4
         with:
           name: OmaSales-Mobile-apk
