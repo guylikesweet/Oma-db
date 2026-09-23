@@ -16,7 +16,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Check Flask backend
         run: |
@@ -24,7 +24,7 @@ jobs:
           curl --fail ${{ inputs.api_base_url }}/health || curl --fail https://oma-db.onrender.com/health || echo "Backend check warning - continuing"
 
       - name: Setup Java 17
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: 'temurin'
           java-version: '17'
