@@ -1,0 +1,55 @@
+name: Build Oma Mobile APK
+
+on:
+  workflow_dispatch:
+    inputs:
+      api_base_url:
+        description: 'API URL - use https://oma-db.onrender.com/api'
+        required: true
+        default: 'https://oma-db.onrender.com/api'
+        type: string
+
+jobs:
+  build-apk:
+    name: Analyze and build Android APK
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Check Flask backend
+        run: |
+          echo "Checking backend at ${{ inputs.api_base_url }}"
+          curl --fail ${{ inputs.api_base_url }}/health || curl --fail https://oma-db.onrender.com/health || echo "Backend check warning - continuing"
+
+      - name: Setup Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.22.0'
+          channel: 'stable'
+
+      - name: Install dependencies
+        working-directory: ./mobile
+        run: flutter pub get
+
+      - name: Analyze code
+        working-directory: ./mobile
+        run: flutter analyze
+
+      - name: Build Release APK
+        working-directory: ./mobile
+        run: flutter build apk --release --dart-define=API_BASE_URL=${{ inputs.api_base_url }}
+
+      - name: Upload APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: oma-mobile-release-apk
+          path: mobile/build/app/outputs/flutter-apk/app-release.apk
+          retention-days: 7
