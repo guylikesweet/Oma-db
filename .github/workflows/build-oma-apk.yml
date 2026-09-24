@@ -75,24 +75,49 @@ jobs:
           find android/app/src/main -name 'MainActivity.java' -delete || true
           sed -i 's/android:label="[^"]*"/android:label="OmaSales Mobile"/' android/app/src/main/AndroidManifest.xml
           if ! grep -q 'android.permission.INTERNET' android/app/src/main/AndroidManifest.xml; then
-            sed -i 's#<application#<uses-permission android:name="android.permission.INTERNET" />\n    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />\n    <application#' android/app/src/main/AndroidManifest.xml
+            sed -i 's#<application#<uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <application#' android/app/src/main/AndroidManifest.xml
           fi
 
-      - name: Validate and generate launcher icon
+      - name: Validate and install launcher icon
         run: |
           python3 - <<'PY'
-          from PIL import Image
           from pathlib import Path
-          src=Path('assets/images/app_icon.png')
-          if not src.exists(): raise SystemExit('assets/images/app_icon.png is missing')
-          im=Image.open(src).convert('RGBA')
-          s=max(im.size); bg=Image.new('RGBA',(s,s),(255,255,255,255)); bg.paste(im,((s-im.width)//2,(s-im.height)//2),im)
-          sizes={'mipmap-mdpi':48,'mipmap-hdpi':72,'mipmap-xhdpi':96,'mipmap-xxhdpi':144,'mipmap-xxxhdpi':192}
-          for folder,size in sizes.items():
-            out=Path('android/app/src/main/res')/folder; out.mkdir(parents=True,exist_ok=True)
-            r=bg.resize((size,size),Image.LANCZOS)
-            r.save(out/'launcher_icon.png','PNG'); r.save(out/'ic_launcher.png','PNG')
-          print('Icon OK:', im.size)
+          import struct
+
+          src = Path('assets/images/app_icon.png')
+          if not src.exists():
+              raise SystemExit('assets/images/app_icon.png is missing')
+
+          data = src.read_bytes()
+          png_signature = b'\x89PNG\r\n\x1a\n'
+          if not data.startswith(png_signature):
+              raise SystemExit('assets/images/app_icon.png is not a valid PNG file')
+          if len(data) < 24 or data[12:16] != b'IHDR':
+              raise SystemExit('assets/images/app_icon.png has no valid PNG header')
+
+          width, height = struct.unpack('>II', data[16:24])
+          if width <= 0 or height <= 0:
+              raise SystemExit('assets/images/app_icon.png has invalid dimensions')
+
+          res = Path('android/app/src/main/res')
+          sizes = {
+              'mipmap-mdpi': 48,
+              'mipmap-hdpi': 72,
+              'mipmap-xhdpi': 96,
+              'mipmap-xxhdpi': 144,
+              'mipmap-xxxhdpi': 192,
+          }
+          for folder in sizes:
+              out = res / folder
+              out.mkdir(parents=True, exist_ok=True)
+              # Keep the supplied verified PNG unchanged. Android accepts a
+              # valid PNG in each density bucket; no Pillow/ImageMagick needed.
+              (out / 'launcher_icon.png').write_bytes(data)
+              (out / 'ic_launcher.png').write_bytes(data)
+
+          print(f'Icon OK: {width}x{height}')
           PY
 
       - name: Configure release signing
@@ -117,26 +142,29 @@ jobs:
           p=Path('android/app/build.gradle')
           s=p.read_text()
           if 'keystorePropertiesFile' not in s:
-              s=s.replace('android {', """def keystoreProperties = new Properties()
-          def keystorePropertiesFile = rootProject.file('key.properties')
-          if (keystorePropertiesFile.exists()) {
-              keystoreProperties.load(new FileInputStream(keystorePropertiesFile))
-          }
-          
-          android {""",1)
+            s=s.replace('android {', """def keystoreProperties = new Properties()
+def keystorePropertiesFile = rootProject.file('key.properties')
+if (keystorePropertiesFile.exists()) {
+    keystoreProperties.load(new FileInputStream(keystorePropertiesFile))
+}
+
+android {""",1)
           if 'signingConfigs {' not in s:
-              s=s.replace('buildTypes {', """signingConfigs {
-                  release {
-                      keyAlias keystoreProperties['keyAlias']
-                      keyPassword keystoreProperties['keyPassword']
-                      storeFile keystoreProperties['storeFile'] ? file(keystoreProperties['storeFile']) : null
-                      storePassword keystoreProperties['storePassword']
-                  }
-              }
-          
-              buildTypes {""",1)
+            s=s.replace('buildTypes {', """signingConfigs {
+        release {
+            keyAlias keystoreProperties['keyAlias']
+            keyPassword keystoreProperties['keyPassword']
+            storeFile keystoreProperties['storeFile'] ? file(keystoreProperties['storeFile']) : null
+            storePassword keystoreProperties['storePassword']
+        }
+    }
+
+    buildTypes {""",1)
           if 'signingConfig signingConfigs.release' not in s:
-              s=s.replace('buildTypes {\n        release {', 'buildTypes {\n        release {\n            signingConfig signingConfigs.release', 1)
+            s=s.replace('buildTypes {
+        release {', 'buildTypes {
+        release {
+            signingConfig signingConfigs.release',1)
           p.write_text(s)
           PY
 
