@@ -1,8 +1,6 @@
 import 'dart:async';
-
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/material.dart';
-
 import 'data/api_client.dart';
 import 'data/local_database.dart';
 import 'data/sync_repository.dart';
@@ -15,13 +13,10 @@ void main() async {
 
 class OmaMobileApp extends StatefulWidget {
   const OmaMobileApp({super.key});
-
-  @override
-  State<OmaMobileApp> createState() => _OmaMobileAppState();
+  @override State<OmaMobileApp> createState() => _OmaMobileAppState();
 }
 
-class _OmaMobileAppState extends State<OmaMobileApp>
-    with WidgetsBindingObserver {
+class _OmaMobileAppState extends State<OmaMobileApp> with WidgetsBindingObserver {
   Timer? _timer;
   ThemeMode _theme = ThemeMode.light;
 
@@ -32,31 +27,20 @@ class _OmaMobileAppState extends State<OmaMobileApp>
 
   void _refreshTheme() {
     final next = _themeForNow();
-
-    if (mounted && next != _theme) {
-      setState(() => _theme = next);
-    }
+    if (mounted && next != _theme) setState(() => _theme = next);
   }
 
   @override
   void initState() {
     super.initState();
-
     WidgetsBinding.instance.addObserver(this);
-
     _theme = _themeForNow();
-
-    _timer = Timer.periodic(
-      const Duration(minutes: 1),
-      (_) => _refreshTheme(),
-    );
+    _timer = Timer.periodic(const Duration(minutes: 1), (_) => _refreshTheme());
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed) {
-      _refreshTheme();
-    }
+    if (state == AppLifecycleState.resumed) _refreshTheme();
   }
 
   @override
@@ -67,62 +51,51 @@ class _OmaMobileAppState extends State<OmaMobileApp>
   }
 
   @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Oma Mobile',
-      debugShowCheckedModeBanner: false,
-      themeMode: _theme,
-      theme: ThemeData(
-        useMaterial3: true,
-        colorSchemeSeed: Colors.indigo,
-        brightness: Brightness.light,
-      ),
-      darkTheme: ThemeData(
-        useMaterial3: true,
-        colorSchemeSeed: Colors.indigo,
-        brightness: Brightness.dark,
-      ),
-      home: const SessionGate(),
-    );
-  }
+  Widget build(BuildContext context) => MaterialApp(
+        title: 'Oma Mobile',
+        debugShowCheckedModeBanner: false,
+        themeMode: _theme,
+        theme: ThemeData(
+          useMaterial3: true,
+          colorSchemeSeed: Colors.indigo,
+          brightness: Brightness.light,
+        ),
+        darkTheme: ThemeData(
+          useMaterial3: true,
+          colorSchemeSeed: Colors.indigo,
+          brightness: Brightness.dark,
+        ),
+        home: const SessionGate(),
+      );
 }
 
 class SessionGate extends StatefulWidget {
   const SessionGate({super.key});
-
-  @override
-  State<SessionGate> createState() => _SessionGateState();
+  @override State<SessionGate> createState() => _SessionGateState();
 }
 
 class _SessionGateState extends State<SessionGate> {
   final api = ApiClient();
 
   @override
-  Widget build(BuildContext context) {
-    return FutureBuilder<String?>(
-      future: api.token(),
-      builder: (_, snapshot) {
-        if (snapshot.connectionState != ConnectionState.done) {
-          return const Scaffold(
-            body: Center(
-              child: CircularProgressIndicator(),
-            ),
-          );
-        }
+  Widget build(BuildContext context) => FutureBuilder<String?>(
+        future: api.token(),
+        builder: (_, snapshot) {
+          if (snapshot.connectionState != ConnectionState.done) {
+            return const Scaffold(
+              body: Center(child: CircularProgressIndicator()),
+            );
+          }
 
-        return snapshot.data?.isNotEmpty == true
-            ? AppShell(api: api)
-            : LoginPage(api: api);
-      },
-    );
-  }
+          return snapshot.data?.isNotEmpty == true
+              ? AppShell(api: api)
+              : LoginPage(api: api);
+        },
+      );
 }
 
 class LoginPage extends StatefulWidget {
-  const LoginPage({
-    super.key,
-    required this.api,
-  });
+  const LoginPage({super.key, required this.api});
 
   final ApiClient api;
 
@@ -140,9 +113,7 @@ class _LoginPageState extends State<LoginPage> {
 
   Future<void> login() async {
     if (username.text.trim().isEmpty || password.text.isEmpty) {
-      setState(() {
-        error = 'Enter your username and password.';
-      });
+      setState(() => error = 'Enter your username and password.');
       return;
     }
 
@@ -160,9 +131,7 @@ class _LoginPageState extends State<LoginPage> {
       final token = result['token']?.toString();
 
       if (token == null || token.isEmpty) {
-        throw Exception(
-          'Server did not return an API token.',
-        );
+        throw Exception('Server did not return an API token.');
       }
 
       await widget.api.saveToken(token);
@@ -176,131 +145,110 @@ class _LoginPageState extends State<LoginPage> {
       }
     } catch (e) {
       if (mounted) {
-        setState(() {
-          error = e.toString();
-        });
+        setState(() => error = e.toString());
       }
     } finally {
       if (mounted) {
-        setState(() {
-          busy = false;
-        });
+        setState(() => busy = false);
       }
     }
   }
 
   @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      body: SafeArea(
-        child: Center(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(24),
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(
-                maxWidth: 440,
-              ),
-              child: Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(24),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Image.asset(
-                        'assets/images/app_icon.png',
-                        height: 82,
-                      ),
-                      const SizedBox(height: 14),
-                      Text(
-                        'Oma Mobile',
-                        style: Theme.of(context)
-                            .textTheme
-                            .headlineMedium
-                            ?.copyWith(
-                              fontWeight: FontWeight.bold,
-                            ),
-                      ),
-                      const SizedBox(height: 6),
-                      const Text(
-                        'Full business system • offline capable',
-                        textAlign: TextAlign.center,
-                      ),
-                      const SizedBox(height: 26),
-                      TextField(
-                        controller: username,
-                        textInputAction: TextInputAction.next,
-                        decoration: const InputDecoration(
-                          labelText: 'Username',
-                          border: OutlineInputBorder(),
-                          prefixIcon: Icon(
-                            Icons.person_outline,
-                          ),
+  Widget build(BuildContext context) => Scaffold(
+        body: SafeArea(
+          child: Center(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(24),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 440),
+                child: Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Image.asset(
+                          'assets/images/app_icon.png',
+                          height: 82,
                         ),
-                      ),
-                      const SizedBox(height: 12),
-                      TextField(
-                        controller: password,
-                        obscureText: obscure,
-                        onSubmitted: (_) => login(),
-                        decoration: InputDecoration(
-                          labelText: 'Password',
-                          border: const OutlineInputBorder(),
-                          prefixIcon: const Icon(
-                            Icons.lock_outline,
-                          ),
-                          suffixIcon: IconButton(
-                            icon: Icon(
-                              obscure
-                                  ? Icons.visibility
-                                  : Icons.visibility_off,
-                            ),
-                            onPressed: () {
-                              setState(() {
-                                obscure = !obscure;
-                              });
-                            },
-                          ),
-                        ),
-                      ),
-                      if (error != null) ...[
-                        const SizedBox(height: 12),
+                        const SizedBox(height: 14),
                         Text(
-                          error!,
-                          style: TextStyle(
-                            color:
-                                Theme.of(context).colorScheme.error,
-                          ),
+                          'Oma Mobile',
+                          style: Theme.of(context)
+                              .textTheme
+                              .headlineMedium
+                              ?.copyWith(fontWeight: FontWeight.bold),
+                        ),
+                        const SizedBox(height: 6),
+                        const Text(
+                          'Full business system • offline capable',
                           textAlign: TextAlign.center,
                         ),
-                      ],
-                      const SizedBox(height: 20),
-                      SizedBox(
-                        width: double.infinity,
-                        child: FilledButton.icon(
-                          onPressed: busy ? null : login,
-                          icon: const Icon(Icons.login),
-                          label: Text(
-                            busy ? 'Signing in...' : 'Sign in',
+                        const SizedBox(height: 26),
+                        TextField(
+                          controller: username,
+                          textInputAction: TextInputAction.next,
+                          decoration: const InputDecoration(
+                            labelText: 'Username',
+                            border: OutlineInputBorder(),
+                            prefixIcon: Icon(Icons.person_outline),
                           ),
                         ),
-                      ),
-                    ],
+                        const SizedBox(height: 12),
+                        TextField(
+                          controller: password,
+                          obscureText: obscure,
+                          onSubmitted: (_) => login(),
+                          decoration: InputDecoration(
+                            labelText: 'Password',
+                            border: const OutlineInputBorder(),
+                            prefixIcon: const Icon(Icons.lock_outline),
+                            suffixIcon: IconButton(
+                              icon: Icon(
+                                obscure
+                                    ? Icons.visibility
+                                    : Icons.visibility_off,
+                              ),
+                              onPressed: () =>
+                                  setState(() => obscure = !obscure),
+                            ),
+                          ),
+                        ),
+                        if (error != null) ...[
+                          const SizedBox(height: 12),
+                          Text(
+                            error!,
+                            style: TextStyle(
+                              color: Theme.of(context).colorScheme.error,
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                        ],
+                        const SizedBox(height: 20),
+                        SizedBox(
+                          width: double.infinity,
+                          child: FilledButton.icon(
+                            onPressed: busy ? null : login,
+                            icon: const Icon(Icons.login),
+                            label: Text(
+                              busy ? 'Signing in...' : 'Sign in',
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ),
             ),
           ),
         ),
-      ),
-    );
-  }
+      );
 }
 
 class AppShell extends StatefulWidget {
-  const AppShell({
-    super.key,
-    required this.api,
-  });
+  const AppShell({super.key, required this.api});
 
   final ApiClient api;
 
@@ -334,15 +282,11 @@ class _AppShellState extends State<AppShell> {
     sync(silent: true);
   }
 
-  Future<void> sync({
-    bool silent = false,
-  }) async {
+  Future<void> sync({bool silent = false}) async {
     if (syncing) return;
 
     if (mounted) {
-      setState(() {
-        syncing = true;
-      });
+      setState(() => syncing = true);
     }
 
     try {
@@ -362,23 +306,17 @@ class _AppShellState extends State<AppShell> {
       if (!silent && mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(
-              'Sync unavailable: $e',
-            ),
+            content: Text('Sync unavailable: $e'),
           ),
         );
       }
 
       if (mounted) {
-        setState(() {
-          syncText = 'Offline • local work is safe';
-        });
+        setState(() => syncText = 'Offline • local work is safe');
       }
     } finally {
       if (mounted) {
-        setState(() {
-          syncing = false;
-        });
+        setState(() => syncing = false);
       }
     }
   }
@@ -449,9 +387,7 @@ class _AppShellState extends State<AppShell> {
       ),
       bottomNavigationBar: NavigationBar(
         selectedIndex: tab,
-        onDestinationSelected: (i) {
-          setState(() => tab = i);
-        },
+        onDestinationSelected: (i) => setState(() => tab = i),
         destinations: const [
           NavigationDestination(
             icon: Icon(Icons.dashboard_outlined),
@@ -500,14 +436,11 @@ class DashboardPage extends StatefulWidget {
   final SyncRepository repo;
   final String syncText;
   final bool syncing;
-  final Future<void> Function({
-    bool silent,
-  }) onSync;
+  final Future<void> Function({bool silent}) onSync;
   final int refreshKey;
 
   @override
-  State<DashboardPage> createState() =>
-      _DashboardPageState();
+  State<DashboardPage> createState() => _DashboardPageState();
 }
 
 class _DashboardPageState extends State<DashboardPage> {
@@ -521,9 +454,7 @@ class _DashboardPageState extends State<DashboardPage> {
   }
 
   @override
-  void didUpdateWidget(
-    covariant DashboardPage oldWidget,
-  ) {
+  void didUpdateWidget(covariant DashboardPage oldWidget) {
     super.didUpdateWidget(oldWidget);
 
     if (oldWidget.refreshKey != widget.refreshKey) {
@@ -539,15 +470,13 @@ class _DashboardPageState extends State<DashboardPage> {
       final sales = await db.query('sales');
 
       final low = products
-          .where(
-            (x) => (x['stock'] as int? ?? 0) <= 5,
-          )
+          .where((x) => (x['stock'] as int? ?? 0) <= 5)
           .take(8)
           .toList();
 
       if (mounted) {
-        setState(() {
-          data = {
+        setState(
+          () => data = {
             'sales_today': 0,
             'profit_today': 0,
             'pending_shipments': 0,
@@ -557,8 +486,8 @@ class _DashboardPageState extends State<DashboardPage> {
               'products': products.length,
               'sales': sales.length,
             },
-          };
-        });
+          },
+        );
       }
     } catch (_) {
       final db = await widget.local.db;
@@ -572,8 +501,8 @@ class _DashboardPageState extends State<DashboardPage> {
       );
 
       if (mounted) {
-        setState(() {
-          data = {
+        setState(
+          () => data = {
             'sales_today': 0,
             'profit_today': 0,
             'pending_shipments': 0,
@@ -583,8 +512,8 @@ class _DashboardPageState extends State<DashboardPage> {
               'products': p.first['c'],
               'sales': s.first['c'],
             },
-          };
-        });
+          },
+        );
       }
     }
 
@@ -596,203 +525,194 @@ class _DashboardPageState extends State<DashboardPage> {
   }
 
   @override
-  Widget build(BuildContext context) {
-    return RefreshIndicator(
-      onRefresh: () async {
-        await widget.onSync(silent: false);
-        await load();
-      },
-      child: CustomScrollView(
-        slivers: [
-          SliverAppBar(
-            pinned: true,
-            title: const Text('Oma Dashboard'),
-            actions: [
-              IconButton(
-                onPressed: widget.syncing
-                    ? null
-                    : () => widget.onSync(
-                          silent: false,
-                        ),
-                icon: const Icon(Icons.sync),
-              ),
-            ],
-          ),
-          SliverPadding(
-            padding: const EdgeInsets.all(16),
-            sliver: SliverList(
-              delegate: SliverChildListDelegate(
-                [
-                  Card(
-                    child: ListTile(
-                      leading: Icon(
-                        widget.syncing
-                            ? Icons.sync
-                            : Icons.cloud_done,
-                      ),
-                      title: Text(widget.syncText),
-                      subtitle: Text(
-                        pending == 0
-                            ? 'No pending offline operations'
-                            : '$pending operation(s) waiting to sync',
-                      ),
-                      trailing: widget.syncing
-                          ? const SizedBox(
-                              width: 22,
-                              height: 22,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                              ),
-                            )
-                          : null,
-                    ),
-                  ),
-                  const SizedBox(height: 14),
-                  if (data != null)
-                    GridView.count(
-                      crossAxisCount:
-                          MediaQuery.sizeOf(context).width > 600
-                              ? 4
-                              : 2,
-                      shrinkWrap: true,
-                      physics:
-                          const NeverScrollableScrollPhysics(),
-                      crossAxisSpacing: 10,
-                      mainAxisSpacing: 10,
-                      childAspectRatio: 1.5,
-                      children: [
-                        _Kpi(
-                          title: 'Sales today',
-                          value:
-                              '₦${_money(data!['sales_today'])}',
-                          icon: Icons.payments,
-                        ),
-                        _Kpi(
-                          title: 'Profit today',
-                          value:
-                              '₦${_money(data!['profit_today'])}',
-                          icon: Icons.trending_up,
-                        ),
-                        _Kpi(
-                          title: 'Pending shipments',
-                          value:
-                              '${data!['pending_shipments'] ?? 0}',
-                          icon: Icons.local_shipping,
-                        ),
-                        _Kpi(
-                          title: 'Low stock',
-                          value:
-                              '${data!['low_stock_count'] ?? 0}',
-                          icon: Icons.warning_amber,
-                        ),
-                      ],
-                    )
-                  else
-                    const SizedBox(
-                      height: 160,
-                      child: Center(
-                        child: CircularProgressIndicator(),
-                      ),
-                    ),
-                  const SizedBox(height: 16),
-                  if ((data?['low_stock_products'] as List?)
-                          ?.isNotEmpty ==
-                      true)
+  Widget build(BuildContext context) => RefreshIndicator(
+        onRefresh: () async {
+          await widget.onSync(silent: false);
+          await load();
+        },
+        child: CustomScrollView(
+          slivers: [
+            SliverAppBar(
+              pinned: true,
+              title: const Text('Oma Dashboard'),
+              actions: [
+                IconButton(
+                  onPressed: widget.syncing
+                      ? null
+                      : () => widget.onSync(silent: false),
+                  icon: const Icon(Icons.sync),
+                ),
+              ],
+            ),
+            SliverPadding(
+              padding: const EdgeInsets.all(16),
+              sliver: SliverList(
+                delegate: SliverChildListDelegate(
+                  [
                     Card(
-                      child: Padding(
-                        padding: const EdgeInsets.all(16),
-                        child: Column(
-                          crossAxisAlignment:
-                              CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Low stock',
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .titleLarge,
-                            ),
-                            const SizedBox(height: 8),
-                            ...List<dynamic>.from(
-                              data!['low_stock_products'],
-                            ).take(8).map(
-                              (x) => ListTile(
-                                contentPadding:
-                                    EdgeInsets.zero,
-                                leading: const Icon(
-                                  Icons.inventory_2,
-                                ),
-                                title: Text('${x['name']}'),
-                                subtitle: Text(
-                                  x['sku']?.toString() ??
-                                      'No SKU',
-                                ),
-                                trailing:
-                                    Text('${x['stock']}'),
-                              ),
-                            ),
-                          ],
+                      child: ListTile(
+                        leading: Icon(
+                          widget.syncing
+                              ? Icons.sync
+                              : Icons.cloud_done,
                         ),
+                        title: Text(widget.syncText),
+                        subtitle: Text(
+                          pending == 0
+                              ? 'No pending offline operations'
+                              : '$pending operation(s) waiting to sync',
+                        ),
+                        trailing: widget.syncing
+                            ? const SizedBox(
+                                width: 22,
+                                height: 22,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
+                              )
+                            : null,
                       ),
                     ),
-                  const SizedBox(height: 16),
-                  Text(
-                    'Quick actions',
-                    style: Theme.of(context)
-                        .textTheme
-                        .titleLarge,
-                  ),
-                  const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: FilledButton.icon(
-                          onPressed: () {
-                            Navigator.push(
+                    const SizedBox(height: 14),
+                    if (data != null)
+                      GridView.count(
+                        crossAxisCount:
+                            MediaQuery.sizeOf(context).width > 600
+                                ? 4
+                                : 2,
+                        shrinkWrap: true,
+                        physics: const NeverScrollableScrollPhysics(),
+                        crossAxisSpacing: 10,
+                        mainAxisSpacing: 10,
+                        childAspectRatio: 1.5,
+                        children: [
+                          _Kpi(
+                            title: 'Sales today',
+                            value:
+                                '₦${_money(data!['sales_today'])}',
+                            icon: Icons.payments,
+                          ),
+                          _Kpi(
+                            title: 'Profit today',
+                            value:
+                                '₦${_money(data!['profit_today'])}',
+                            icon: Icons.trending_up,
+                          ),
+                          _Kpi(
+                            title: 'Pending shipments',
+                            value:
+                                '${data!['pending_shipments'] ?? 0}',
+                            icon: Icons.local_shipping,
+                          ),
+                          _Kpi(
+                            title: 'Low stock',
+                            value:
+                                '${data!['low_stock_count'] ?? 0}',
+                            icon: Icons.warning_amber,
+                          ),
+                        ],
+                      )
+                    else
+                      const SizedBox(
+                        height: 160,
+                        child: Center(
+                          child: CircularProgressIndicator(),
+                        ),
+                      ),
+                    const SizedBox(height: 16),
+                    if ((data?['low_stock_products'] as List?)
+                            ?.isNotEmpty ==
+                        true)
+                      Card(
+                        child: Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: Column(
+                            crossAxisAlignment:
+                                CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Low stock',
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .titleLarge,
+                              ),
+                              const SizedBox(height: 8),
+                              ...List<dynamic>.from(
+                                data!['low_stock_products'],
+                              ).take(8).map(
+                                    (x) => ListTile(
+                                      contentPadding:
+                                          EdgeInsets.zero,
+                                      leading: const Icon(
+                                        Icons.inventory_2,
+                                      ),
+                                      title: Text('${x['name']}'),
+                                      subtitle: Text(
+                                        x['sku']?.toString() ??
+                                            'No SKU',
+                                      ),
+                                      trailing: Text(
+                                        '${x['stock']}',
+                                      ),
+                                    ),
+                                  ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    const SizedBox(height: 16),
+                    Text(
+                      'Quick actions',
+                      style: Theme.of(context)
+                          .textTheme
+                          .titleLarge,
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: FilledButton.icon(
+                            onPressed: () => Navigator.push(
                               context,
                               MaterialPageRoute(
                                 builder: (_) => NewSalePage(
                                   repo: widget.repo,
                                 ),
                               ),
-                            );
-                          },
-                          icon: const Icon(
-                            Icons.add_shopping_cart,
+                            ),
+                            icon: const Icon(
+                              Icons.add_shopping_cart,
+                            ),
+                            label: const Text('New sale'),
                           ),
-                          label: const Text('New sale'),
                         ),
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: OutlinedButton.icon(
-                          onPressed: () {
-                            Navigator.push(
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: OutlinedButton.icon(
+                            onPressed: () => Navigator.push(
                               context,
                               MaterialPageRoute(
                                 builder: (_) => StockPage(
                                   api: widget.api,
                                   local: widget.local,
                                   repo: widget.repo,
-                                  refreshKey:
-                                      widget.refreshKey,
+                                  refreshKey: widget.refreshKey,
                                 ),
                               ),
-                            );
-                          },
-                          icon: const Icon(Icons.add_box),
-                          label: const Text('Adjust stock'),
+                            ),
+                            icon: const Icon(Icons.add_box),
+                            label: const Text('Adjust stock'),
+                          ),
                         ),
-                      ),
-                    ],
-                  ),
-                ],
+                      ],
+                    ),
+                  ],
+                ),
               ),
             ),
-          ),
-        ],
-      ),
-    );
-  }
+          ],
+        ),
+      );
 }
 
 class _Kpi extends StatelessWidget {
@@ -807,38 +727,30 @@ class _Kpi extends StatelessWidget {
   final IconData icon;
 
   @override
-  Widget build(BuildContext c) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Column(
-          crossAxisAlignment:
-              CrossAxisAlignment.start,
-          mainAxisAlignment:
-              MainAxisAlignment.center,
-          children: [
-            Icon(icon),
-            const SizedBox(height: 5),
-            Text(
-              value,
-              style: Theme.of(c)
-                  .textTheme
-                  .titleLarge
-                  ?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
-            ),
-            Text(
-              title,
-              style: Theme.of(c)
-                  .textTheme
-                  .bodySmall,
-            ),
-          ],
+  Widget build(BuildContext c) => Card(
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(icon),
+              const SizedBox(height: 5),
+              Text(
+                value,
+                style: Theme.of(c)
+                    .textTheme
+                    .titleLarge
+                    ?.copyWith(fontWeight: FontWeight.bold),
+              ),
+              Text(
+                title,
+                style: Theme.of(c).textTheme.bodySmall,
+              ),
+            ],
+          ),
         ),
-      ),
-    );
-  }
+      );
 }
 
 String _money(dynamic x) {
@@ -867,8 +779,7 @@ class ProductsPage extends StatefulWidget {
   final int refreshKey;
 
   @override
-  State<ProductsPage> createState() =>
-      _ProductsPageState();
+  State<ProductsPage> createState() => _ProductsPageState();
 }
 
 class _ProductsPageState extends State<ProductsPage> {
@@ -876,112 +787,96 @@ class _ProductsPageState extends State<ProductsPage> {
   String q = '';
 
   @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Products'),
-        actions: [
-          IconButton(
-            onPressed: () => _editProduct(
-              context,
-              null,
+  Widget build(BuildContext context) => Scaffold(
+        appBar: AppBar(
+          title: const Text('Products'),
+          actions: [
+            IconButton(
+              onPressed: () => _editProduct(context, null),
+              icon: const Icon(Icons.add),
             ),
-            icon: const Icon(Icons.add),
-          ),
-        ],
-      ),
-      body: Column(
-        children: [
-          Padding(
-            padding:
-                const EdgeInsets.fromLTRB(16, 12, 16, 8),
-            child: TextField(
-              controller: search,
-              onChanged: (v) {
-                setState(() {
-                  q = v.trim();
-                });
-              },
-              decoration: const InputDecoration(
-                prefixIcon: Icon(Icons.search),
-                hintText: 'Search name or SKU',
-                border: OutlineInputBorder(),
+          ],
+        ),
+        body: Column(
+          children: [
+            Padding(
+              padding:
+                  const EdgeInsets.fromLTRB(16, 12, 16, 8),
+              child: TextField(
+                controller: search,
+                onChanged: (v) => setState(() => q = v.trim()),
+                decoration: const InputDecoration(
+                  prefixIcon: Icon(Icons.search),
+                  hintText: 'Search name or SKU',
+                  border: OutlineInputBorder(),
+                ),
               ),
             ),
-          ),
-          Expanded(
-            child: FutureBuilder<
-                List<Map<String, dynamic>>>(
-              future: _load(),
-              builder: (_, s) {
-                if (!s.hasData) {
-                  return const Center(
-                    child: CircularProgressIndicator(),
-                  );
-                }
+            Expanded(
+              child: FutureBuilder<List<Map<String, dynamic>>>(
+                future: _load(),
+                builder: (_, s) {
+                  if (!s.hasData) {
+                    return const Center(
+                      child: CircularProgressIndicator(),
+                    );
+                  }
 
-                final rows = s.data!;
+                  final rows = s.data!;
 
-                if (rows.isEmpty) {
-                  return const Center(
-                    child: Text('No products found.'),
-                  );
-                }
+                  if (rows.isEmpty) {
+                    return const Center(
+                      child: Text('No products found.'),
+                    );
+                  }
 
-                return RefreshIndicator(
-                  onRefresh: () async {
-                    await widget.repo
-                        .syncOnce()
-                        .catchError(
-                          (_) => const SyncResult(
-                            completed: 0,
-                            downloaded: 0,
-                            cursor: 0,
+                  return RefreshIndicator(
+                    onRefresh: () async {
+                      await widget.repo
+                          .syncOnce()
+                          .catchError(
+                            (_) => SyncResult(
+                              completed: 0,
+                              downloaded: 0,
+                              cursor: 0,
+                            ),
+                          );
+
+                      if (mounted) setState(() {});
+                    },
+                    child: ListView.separated(
+                      itemCount: rows.length,
+                      separatorBuilder: (_, __) =>
+                          const Divider(height: 1),
+                      itemBuilder: (_, i) {
+                        final p = rows[i];
+
+                        return ListTile(
+                          leading: CircleAvatar(
+                            child: Text('${p['stock'] ?? 0}'),
+                          ),
+                          title: Text('${p['name']}'),
+                          subtitle: Text(
+                            '${p['sku'] ?? 'No SKU'} • '
+                            '₦${_money(p['cost'])}',
+                          ),
+                          trailing: IconButton(
+                            icon: const Icon(
+                              Icons.edit_outlined,
+                            ),
+                            onPressed: () =>
+                                _editProduct(context, p),
                           ),
                         );
-
-                    if (mounted) {
-                      setState(() {});
-                    }
-                  },
-                  child: ListView.separated(
-                    itemCount: rows.length,
-                    separatorBuilder: (_, __) =>
-                        const Divider(height: 1),
-                    itemBuilder: (_, i) {
-                      final p = rows[i];
-
-                      return ListTile(
-                        leading: CircleAvatar(
-                          child: Text(
-                            '${p['stock'] ?? 0}',
-                          ),
-                        ),
-                        title: Text('${p['name']}'),
-                        subtitle: Text(
-                          '${p['sku'] ?? 'No SKU'} • '
-                          '₦${_money(p['cost'])}',
-                        ),
-                        trailing: IconButton(
-                          icon: const Icon(
-                            Icons.edit_outlined,
-                          ),
-                          onPressed: () => _editProduct(
-                            context,
-                            p,
-                          ),
-                        ),
-                      );
-                    },
-                  ),
-                );
-              },
+                      },
+                    ),
+                  );
+                },
+              ),
             ),
-          ),
-        ],
-      ),
-    );
-  }
+          ],
+        ),
+      );
 
   Future<List<Map<String, dynamic>>> _load() async {
     final db = await widget.local.db;
@@ -999,9 +894,7 @@ class _ProductsPageState extends State<ProductsPage> {
         .where(
           (x) =>
               '${x['name']}'.toLowerCase().contains(l) ||
-              '${x['sku'] ?? ''}'
-                  .toLowerCase()
-                  .contains(l),
+              '${x['sku'] ?? ''}'.toLowerCase().contains(l),
         )
         .toList();
   }
@@ -1038,12 +931,10 @@ class ProductDialog extends StatefulWidget {
   final Map<String, dynamic>? product;
 
   @override
-  State<ProductDialog> createState() =>
-      _ProductDialogState();
+  State<ProductDialog> createState() => _ProductDialogState();
 }
 
-class _ProductDialogState
-    extends State<ProductDialog> {
+class _ProductDialogState extends State<ProductDialog> {
   late final name = TextEditingController(
     text: widget.product?['name']?.toString() ?? '',
   );
@@ -1099,15 +990,11 @@ class _ProductDialogState
 
   Future<void> save() async {
     if (name.text.trim().isEmpty) {
-      setState(() {
-        error = 'Product name is required.';
-      });
+      setState(() => error = 'Product name is required.');
       return;
     }
 
-    setState(() {
-      busy = true;
-    });
+    setState(() => busy = true);
 
     try {
       if (widget.product == null) {
@@ -1141,155 +1028,123 @@ class _ProductDialogState
       }
     } catch (e) {
       if (mounted) {
-        setState(() {
-          error = e.toString();
-        });
+        setState(() => error = e.toString());
       }
     } finally {
       if (mounted) {
-        setState(() {
-          busy = false;
-        });
+        setState(() => busy = false);
       }
     }
   }
 
   @override
-  Widget build(BuildContext context) {
-    return AlertDialog(
-      title: Text(
-        widget.product == null
-            ? 'Add product'
-            : 'Edit product',
-      ),
-      content: SizedBox(
-        width: 480,
-        child: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: name,
-                decoration: const InputDecoration(
-                  labelText: 'Name',
-                ),
-              ),
-              TextField(
-                controller: sku,
-                decoration: const InputDecoration(
-                  labelText: 'SKU',
-                ),
-              ),
-              TextField(
-                controller: cost,
-                keyboardType:
-                    const TextInputType.numberWithOptions(
-                  decimal: true,
-                ),
-                decoration: const InputDecoration(
-                  labelText: 'Cost',
-                ),
-              ),
-              Row(
-                children: [
-                  Expanded(
-                    child: TextField(
-                      controller: l,
-                      keyboardType:
-                          const TextInputType.numberWithOptions(
-                        decimal: true,
-                      ),
-                      decoration: const InputDecoration(
-                        labelText: 'Length cm',
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: TextField(
-                      controller: w,
-                      keyboardType:
-                          const TextInputType.numberWithOptions(
-                        decimal: true,
-                      ),
-                      decoration: const InputDecoration(
-                        labelText: 'Width cm',
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              Row(
-                children: [
-                  Expanded(
-                    child: TextField(
-                      controller: h,
-                      keyboardType:
-                          const TextInputType.numberWithOptions(
-                        decimal: true,
-                      ),
-                      decoration: const InputDecoration(
-                        labelText: 'Height cm',
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: TextField(
-                      controller: weight,
-                      keyboardType:
-                          const TextInputType.numberWithOptions(
-                        decimal: true,
-                      ),
-                      decoration: const InputDecoration(
-                        labelText: 'Weight kg',
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              if (widget.product == null)
+  Widget build(BuildContext context) => AlertDialog(
+        title: Text(
+          widget.product == null
+              ? 'Add product'
+              : 'Edit product',
+        ),
+        content: SizedBox(
+          width: 480,
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
                 TextField(
-                  controller: stock,
+                  controller: name,
+                  decoration:
+                      const InputDecoration(labelText: 'Name'),
+                ),
+                TextField(
+                  controller: sku,
+                  decoration:
+                      const InputDecoration(labelText: 'SKU'),
+                ),
+                TextField(
+                  controller: cost,
                   keyboardType:
-                      const TextInputType.number,
+                      const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
                   decoration: const InputDecoration(
-                    labelText: 'Initial stock',
+                    labelText: 'Cost',
                   ),
                 ),
-              if (error != null)
-                Padding(
-                  padding:
-                      const EdgeInsets.only(top: 12),
-                  child: Text(
-                    error!,
-                    style: TextStyle(
-                      color: Theme.of(context)
-                          .colorScheme
-                          .error,
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: l,
+                        keyboardType: TextInputType.number,
+                        decoration: const InputDecoration(
+                          labelText: 'Length cm',
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: TextField(
+                        controller: w,
+                        keyboardType: TextInputType.number,
+                        decoration: const InputDecoration(
+                          labelText: 'Width cm',
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: TextField(
+                        controller: h,
+                        keyboardType: TextInputType.number,
+                        decoration: const InputDecoration(
+                          labelText: 'Height cm',
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                TextField(
+                  controller: weight,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(
+                    labelText: 'Actual weight kg',
+                  ),
+                ),
+                if (widget.product == null)
+                  TextField(
+                    controller: stock,
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(
+                      labelText: 'Opening stock',
                     ),
                   ),
-                ),
-            ],
+                if (error != null)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 8),
+                    child: Text(
+                      error!,
+                      style: TextStyle(
+                        color:
+                            Theme.of(context).colorScheme.error,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
           ),
         ),
-      ),
-      actions: [
-        TextButton(
-          onPressed: busy
-              ? null
-              : () => Navigator.pop(context),
-          child: const Text('Cancel'),
-        ),
-        FilledButton(
-          onPressed: busy ? null : save,
-          child: Text(
-            busy ? 'Saving...' : 'Save',
+        actions: [
+          TextButton(
+            onPressed:
+                busy ? null : () => Navigator.pop(context),
+            child: const Text('Cancel'),
           ),
-        ),
-      ],
-    );
-  }
+          FilledButton(
+            onPressed: busy ? null : save,
+            child: Text(busy ? 'Saving...' : 'Save'),
+          ),
+        ],
+      );
 }
 
 class SalesPage extends StatefulWidget {
@@ -1311,124 +1166,392 @@ class SalesPage extends StatefulWidget {
 }
 
 class _SalesPageState extends State<SalesPage> {
+  final search = TextEditingController();
   String q = '';
+  String status = 'All';
 
   @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Sales'),
-        actions: [
-          IconButton(
-            onPressed: () {
-              Navigator.push(
+  Widget build(BuildContext context) => Scaffold(
+        appBar: AppBar(
+          title: const Text('Sales'),
+          actions: [
+            IconButton(
+              onPressed: () => Navigator.push(
                 context,
                 MaterialPageRoute(
                   builder: (_) => NewSalePage(
                     repo: widget.repo,
                   ),
                 ),
-              );
-            },
-            icon: const Icon(Icons.add),
-          ),
-        ],
-      ),
-      body: Column(
-        children: [
-          Padding(
-            padding:
-                const EdgeInsets.fromLTRB(16, 12, 16, 8),
-            child: TextField(
-              onChanged: (v) {
-                setState(() {
-                  q = v.trim();
-                });
-              },
-              decoration: const InputDecoration(
-                prefixIcon: Icon(Icons.search),
-                hintText:
-                    'Search customer, phone or order',
-                border: OutlineInputBorder(),
+              ).then((_) => setState(() {})),
+              icon: const Icon(Icons.add_shopping_cart),
+            ),
+          ],
+        ),
+        body: Column(
+          children: [
+            Padding(
+              padding:
+                  const EdgeInsets.fromLTRB(16, 12, 16, 8),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: search,
+                      onChanged: (v) =>
+                          setState(() => q = v.trim()),
+                      decoration: const InputDecoration(
+                        prefixIcon:
+                            Icon(Icons.search),
+                        hintText:
+                            'Order, customer or phone',
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  DropdownButton<String>(
+                    value: status,
+                    items: const [
+                      'All',
+                      'New',
+                      'Packed',
+                      'Shipped',
+                      'Delivered',
+                      'Cancelled',
+                    ]
+                        .map(
+                          (x) => DropdownMenuItem(
+                            value: x,
+                            child: Text(x),
+                          ),
+                        )
+                        .toList(),
+                    onChanged: (v) =>
+                        setState(() => status = v ?? 'All'),
+                  ),
+                ],
               ),
             ),
-          ),
-          Expanded(
-            child: FutureBuilder<
-                List<Map<String, dynamic>>>(
-              future: _load(),
-              builder: (_, s) {
-                if (!s.hasData) {
-                  return const Center(
-                    child: CircularProgressIndicator(),
-                  );
-                }
-
-                final rows = s.data!;
-
-                if (rows.isEmpty) {
-                  return const Center(
-                    child: Text('No sales found.'),
-                  );
-                }
-
-                return ListView.separated(
-                  itemCount: rows.length,
-                  separatorBuilder: (_, __) =>
-                      const Divider(height: 1),
-                  itemBuilder: (_, i) {
-                    final sale = rows[i];
-
-                    return ListTile(
-                      leading: const CircleAvatar(
-                        child: Icon(
-                          Icons.receipt_long,
-                        ),
-                      ),
-                      title: Text(
-                        '${sale['customer_name'] ?? 'Customer'}',
-                      ),
-                      subtitle: Text(
-                        '${sale['order_id'] ?? 'Local sale'} • '
-                        '${sale['order_status'] ?? 'New'}',
-                      ),
-                      trailing: Text(
-                        '₦${_money(sale['total_amount'] ?? sale['subtotal_amount'])}',
-                      ),
+            Expanded(
+              child:
+                  FutureBuilder<List<Map<String, dynamic>>>(
+                future: _load(),
+                builder: (_, s) {
+                  if (!s.hasData) {
+                    return const Center(
+                      child: CircularProgressIndicator(),
                     );
-                  },
-                );
-              },
+                  }
+
+                  final rows = s.data!;
+
+                  if (rows.isEmpty) {
+                    return const Center(
+                      child: Text('No sales found.'),
+                    );
+                  }
+
+                  return RefreshIndicator(
+                    onRefresh: () async {
+                      await widget.repo
+                          .syncOnce()
+                          .catchError(
+                            (_) => SyncResult(
+                              completed: 0,
+                              downloaded: 0,
+                              cursor: 0,
+                            ),
+                          );
+
+                      if (mounted) setState(() {});
+                    },
+                    child: ListView.separated(
+                      itemCount: rows.length,
+                      separatorBuilder: (_, __) =>
+                          const Divider(height: 1),
+                      itemBuilder: (_, i) {
+                        final x = rows[i];
+
+                        return ListTile(
+                          title: Text(
+                            '${x['order_id'] ?? 'Offline sale'} • '
+                            '${x['customer_name'] ?? ''}',
+                          ),
+                          subtitle: Text(
+                            '${x['order_status'] ?? ''} • '
+                            '${x['payment_status'] ?? ''} • '
+                            '₦${_money(x['total_amount'])}',
+                          ),
+                          leading: Icon(
+                            x['local_only'] == 1
+                                ? Icons.cloud_upload
+                                : Icons.receipt_long,
+                          ),
+                          onTap: () => Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => SaleDetailPage(
+                                api: widget.api,
+                                local: widget.local,
+                                repo: widget.repo,
+                                saleId: x['id'] as int,
+                              ),
+                            ),
+                          ).then((_) => setState(() {})),
+                        );
+                      },
+                    ),
+                  );
+                },
+              ),
             ),
-          ),
-        ],
-      ),
-    );
-  }
+          ],
+        ),
+      );
 
   Future<List<Map<String, dynamic>>> _load() async {
     final db = await widget.local.db;
 
-    final rows = await db.query(
+    var rows = await db.query(
       'sales',
       orderBy: 'id DESC',
     );
 
-    if (q.isEmpty) return rows;
+    if (status != 'All') {
+      rows = rows
+          .where(
+            (x) => x['order_status'] == status,
+          )
+          .toList();
+    }
 
-    final query = q.toLowerCase();
+    if (q.isNotEmpty) {
+      final l = q.toLowerCase();
 
-    return rows.where((x) {
-      return '${x['customer_name'] ?? ''}'
-              .toLowerCase()
-              .contains(query) ||
-          '${x['customer_phone'] ?? ''}'
-              .toLowerCase()
-              .contains(query) ||
-          '${x['order_id'] ?? ''}'
-              .toLowerCase()
-              .contains(query);
-    }).toList();
+      rows = rows
+          .where(
+            (x) =>
+                '${x['order_id'] ?? ''}'
+                    .toLowerCase()
+                    .contains(l) ||
+                '${x['customer_name'] ?? ''}'
+                    .toLowerCase()
+                    .contains(l) ||
+                '${x['customer_phone'] ?? ''}'
+                    .toLowerCase()
+                    .contains(l),
+          )
+          .toList();
+    }
+
+    return rows;
+  }
+}
+
+class SaleDetailPage extends StatefulWidget {
+  const SaleDetailPage({
+    super.key,
+    required this.api,
+    required this.local,
+    required this.repo,
+    required this.saleId,
+  });
+
+  final ApiClient api;
+  final LocalDatabase local;
+  final SyncRepository repo;
+  final int saleId;
+
+  @override
+  State<SaleDetailPage> createState() =>
+      _SaleDetailPageState();
+}
+
+class _SaleDetailPageState extends State<SaleDetailPage> {
+  Map<String, dynamic>? sale;
+  List<Map<String, dynamic>> items = [];
+
+  @override
+  void initState() {
+    super.initState();
+    load();
+  }
+
+  Future<void> load() async {
+    final db = await widget.local.db;
+
+    final rows = await db.query(
+      'sales',
+      where: 'id=?',
+      whereArgs: [widget.saleId],
+      limit: 1,
+    );
+
+    if (rows.isEmpty) return;
+
+    final its = await db.query(
+      'sale_items',
+      where: 'sale_id=?',
+      whereArgs: [widget.saleId],
+    );
+
+    if (mounted) {
+      setState(() {
+        sale = rows.first;
+        items = its;
+      });
+    }
+  }
+
+  Future<void> status(String value) async {
+    try {
+      await widget.repo.queueSaleStatus(
+        widget.saleId,
+        value,
+      );
+
+      await widget.repo.syncOnce();
+      await load();
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Status queued: $value'),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(e.toString()),
+          ),
+        );
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (sale == null) {
+      return const Scaffold(
+        body: Center(
+          child: CircularProgressIndicator(),
+        ),
+      );
+    }
+
+    final s = sale!;
+
+    return Scaffold(
+      appBar: AppBar(
+        title: Text('${s['order_id'] ?? 'Sale'}'),
+      ),
+      body: RefreshIndicator(
+        onRefresh: load,
+        child: ListView(
+          padding: const EdgeInsets.all(16),
+          children: [
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment:
+                      CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '${s['customer_name']}',
+                      style: Theme.of(context)
+                          .textTheme
+                          .titleLarge,
+                    ),
+                    Text('${s['customer_phone'] ?? ''}'),
+                    Text('${s['customer_address'] ?? ''}'),
+                    Text('${s['customer_state'] ?? ''}'),
+                    const SizedBox(height: 10),
+                    Wrap(
+                      spacing: 8,
+                      children: [
+                        Chip(
+                          label: Text(
+                            '${s['order_status']}',
+                          ),
+                        ),
+                        Chip(
+                          label: Text(
+                            '${s['payment_status']}',
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              'Items',
+              style:
+                  Theme.of(context).textTheme.titleLarge,
+            ),
+            ...items.map(
+              (i) => ListTile(
+                contentPadding: EdgeInsets.zero,
+                title: Text(
+                  '${i['product_name'] ?? 'Product #${i['product_id']}'}',
+                ),
+                subtitle: Text(
+                  'Qty ${i['qty']} • '
+                  '₦${_money(i['unit_price'])}',
+                ),
+                trailing: Text(
+                  i['variant_note']?.toString() ?? '',
+                ),
+              ),
+            ),
+            Card(
+              child: ListTile(
+                title: const Text('Total'),
+                trailing: Text(
+                  '₦${_money(s['total_amount'])}',
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              'Update status',
+              style:
+                  Theme.of(context).textTheme.titleMedium,
+            ),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                'Packed',
+                'Shipped',
+                'Delivered',
+                'Cancelled',
+              ]
+                  .map(
+                    (x) => OutlinedButton(
+                      onPressed:
+                          s['order_status'] == 'Cancelled' ||
+                                  s['order_status'] == x
+                              ? null
+                              : () => status(x),
+                      child: Text(x),
+                    ),
+                  )
+                  .toList(),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }
 
@@ -1452,10 +1575,10 @@ class _NewSalePageState extends State<NewSalePage> {
   final state = TextEditingController();
   final notes = TextEditingController();
 
+  List<Map<String, dynamic>> products = [];
+
   final Map<int, int> qty = {};
   final Map<int, TextEditingController> prices = {};
-
-  List<Map<String, dynamic>> products = [];
 
   String payment = 'Paid';
   bool loading = true;
@@ -1464,37 +1587,26 @@ class _NewSalePageState extends State<NewSalePage> {
   @override
   void initState() {
     super.initState();
-    loadProducts();
+    load();
   }
 
-  Future<void> loadProducts() async {
-    try {
-      final db = await LocalDatabase.instance.db;
+  Future<void> load() async {
+    final db = await LocalDatabase.instance.db;
 
-      products = await db.query(
-        'products',
-        where: 'stock > 0',
-        orderBy: 'name ASC',
-      );
+    final rows = await db.query(
+      'products',
+      where: 'stock>0',
+      orderBy: 'name ASC',
+    );
 
-      for (final p in products) {
-        final id = p['id'] as int;
-
-        qty[id] = 0;
-
-        prices[id] = TextEditingController(
-          text: p['selling_price']?.toString() ??
-              p['price']?.toString() ??
-              p['cost']?.toString() ??
-              '0',
-        );
-      }
-    } catch (_) {
-      products = [];
+    for (final p in rows) {
+      prices[p['id'] as int] =
+          TextEditingController();
     }
 
     if (mounted) {
       setState(() {
+        products = rows;
         loading = false;
       });
     }
@@ -1502,14 +1614,18 @@ class _NewSalePageState extends State<NewSalePage> {
 
   @override
   void dispose() {
-    name.dispose();
-    phone.dispose();
-    address.dispose();
-    state.dispose();
-    notes.dispose();
+    for (final c in prices.values) {
+      c.dispose();
+    }
 
-    for (final controller in prices.values) {
-      controller.dispose();
+    for (final c in [
+      name,
+      phone,
+      address,
+      state,
+      notes,
+    ]) {
+      c.dispose();
     }
 
     super.dispose();
@@ -1518,55 +1634,45 @@ class _NewSalePageState extends State<NewSalePage> {
   Future<void> save() async {
     final items = <Map<String, dynamic>>[];
 
-    for (final product in products) {
-      final id = product['id'] as int;
-      final quantity = qty[id] ?? 0;
+    for (final p in products) {
+      final id = p['id'] as int;
+      final q = qty[id] ?? 0;
 
-      if (quantity <= 0) continue;
+      if (q > 0) {
+        final price =
+            double.tryParse(prices[id]!.text.trim());
 
-      final price =
-          double.tryParse(prices[id]?.text ?? '') ?? 0;
+        if (price == null || price < 0) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'Enter a valid price for every selected product.',
+              ),
+            ),
+          );
+          return;
+        }
 
-      if (price < 0) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content:
-                Text('Unit price cannot be negative.'),
-          ),
-        );
-        return;
+        items.add({
+          'product_id': id,
+          'qty': q,
+          'unit_price': price.toStringAsFixed(2),
+        });
       }
-
-      items.add({
-        'product_id': id,
-        'qty': quantity,
-        'unit_price': price,
-      });
-    }
-
-    if (name.text.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content:
-              Text('Customer name is required.'),
-        ),
-      );
-      return;
     }
 
     if (items.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content:
-              Text('Add at least one product.'),
+          content: Text(
+            'Select at least one product.',
+          ),
         ),
       );
       return;
     }
 
-    setState(() {
-      saving = true;
-    });
+    setState(() => saving = true);
 
     try {
       await widget.repo.saveSaleOffline(
@@ -1579,17 +1685,17 @@ class _NewSalePageState extends State<NewSalePage> {
         items: items,
       );
 
-      if (!mounted) return;
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Sale saved locally and queued for sync.',
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Sale saved offline and queued for sync.',
+            ),
           ),
-        ),
-      );
+        );
 
-      Navigator.pop(context);
+        Navigator.pop(context);
+      }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -1600,195 +1706,182 @@ class _NewSalePageState extends State<NewSalePage> {
       }
     } finally {
       if (mounted) {
-        setState(() {
-          saving = false;
-        });
+        setState(() => saving = false);
       }
     }
   }
 
   @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('New Sale'),
-      ),
-      body: loading
-          ? const Center(
-              child: CircularProgressIndicator(),
-            )
-          : ListView(
-              padding: const EdgeInsets.all(16),
-              children: [
-                TextField(
-                  controller: name,
-                  decoration: const InputDecoration(
-                    labelText: 'Customer name',
-                    border: OutlineInputBorder(),
-                  ),
-                ),
-                const SizedBox(height: 10),
-                TextField(
-                  controller: phone,
-                  decoration: const InputDecoration(
-                    labelText: 'Phone',
-                    border: OutlineInputBorder(),
-                  ),
-                ),
-                const SizedBox(height: 10),
-                TextField(
-                  controller: address,
-                  decoration: const InputDecoration(
-                    labelText: 'Address',
-                    border: OutlineInputBorder(),
-                  ),
-                ),
-                const SizedBox(height: 10),
-                TextField(
-                  controller: state,
-                  decoration: const InputDecoration(
-                    labelText: 'State',
-                    border: OutlineInputBorder(),
-                  ),
-                ),
-                const SizedBox(height: 10),
-                DropdownButtonFormField<String>(
-                  initialValue: payment,
-                  decoration:
-                      const InputDecoration(
-                    labelText: 'Payment status',
-                    border: OutlineInputBorder(),
-                  ),
-                  items: const [
-                    DropdownMenuItem(
-                      value: 'Paid',
-                      child: Text('Paid'),
+  Widget build(BuildContext context) => Scaffold(
+        appBar: AppBar(
+          title: const Text('New Sale'),
+        ),
+        body: loading
+            ? const Center(
+                child: CircularProgressIndicator(),
+              )
+            : ListView(
+                padding: const EdgeInsets.all(16),
+                children: [
+                  TextField(
+                    controller: name,
+                    decoration: const InputDecoration(
+                      labelText: 'Customer name',
+                      border: OutlineInputBorder(),
                     ),
-                    DropdownMenuItem(
-                      value: 'Pending',
-                      child: Text('Pending'),
+                  ),
+                  const SizedBox(height: 10),
+                  TextField(
+                    controller: phone,
+                    decoration: const InputDecoration(
+                      labelText: 'Phone',
+                      border: OutlineInputBorder(),
                     ),
-                    DropdownMenuItem(
-                      value: 'Refunded',
-                      child: Text('Refunded'),
+                  ),
+                  const SizedBox(height: 10),
+                  TextField(
+                    controller: address,
+                    decoration: const InputDecoration(
+                      labelText: 'Address',
+                      border: OutlineInputBorder(),
                     ),
-                  ],
-                  onChanged: (v) {
-                    if (v != null) {
-                      setState(() {
-                        payment = v;
-                      });
-                    }
-                  },
-                ),
-                const SizedBox(height: 16),
-                ...products.map(
-                  (p) {
-                    final id = p['id'] as int;
-                    final q = qty[id] ?? 0;
-
-                    return Card(
-                      child: Padding(
-                        padding:
-                            const EdgeInsets.all(10),
-                        child: Column(
-                          crossAxisAlignment:
-                              CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              '${p['name']}',
-                              style: const TextStyle(
-                                fontWeight:
-                                    FontWeight.bold,
-                              ),
-                            ),
-                            Text(
-                              'Stock: ${p['stock']}',
-                            ),
-                            Row(
-                              children: [
-                                IconButton(
-                                  onPressed: q > 0
-                                      ? () {
-                                          setState(() {
-                                            qty[id] =
-                                                q - 1;
-                                          });
-                                        }
-                                      : null,
-                                  icon: const Icon(
-                                    Icons
-                                        .remove_circle_outline,
-                                  ),
-                                ),
-                                Text('$q'),
-                                IconButton(
-                                  onPressed:
-                                      q <
-                                              (p['stock']
-                                                  as int)
-                                          ? () {
-                                              setState(() {
-                                                qty[id] =
-                                                    q + 1;
-                                              });
-                                            }
-                                          : null,
-                                  icon: const Icon(
-                                    Icons
-                                        .add_circle_outline,
-                                  ),
-                                ),
-                                const SizedBox(width: 8),
-                                Expanded(
-                                  child: TextField(
-                                    controller:
-                                        prices[id],
-                                    keyboardType:
-                                        const TextInputType
-                                            .numberWithOptions(
-                                      decimal: true,
-                                    ),
-                                    decoration:
-                                        const InputDecoration(
-                                      labelText:
-                                          'Unit price',
-                                      prefixText: '₦',
-                                      border:
-                                          OutlineInputBorder(),
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ],
-                        ),
+                  ),
+                  const SizedBox(height: 10),
+                  TextField(
+                    controller: state,
+                    decoration: const InputDecoration(
+                      labelText: 'State',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  DropdownButtonFormField<String>(
+                    value: payment,
+                    decoration: const InputDecoration(
+                      labelText: 'Payment status',
+                      border: OutlineInputBorder(),
+                    ),
+                    items: const [
+                      DropdownMenuItem(
+                        value: 'Paid',
+                        child: Text('Paid'),
                       ),
-                    );
-                  },
-                ),
-                TextField(
-                  controller: notes,
-                  maxLines: 2,
-                  decoration: const InputDecoration(
-                    labelText: 'Notes',
-                    border: OutlineInputBorder(),
+                      DropdownMenuItem(
+                        value: 'Pending',
+                        child: Text('Pending'),
+                      ),
+                      DropdownMenuItem(
+                        value: 'Refunded',
+                        child: Text('Refunded'),
+                      ),
+                    ],
+                    onChanged: (v) {
+                      if (v != null) {
+                        setState(() => payment = v);
+                      }
+                    },
                   ),
-                ),
-                const SizedBox(height: 16),
-                FilledButton.icon(
-                  onPressed: saving ? null : save,
-                  icon: const Icon(Icons.save),
-                  label: Text(
-                    saving
-                        ? 'Saving...'
-                        : 'Save sale offline',
+                  const SizedBox(height: 16),
+                  ...products.map(
+                    (p) {
+                      final id = p['id'] as int;
+                      final q = qty[id] ?? 0;
+
+                      return Card(
+                        child: Padding(
+                          padding:
+                              const EdgeInsets.all(10),
+                          child: Column(
+                            crossAxisAlignment:
+                                CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                '${p['name']}',
+                                style: const TextStyle(
+                                  fontWeight:
+                                      FontWeight.bold,
+                                ),
+                              ),
+                              Text(
+                                'Stock: ${p['stock']}',
+                              ),
+                              Row(
+                                children: [
+                                  IconButton(
+                                    onPressed: q > 0
+                                        ? () => setState(
+                                              () => qty[id] =
+                                                  q - 1,
+                                            )
+                                        : null,
+                                    icon: const Icon(
+                                      Icons
+                                          .remove_circle_outline,
+                                    ),
+                                  ),
+                                  Text('$q'),
+                                  IconButton(
+                                    onPressed: q <
+                                            (p['stock']
+                                                as int)
+                                        ? () => setState(
+                                              () => qty[id] =
+                                                  q + 1,
+                                            )
+                                        : null,
+                                    icon: const Icon(
+                                      Icons
+                                          .add_circle_outline,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: TextField(
+                                      controller: prices[id],
+                                      keyboardType:
+                                          const TextInputType
+                                              .numberWithOptions(
+                                        decimal: true,
+                                      ),
+                                      decoration:
+                                          const InputDecoration(
+                                        labelText:
+                                            'Unit price',
+                                        prefixText: '₦',
+                                        border:
+                                            OutlineInputBorder(),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                    },
                   ),
-                ),
-              ],
-            ),
-    );
-  }
+                  TextField(
+                    controller: notes,
+                    maxLines: 2,
+                    decoration: const InputDecoration(
+                      labelText: 'Notes',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  FilledButton.icon(
+                    onPressed: saving ? null : save,
+                    icon: const Icon(Icons.save),
+                    label: Text(
+                      saving
+                          ? 'Saving...'
+                          : 'Save sale offline',
+                    ),
+                  ),
+                ],
+              ),
+      );
 }
 
 class StockPage extends StatefulWidget {
@@ -1806,85 +1899,81 @@ class StockPage extends StatefulWidget {
   final int refreshKey;
 
   @override
-  State<StockPage> createState() =>
-      _StockPageState();
+  State<StockPage> createState() => _StockPageState();
 }
 
 class _StockPageState extends State<StockPage> {
+  int? selected;
+
   @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Stock'),
-        actions: [
-          IconButton(
-            onPressed: () => _history(context),
-            icon: const Icon(Icons.history),
-          ),
-        ],
-      ),
-      body: FutureBuilder<
-          List<Map<String, dynamic>>>(
-        future: widget.local.db.then(
-          (db) => db.query(
-            'products',
-            orderBy: 'stock ASC, name ASC',
-          ),
+  Widget build(BuildContext context) => Scaffold(
+        appBar: AppBar(
+          title: const Text('Stock'),
+          actions: [
+            IconButton(
+              onPressed: () => _history(context),
+              icon: const Icon(Icons.history),
+            ),
+          ],
         ),
-        builder: (_, s) {
-          if (!s.hasData) {
-            return const Center(
-              child: CircularProgressIndicator(),
-            );
-          }
+        body: FutureBuilder<List<Map<String, dynamic>>>(
+          future: widget.local.db.then(
+            (db) => db.query(
+              'products',
+              orderBy: 'stock ASC, name ASC',
+            ),
+          ),
+          builder: (_, s) {
+            if (!s.hasData) {
+              return const Center(
+                child: CircularProgressIndicator(),
+              );
+            }
 
-          final rows = s.data!;
+            final rows = s.data!;
 
-          return RefreshIndicator(
-            onRefresh: () async {
-              await widget.repo
-                  .syncOnce()
-                  .catchError(
-                    (_) => const SyncResult(
-                      completed: 0,
-                      downloaded: 0,
-                      cursor: 0,
+            return RefreshIndicator(
+              onRefresh: () async {
+                await widget.repo
+                    .syncOnce()
+                    .catchError(
+                      (_) => SyncResult(
+                        completed: 0,
+                        downloaded: 0,
+                        cursor: 0,
+                      ),
+                    );
+
+                if (mounted) setState(() {});
+              },
+              child: ListView.separated(
+                itemCount: rows.length,
+                separatorBuilder: (_, __) =>
+                    const Divider(height: 1),
+                itemBuilder: (_, i) {
+                  final p = rows[i];
+
+                  return ListTile(
+                    title: Text('${p['name']}'),
+                    subtitle: Text(
+                      '${p['sku'] ?? 'No SKU'} • '
+                      'Stock ${p['stock']}',
+                    ),
+                    leading: CircleAvatar(
+                      child: Text('${p['stock']}'),
+                    ),
+                    trailing: IconButton(
+                      icon: const Icon(Icons.edit),
+                      onPressed: () =>
+                          _adjust(context, p),
                     ),
                   );
-
-              if (mounted) {
-                setState(() {});
-              }
-            },
-            child: ListView.separated(
-              itemCount: rows.length,
-              separatorBuilder: (_, __) =>
-                  const Divider(height: 1),
-              itemBuilder: (_, i) {
-                final p = rows[i];
-
-                return ListTile(
-                  title: Text('${p['name']}'),
-                  subtitle: Text(
-                    '${p['sku'] ?? 'No SKU'} • '
-                    'Stock ${p['stock']}',
-                  ),
-                  leading: CircleAvatar(
-                    child: Text('${p['stock']}'),
-                  ),
-                  trailing: IconButton(
-                    icon: const Icon(Icons.edit),
-                    onPressed: () =>
-                        _adjust(context, p),
-                  ),
-                );
-              },
-            ),
-          );
-        },
-      ),
-    );
-  }
+                },
+              ),
+            );
+          },
+        ),
+      );
 
   Future<void> _adjust(
     BuildContext context,
@@ -1898,9 +1987,7 @@ class _StockPageState extends State<StockPage> {
     final result = await showDialog<List<String>>(
       context: context,
       builder: (c) => AlertDialog(
-        title: Text(
-          'Adjust ${p['name']}',
-        ),
+        title: Text('Adjust ${p['name']}'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -1931,23 +2018,13 @@ class _StockPageState extends State<StockPage> {
             child: const Text('Cancel'),
           ),
           FilledButton(
-            onPressed: () {
-              Navigator.pop(
-                c,
-                [
-                  q.text,
-                  reason.text,
-                ],
-              );
-            },
+            onPressed: () =>
+                Navigator.pop(c, [q.text, reason.text]),
             child: const Text('Save'),
           ),
         ],
       ),
     );
-
-    q.dispose();
-    reason.dispose();
 
     if (result == null) return;
 
@@ -1955,8 +2032,7 @@ class _StockPageState extends State<StockPage> {
 
     if (change == null || change == 0) {
       if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(
+        ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text(
               'Enter a non-zero whole number.',
@@ -1964,6 +2040,7 @@ class _StockPageState extends State<StockPage> {
           ),
         );
       }
+
       return;
     }
 
@@ -1977,8 +2054,7 @@ class _StockPageState extends State<StockPage> {
       if (mounted) {
         setState(() {});
 
-        ScaffoldMessenger.of(context)
-            .showSnackBar(
+        ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text(
               'Stock updated locally and queued.',
@@ -1988,8 +2064,7 @@ class _StockPageState extends State<StockPage> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(
+        ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(e.toString()),
           ),
@@ -1998,12 +2073,9 @@ class _StockPageState extends State<StockPage> {
     }
   }
 
-  Future<void> _history(
-    BuildContext context,
-  ) async {
-    final logs = await widget.api
-        .stockLog()
-        .catchError((_) => <Map<String, dynamic>>[]);
+  Future<void> _history(BuildContext context) async {
+    final logs =
+        await widget.api.stockLog().catchError((_) => []);
 
     if (!mounted) return;
 
@@ -2011,8 +2083,7 @@ class _StockPageState extends State<StockPage> {
       context: context,
       isScrollControlled: true,
       builder: (_) => SizedBox(
-        height:
-            MediaQuery.sizeOf(context).height * .8,
+        height: MediaQuery.sizeOf(context).height * .8,
         child: ListView(
           padding: const EdgeInsets.all(16),
           children: [
@@ -2059,34 +2130,28 @@ class MorePage extends StatelessWidget {
   final LocalDatabase local;
   final SyncRepository repo;
   final Future<void> Function() onLogout;
-  final Future<void> Function({
-    bool silent,
-  }) onSync;
+  final Future<void> Function({bool silent}) onSync;
   final int refreshKey;
 
   @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('More'),
-      ),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          Card(
-            child: ListTile(
-              leading: const Icon(
-                Icons.cloud_sync,
-              ),
-              title: const Text('Sync queue'),
-              subtitle: const Text(
-                'Pending, failed and retrying operations',
-              ),
-              trailing: const Icon(
-                Icons.chevron_right,
-              ),
-              onTap: () {
-                Navigator.push(
+  Widget build(BuildContext context) => Scaffold(
+        appBar: AppBar(
+          title: const Text('More'),
+        ),
+        body: ListView(
+          padding: const EdgeInsets.all(16),
+          children: [
+            Card(
+              child: ListTile(
+                leading:
+                    const Icon(Icons.cloud_sync),
+                title: const Text('Sync queue'),
+                subtitle: const Text(
+                  'Pending, failed and retrying operations',
+                ),
+                trailing:
+                    const Icon(Icons.chevron_right),
+                onTap: () => Navigator.push(
                   context,
                   MaterialPageRoute(
                     builder: (_) => SyncQueuePage(
@@ -2094,55 +2159,42 @@ class MorePage extends StatelessWidget {
                       local: local,
                     ),
                   ),
-                );
-              },
+                ),
+              ),
             ),
-          ),
-          Card(
-            child: ListTile(
-              leading: const Icon(
-                Icons.lock_reset,
-              ),
-              title: const Text(
-                'Change password',
-              ),
-              trailing: const Icon(
-                Icons.chevron_right,
-              ),
-              onTap: () {
-                showDialog(
+            Card(
+              child: ListTile(
+                leading:
+                    const Icon(Icons.lock_reset),
+                title: const Text('Change password'),
+                trailing:
+                    const Icon(Icons.chevron_right),
+                onTap: () => showDialog(
                   context: context,
                   builder: (_) =>
-                      ChangePasswordDialog(
-                    api: api,
-                  ),
-                );
-              },
-            ),
-          ),
-          Card(
-            child: ListTile(
-              leading: const Icon(Icons.sync),
-              title: const Text('Sync now'),
-              onTap: () => onSync(
-                silent: false,
+                      ChangePasswordDialog(api: api),
+                ),
               ),
             ),
-          ),
-          const SizedBox(height: 16),
-          OutlinedButton.icon(
-            onPressed: onLogout,
-            icon: const Icon(Icons.logout),
-            label: const Text('Log out'),
-          ),
-        ],
-      ),
-    );
-  }
+            Card(
+              child: ListTile(
+                leading: const Icon(Icons.sync),
+                title: const Text('Sync now'),
+                onTap: () => onSync(silent: false),
+              ),
+            ),
+            const SizedBox(height: 16),
+            OutlinedButton.icon(
+              onPressed: onLogout,
+              icon: const Icon(Icons.logout),
+              label: const Text('Log out'),
+            ),
+          ],
+        ),
+      );
 }
 
-class ChangePasswordDialog
-    extends StatefulWidget {
+class ChangePasswordDialog extends StatefulWidget {
   const ChangePasswordDialog({
     super.key,
     required this.api,
@@ -2168,16 +2220,14 @@ class _ChangePasswordDialogState
   Future<void> save() async {
     if (next.text.length < 6 ||
         next.text != confirm.text) {
-      setState(() {
-        error =
-            'New passwords must match and be at least 6 characters.';
-      });
+      setState(
+        () => error =
+            'New passwords must match and be at least 6 characters.',
+      );
       return;
     }
 
-    setState(() {
-      busy = true;
-    });
+    setState(() => busy = true);
 
     try {
       await widget.api.changePassword(
@@ -2188,8 +2238,7 @@ class _ChangePasswordDialogState
       if (mounted) {
         Navigator.pop(context);
 
-        ScaffoldMessenger.of(context)
-            .showSnackBar(
+        ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content:
                 Text('Password changed successfully.'),
@@ -2198,97 +2247,78 @@ class _ChangePasswordDialogState
       }
     } catch (e) {
       if (mounted) {
-        setState(() {
-          error = e.toString();
-        });
+        setState(() => error = e.toString());
       }
     } finally {
       if (mounted) {
-        setState(() {
-          busy = false;
-        });
+        setState(() => busy = false);
       }
     }
   }
 
   @override
-  void dispose() {
-    current.dispose();
-    next.dispose();
-    confirm.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return AlertDialog(
-      title: const Text('Change password'),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          TextField(
-            controller: current,
-            obscureText: obscure,
-            decoration: const InputDecoration(
-              labelText: 'Current password',
-            ),
-          ),
-          TextField(
-            controller: next,
-            obscureText: obscure,
-            decoration: const InputDecoration(
-              labelText: 'New password',
-            ),
-          ),
-          TextField(
-            controller: confirm,
-            obscureText: obscure,
-            decoration: const InputDecoration(
-              labelText: 'Confirm new password',
-            ),
-          ),
-          Align(
-            alignment: Alignment.centerRight,
-            child: TextButton(
-              onPressed: () {
-                setState(() {
-                  obscure = !obscure;
-                });
-              },
-              child: Text(
-                obscure
-                    ? 'Show passwords'
-                    : 'Hide passwords',
+  Widget build(BuildContext context) => AlertDialog(
+        title: const Text('Change password'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: current,
+              obscureText: obscure,
+              decoration: const InputDecoration(
+                labelText: 'Current password',
               ),
             ),
-          ),
-          if (error != null)
-            Text(
-              error!,
-              style: TextStyle(
-                color: Theme.of(context)
-                    .colorScheme
-                    .error,
+            TextField(
+              controller: next,
+              obscureText: obscure,
+              decoration: const InputDecoration(
+                labelText: 'New password',
               ),
             ),
+            TextField(
+              controller: confirm,
+              obscureText: obscure,
+              decoration: const InputDecoration(
+                labelText: 'Confirm new password',
+              ),
+            ),
+            Align(
+              alignment: Alignment.centerRight,
+              child: TextButton(
+                onPressed: () =>
+                    setState(() => obscure = !obscure),
+                child: Text(
+                  obscure
+                      ? 'Show passwords'
+                      : 'Hide passwords',
+                ),
+              ),
+            ),
+            if (error != null)
+              Text(
+                error!,
+                style: TextStyle(
+                  color:
+                      Theme.of(context).colorScheme.error,
+                ),
+              ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed:
+                busy ? null : () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: busy ? null : save,
+            child: Text(
+              busy ? 'Saving...' : 'Change',
+            ),
+          ),
         ],
-      ),
-      actions: [
-        TextButton(
-          onPressed: busy
-              ? null
-              : () => Navigator.pop(context),
-          child: const Text('Cancel'),
-        ),
-        FilledButton(
-          onPressed: busy ? null : save,
-          child: Text(
-            busy ? 'Saving...' : 'Change',
-          ),
-        ),
-      ],
-    );
-  }
+      );
 }
 
 class SyncQueuePage extends StatefulWidget {
@@ -2308,93 +2338,87 @@ class SyncQueuePage extends StatefulWidget {
 
 class _SyncQueuePageState
     extends State<SyncQueuePage> {
-  Future<List<Map<String, dynamic>>> load() async {
-    return (await widget.local.db).query(
-      'sync_queue',
-      orderBy: 'local_id DESC',
-      limit: 100,
-    );
-  }
+  Future<List<Map<String, dynamic>>> load() async =>
+      (await widget.local.db).query(
+        'sync_queue',
+        orderBy: 'local_id DESC',
+        limit: 100,
+      );
 
   Future<void> retry() async {
     await widget.repo.retryFailed();
 
-    if (mounted) {
-      setState(() {});
-    }
+    if (mounted) setState(() {});
   }
 
   @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Sync queue'),
-        actions: [
-          IconButton(
-            onPressed: retry,
-            icon: const Icon(Icons.replay),
-          ),
-        ],
-      ),
-      body: FutureBuilder<
-          List<Map<String, dynamic>>>(
-        future: load(),
-        builder: (_, s) {
-          if (!s.hasData) {
-            return const Center(
-              child: CircularProgressIndicator(),
-            );
-          }
-
-          final rows = s.data!;
-
-          if (rows.isEmpty) {
-            return const Center(
-              child: Text('No queued operations.'),
-            );
-          }
-
-          return ListView.builder(
-            itemCount: rows.length,
-            itemBuilder: (_, i) {
-              final x = rows[i];
-
-              final status =
-                  x['status']?.toString() ?? '';
-
-              return Card(
-                margin: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 5,
-                ),
-                child: ListTile(
-                  leading: Icon(
-                    status == 'failed'
-                        ? Icons.error_outline
-                        : status == 'synced'
-                            ? Icons.cloud_done
-                            : Icons.cloud_upload,
-                  ),
-                  title: Text(
-                    x['operation_type']
-                            ?.toString() ??
-                        'Operation',
-                  ),
-                  subtitle: Text(
-                    [
-                      status,
-                      'attempts: ${x['attempts']}',
-                      if ('${x['last_error'] ?? ''}'
-                          .isNotEmpty)
-                        x['last_error'],
-                    ].join(' • '),
-                  ),
-                ),
+  Widget build(BuildContext context) => Scaffold(
+        appBar: AppBar(
+          title: const Text('Sync queue'),
+          actions: [
+            IconButton(
+              onPressed: retry,
+              icon: const Icon(Icons.replay),
+            ),
+          ],
+        ),
+        body: FutureBuilder<
+            List<Map<String, dynamic>>>(
+          future: load(),
+          builder: (_, s) {
+            if (!s.hasData) {
+              return const Center(
+                child: CircularProgressIndicator(),
               );
-            },
-          );
-        },
-      ),
-    );
-  }
+            }
+
+            final rows = s.data!;
+
+            if (rows.isEmpty) {
+              return const Center(
+                child: Text('No queued operations.'),
+              );
+            }
+
+            return ListView.builder(
+              itemCount: rows.length,
+              itemBuilder: (_, i) {
+                final x = rows[i];
+                final status =
+                    x['status']?.toString() ?? '';
+
+                return Card(
+                  margin: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 5,
+                  ),
+                  child: ListTile(
+                    leading: Icon(
+                      status == 'failed'
+                          ? Icons.error_outline
+                          : status == 'synced'
+                              ? Icons.cloud_done
+                              : Icons.cloud_upload,
+                    ),
+                    title: Text(
+                      x['operation_type']
+                              ?.toString() ??
+                          'Operation',
+                    ),
+                    subtitle: Text(
+                      [
+                        status,
+                        'attempts: ${x['attempts']}',
+                        if ('${x['last_error'] ?? ''}'
+                            .isNotEmpty)
+                          x['last_error'],
+                      ].join(' • '),
+                    ),
+                  ),
+                );
+              },
+            );
+          },
+        ),
+      );
 }
