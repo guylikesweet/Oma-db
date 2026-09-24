@@ -11,9 +11,16 @@ on:
   workflow_dispatch:
     inputs:
       api_url:
-        description: 'Backend URL'
+        description: 'Backend API base URL'
         required: true
         default: 'https://oma-db.onrender.com/api'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: oma-mobile-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   build:
@@ -21,161 +28,348 @@ jobs:
     defaults:
       run:
         working-directory: mobile
-    steps:
-      - uses: actions/checkout@v4
 
-      - name: Backend and mobile preflight
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Backend and mobile compatibility preflight
         working-directory: .
+        shell: bash
         run: |
+          set -euo pipefail
+
           python3 -m compileall -q app
+
           python3 - <<'PY'
           from pathlib import Path
-          api = Path('app/api.py').read_text()
-          models = Path('app/models.py').read_text()
+          import re
+          import sys
+
+          api_path = Path('app/api.py')
+          models_path = Path('app/models.py')
+          pubspec_path = Path('mobile/pubspec.yaml')
+          versions = list(Path('migrations/versions').glob('*.py'))
+
+          api = api_path.read_text(encoding='utf-8')
+          models = models_path.read_text(encoding='utf-8')
+          pubspec = pubspec_path.read_text(encoding='utf-8')
+
           required_routes = [
-            '/v1/auth/login','/v1/auth/change-password','/v1/bootstrap','/v1/sync',
-            '/v1/products','/v1/stock/adjust','/v1/sales','/v1/batches',
-            '/v1/deliveries','/v1/shipping','/v1/rates/courier','/v1/rates/monthly',
-            '/v1/dashboard','/v1/reports/sales','/v1/reports/shipping','/v1/reports/inventory',
-            '/v1/settings','/v1/settings/logo','/v1/users','/v1/clear-test-data'
+              '/v1/auth/login',
+              '/v1/auth/me',
+              '/v1/auth/change-password',
+              '/v1/auth/logout',
+              '/v1/bootstrap',
+              '/v1/sync',
+              '/v1/products',
+              '/v1/stock/adjust',
+              '/v1/stock-log',
+              '/v1/sales',
+              '/v1/batches',
+              '/v1/deliveries',
+              '/v1/deliveries/ready',
+              '/v1/deliveries/<int:delivery_id>/label.pdf',
+              '/v1/shipping',
+              '/v1/courier-rates',
+              '/v1/monthly-shipping-rates',
+              '/v1/reports/sales',
+              '/v1/reports/shipping',
+              '/v1/reports/inventory',
+              '/v1/settings',
+              '/v1/users',
+              '/v1/users/<int:user_id>',
+              '/v1/admin/clear-test-data',
           ]
-          missing=[r for r in required_routes if r not in api]
-          if missing: raise SystemExit('Missing API routes: '+', '.join(missing))
-          for cls in ('MobileOperation','MobileChange'):
-            if f'class {cls}' not in models: raise SystemExit(f'Missing model: {cls}')
-          versions=list(Path('migrations/versions').glob('*.py'))
-          if any('7f0f6f0c8a21_add_mobile_sync_tables' in p.name for p in versions):
-            raise SystemExit('Obsolete duplicate mobile-sync migration detected; remove it.')
-          print('Preflight OK')
+
+          missing = [route for route in required_routes if route not in api]
+          if missing:
+              raise SystemExit('Missing API routes: ' + ', '.join(missing))
+
+          for cls in ('MobileOperation', 'MobileChange'):
+              if not re.search(rf'^class {cls}\b', models, re.MULTILINE):
+                  raise SystemExit(f'Missing model: {cls}')
+
+          if '__tablename__ = "mobile_operations"' not in models:
+              raise SystemExit('MobileOperation must map to mobile_operations.')
+          if '__tablename__ = "mobile_changes"' not in models:
+              raise SystemExit('MobileChange must map to mobile_changes.')
+
+          d4 = Path('migrations/versions/d4f2c7a91e60_mobile_sync_infrastructure.py')
+          e71 = Path('migrations/versions/e71c8b4f2d10_add_sale_client_operation_id.py')
+          merge = Path('migrations/versions/final_mobile_merge.py')
+          if not d4.exists() or not e71.exists() or not merge.exists():
+              raise SystemExit('Required mobile migration files are missing (d4/e71/final merge).')
+
+          d4_text = d4.read_text(encoding='utf-8')
+          e71_text = e71.read_text(encoding='utf-8')
+          merge_text = merge.read_text(encoding='utf-8')
+          if 'revision = "d4f2c7a91e60"' not in d4_text or 'down_revision = "ca10b49cd246"' not in d4_text:
+              raise SystemExit('Unexpected d4 mobile migration chain.')
+          if 'revision = "e71c8b4f2d10"' not in e71_text or 'down_revision = "d4f2c7a91e60"' not in e71_text:
+              raise SystemExit('Unexpected e71 mobile migration chain.')
+          if 'revision = "f7a1c9e4b210"' not in merge_text or 'e71c8b4f2d10' not in merge_text:
+              raise SystemExit('Final mobile migration merge is missing e71c8b4f2d10.')
+
+          obsolete = Path('migrations/versions/7f0f6f0c8a21_add_mobile_sync_tables.py')
+          if obsolete.exists():
+              raise SystemExit(
+                  'Obsolete duplicate migration detected: delete '
+                  'migrations/versions/7f0f6f0c8a21_add_mobile_sync_tables.py'
+              )
+
+          if 'name: oma_mobile' not in pubspec:
+              raise SystemExit('mobile/pubspec.yaml does not define the expected package name oma_mobile.')
+
+          if "sdk: '>=3.3.0 <4.0.0'" not in pubspec:
+              raise SystemExit('Unexpected Dart SDK constraint in mobile/pubspec.yaml.')
+
+          print('Backend/mobile compatibility preflight: OK')
           PY
 
-      - uses: subosito/flutter-action@v2
+      - name: Install Flutter
+        uses: subosito/flutter-action@v2
         with:
           channel: stable
           flutter-version: '3.22.0'
+          cache: true
 
-      - uses: actions/setup-java@v4
+      - name: Install Java 17
+        uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
+          cache: gradle
 
-      - run: flutter pub get
-      - run: flutter analyze
+      - name: Get Flutter dependencies
+        run: flutter pub get
 
-      - name: Create Android project
+      - name: Analyze Flutter code
+        run: flutter analyze
+
+      - name: Run Flutter tests when present
+        shell: bash
         run: |
-          if [ ! -d android ]; then flutter create --platforms=android .; fi
-          rm -rf android/app/src/main/java/io
-          mkdir -p android/app/src/main/kotlin/com/example/oma_mobile
-          cat > android/app/src/main/kotlin/com/example/oma_mobile/MainActivity.kt <<'EOF'
-          package com.example.oma_mobile
-          import io.flutter.embedding.android.FlutterActivity
-          class MainActivity: FlutterActivity()
-          EOF
-          find android/app/src/main -name 'MainActivity.java' -delete || true
-          sed -i 's/android:label="[^"]*"/android:label="OmaSales Mobile"/' android/app/src/main/AndroidManifest.xml
-          if ! grep -q 'android.permission.INTERNET' android/app/src/main/AndroidManifest.xml; then
-            sed -i 's#<application#<uses-permission android:name="android.permission.INTERNET" />\n    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />\n    <application#' android/app/src/main/AndroidManifest.xml
+          if [ -d test ] && find test -type f -name '*_test.dart' -print -quit | grep -q .; then
+            flutter test
+          else
+            echo 'No Dart tests found; skipping flutter test.'
           fi
 
-      - name: Validate and install launcher icon
+      - name: Create Android project
+        shell: bash
         run: |
+          set -euo pipefail
+          if [ ! -d android ]; then
+            flutter create --platforms=android --org com.example .
+          fi
+
+          rm -rf android/app/src/main/java/io
+          mkdir -p android/app/src/main/kotlin/com/example/oma_mobile
+
+          cat > android/app/src/main/kotlin/com/example/oma_mobile/MainActivity.kt <<'EOF'
+          package com.example.oma_mobile
+
+          import io.flutter.embedding.android.FlutterActivity
+
+          class MainActivity : FlutterActivity()
+          EOF
+
+          find android/app/src/main -name 'MainActivity.java' -delete || true
+
+          python3 - <<'PY'
+          from pathlib import Path
+          manifest = Path('android/app/src/main/AndroidManifest.xml')
+          s = manifest.read_text(encoding='utf-8')
+          if 'android.permission.INTERNET' not in s:
+              s = s.replace(
+                  '<application',
+                  '<uses-permission android:name="android.permission.INTERNET" />\n'
+                  '    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />\n'
+                  '    <application',
+                  1,
+              )
+          s = s.replace('android:label="Flutter Demo"', 'android:label="OmaSales Mobile"')
+          manifest.write_text(s, encoding='utf-8')
+          PY
+
+      - name: Validate and install launcher icon
+        shell: bash
+        run: |
+          set -euo pipefail
           python3 - <<'PY'
           from pathlib import Path
           import struct
 
           src = Path('assets/images/app_icon.png')
-          if not src.exists():
-              raise SystemExit('assets/images/app_icon.png is missing')
+          if not src.is_file():
+              raise SystemExit('assets/images/app_icon.png is missing.')
 
           data = src.read_bytes()
-          png_signature = b'\x89PNG\r\n\x1a\n'
-          if not data.startswith(png_signature):
-              raise SystemExit('assets/images/app_icon.png is not a valid PNG file')
+          if not data.startswith(b'\x89PNG\r\n\x1a\n'):
+              raise SystemExit('assets/images/app_icon.png is not a valid PNG.')
           if len(data) < 24 or data[12:16] != b'IHDR':
-              raise SystemExit('assets/images/app_icon.png has no valid PNG header')
+              raise SystemExit('assets/images/app_icon.png has an invalid PNG header.')
 
           width, height = struct.unpack('>II', data[16:24])
           if width <= 0 or height <= 0:
-              raise SystemExit('assets/images/app_icon.png has invalid dimensions')
+              raise SystemExit('assets/images/app_icon.png has invalid dimensions.')
 
+          # The supplied icon is already a valid PNG. No Pillow/ImageMagick is
+          # required on the GitHub runner. Android accepts PNG launcher assets.
           res = Path('android/app/src/main/res')
-          sizes = {
-              'mipmap-mdpi': 48,
-              'mipmap-hdpi': 72,
-              'mipmap-xhdpi': 96,
-              'mipmap-xxhdpi': 144,
-              'mipmap-xxxhdpi': 192,
-          }
-          for folder in sizes:
+          for folder in ('mipmap-mdpi', 'mipmap-hdpi', 'mipmap-xhdpi', 'mipmap-xxhdpi', 'mipmap-xxxhdpi'):
               out = res / folder
               out.mkdir(parents=True, exist_ok=True)
-              # Keep the supplied verified PNG unchanged. Android accepts a
-              # valid PNG in each density bucket; no Pillow/ImageMagick needed.
-              (out / 'launcher_icon.png').write_bytes(data)
               (out / 'ic_launcher.png').write_bytes(data)
+              (out / 'launcher_icon.png').write_bytes(data)
 
-          print(f'Icon OK: {width}x{height}')
+          print(f'Launcher icon validated: {width}x{height}')
           PY
 
-      - name: Configure release signing
+      - name: Configure and validate Android release signing
+        working-directory: mobile
         env:
           ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        shell: bash
         run: |
-          if [ -z "$ANDROID_KEYSTORE_BASE64" ] || [ -z "$ANDROID_KEYSTORE_PASSWORD" ] || [ -z "$ANDROID_KEY_ALIAS" ] || [ -z "$ANDROID_KEY_PASSWORD" ]; then
-            echo 'Missing Android release signing secrets.'; exit 1
-          fi
-          echo "$ANDROID_KEYSTORE_BASE64" | base64 --decode > android/app/oma-release.jks
-          cat > android/key.properties <<EOF
-          storePassword=$ANDROID_KEYSTORE_PASSWORD
-          keyPassword=$ANDROID_KEY_PASSWORD
-          keyAlias=$ANDROID_KEY_ALIAS
-          storeFile=oma-release.jks
-          EOF
+          set -euo pipefail
+
+          for required in ANDROID_KEYSTORE_BASE64 ANDROID_KEYSTORE_PASSWORD ANDROID_KEY_ALIAS ANDROID_KEY_PASSWORD; do
+            if [ -z "${!required}" ]; then
+              echo "Missing GitHub Actions secret: $required"
+              exit 1
+            fi
+          done
+
+          printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > android/app/oma-release.jks
+
+          python3 - <<'PY'
+          import os
+          from pathlib import Path
+
+          values = {
+              'storePassword': os.environ['ANDROID_KEYSTORE_PASSWORD'],
+              'keyPassword': os.environ['ANDROID_KEY_PASSWORD'],
+              'keyAlias': os.environ['ANDROID_KEY_ALIAS'],
+              'storeFile': 'oma-release.jks',
+          }
+          Path('android/key.properties').write_text(
+              ''.join(f'{k}={v}\n' for k, v in values.items()),
+              encoding='utf-8',
+          )
+          PY
+
+          test -s android/app/oma-release.jks
+
+          keytool -list \
+            -keystore android/app/oma-release.jks \
+            -storepass "$ANDROID_KEYSTORE_PASSWORD" \
+            -alias "$ANDROID_KEY_ALIAS" \
+            >/dev/null
+
           python3 - <<'PY'
           from pathlib import Path
-          p=Path('android/app/build.gradle')
-          s=p.read_text()
+          import re
+
+          path = Path('android/app/build.gradle')
+          if not path.exists():
+              raise SystemExit('android/app/build.gradle was not generated.')
+
+          s = path.read_text(encoding='utf-8')
+
           if 'keystorePropertiesFile' not in s:
-            s=s.replace('android {', """def keystoreProperties = new Properties()
-          def keystorePropertiesFile = rootProject.file('key.properties')
-          if (keystorePropertiesFile.exists()) {
-              keystoreProperties.load(new FileInputStream(keystorePropertiesFile))
-          }
-          
-          android {""",1)
+              android_match = re.search(r'(?m)^android\s*\{', s)
+              if not android_match:
+                  raise SystemExit('Could not locate android { block in build.gradle.')
+              prefix = (
+                  "def keystoreProperties = new Properties()\n"
+                  "def keystorePropertiesFile = rootProject.file('key.properties')\n"
+                  "if (keystorePropertiesFile.exists()) {\n"
+                  "    keystoreProperties.load(new FileInputStream(keystorePropertiesFile))\n"
+                  "}\n\n"
+              )
+              s = s[:android_match.start()] + prefix + s[android_match.start():]
+
+          build_types = re.search(r'(?m)^([ \t]*)buildTypes\s*\{', s)
+          if not build_types:
+              raise SystemExit('Could not locate buildTypes { block in build.gradle.')
+
           if 'signingConfigs {' not in s:
-            s=s.replace('buildTypes {', """signingConfigs {
-                  release {
-                      keyAlias keystoreProperties['keyAlias']
-                      keyPassword keystoreProperties['keyPassword']
-                      storeFile keystoreProperties['storeFile'] ? file(keystoreProperties['storeFile']) : null
-                      storePassword keystoreProperties['storePassword']
-                  }
-              }
-          
-              buildTypes {""",1)
-          if 'signingConfig signingConfigs.release' not in s:
-            s=s.replace('buildTypes {
-                  release {', 'buildTypes {
-                  release {
-                      signingConfig signingConfigs.release',1)
-          p.write_text(s)
+              indent = build_types.group(1)
+              signing = (
+                  f'{indent}signingConfigs {{\n'
+                  f'{indent}    release {{\n'
+                  f"{indent}        keyAlias keystoreProperties['keyAlias']\n"
+                  f"{indent}        keyPassword keystoreProperties['keyPassword']\n"
+                  f"{indent}        storeFile keystoreProperties['storeFile'] ? file(keystoreProperties['storeFile']) : null\n"
+                  f"{indent}        storePassword keystoreProperties['storePassword']\n"
+                  f'{indent}    }}\n'
+                  f'{indent}}}\n\n'
+              )
+              s = s[:build_types.start()] + signing + s[build_types.start():]
+
+          build_types = re.search(r'(?m)^([ \t]*)buildTypes\s*\{', s)
+          if not build_types:
+              raise SystemExit('Could not relocate buildTypes { block after signing configuration.')
+
+          tail = s[build_types.end():]
+          release = re.search(r'(?m)^([ \t]*)release\s*\{', tail)
+          if not release:
+              raise SystemExit('Could not locate release { block in build.gradle.')
+
+          release_abs = build_types.end() + release.end()
+          release_indent = release.group(1)
+          release_close = re.search(r'(?m)^' + re.escape(release_indent) + r'\}', s[release_abs:])
+          if not release_close:
+              raise SystemExit('Could not locate the end of the release block in build.gradle.')
+
+          release_end = release_abs + release_close.start()
+          release_block = s[release_abs:release_end]
+          signing_line = release_indent + '    signingConfig signingConfigs.release'
+          if re.search(r'(?m)^[ \t]*signingConfig(?:[ \t]*=[ \t]*)?[ \t]+signingConfigs\.', release_block):
+              release_block = re.sub(
+                  r'(?m)^[ \t]*signingConfig(?:[ \t]*=[ \t]*)?[ \t]+signingConfigs\.[A-Za-z0-9_]+[ \t]*$',
+                  signing_line,
+                  release_block,
+              )
+          else:
+              release_block = '\n' + signing_line + release_block
+
+          s = s[:release_abs] + release_block + s[release_end:]
+          path.write_text(s, encoding='utf-8')
           PY
+
+          grep -q 'signingConfig signingConfigs.release' android/app/build.gradle
+          echo 'Android release signing configuration validated.'
 
       - name: Build signed APK and AAB
         env:
           API_URL: ${{ github.event.inputs.api_url || 'https://oma-db.onrender.com/api' }}
+        shell: bash
         run: |
+          set -euo pipefail
+          case "$API_URL" in
+            https://*) ;;
+            *) echo "API_URL must use HTTPS in release builds: $API_URL"; exit 1 ;;
+          esac
+
           flutter build apk --release --dart-define=API_BASE_URL="$API_URL"
           flutter build appbundle --release --dart-define=API_BASE_URL="$API_URL"
 
-      - uses: actions/upload-artifact@v4
+          test -s build/app/outputs/flutter-apk/app-release.apk
+          test -s build/app/outputs/bundle/release/app-release.aab
+
+          echo 'Release artifacts created successfully.'
+
+      - name: Upload APK and AAB
+        uses: actions/upload-artifact@v4
         with:
           name: OmaSales-Mobile-${{ github.run_number }}
+          if-no-files-found: error
           path: |
             mobile/build/app/outputs/flutter-apk/app-release.apk
             mobile/build/app/outputs/bundle/release/app-release.aab
