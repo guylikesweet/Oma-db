@@ -117,26 +117,26 @@ jobs:
           p=Path('android/app/build.gradle')
           s=p.read_text()
           if 'keystorePropertiesFile' not in s:
-            s=s.replace('android {', """def keystoreProperties = new Properties()
-def keystorePropertiesFile = rootProject.file('key.properties')
-if (keystorePropertiesFile.exists()) {
-    keystoreProperties.load(new FileInputStream(keystorePropertiesFile))
-}
-
-android {""",1)
+              s=s.replace('android {', """def keystoreProperties = new Properties()
+          def keystorePropertiesFile = rootProject.file('key.properties')
+          if (keystorePropertiesFile.exists()) {
+              keystoreProperties.load(new FileInputStream(keystorePropertiesFile))
+          }
+          
+          android {""",1)
           if 'signingConfigs {' not in s:
-            s=s.replace('buildTypes {', """signingConfigs {
-        release {
-            keyAlias keystoreProperties['keyAlias']
-            keyPassword keystoreProperties['keyPassword']
-            storeFile keystoreProperties['storeFile'] ? file(keystoreProperties['storeFile']) : null
-            storePassword keystoreProperties['storePassword']
-        }
-    }
-
-    buildTypes {""",1)
+              s=s.replace('buildTypes {', """signingConfigs {
+                  release {
+                      keyAlias keystoreProperties['keyAlias']
+                      keyPassword keystoreProperties['keyPassword']
+                      storeFile keystoreProperties['storeFile'] ? file(keystoreProperties['storeFile']) : null
+                      storePassword keystoreProperties['storePassword']
+                  }
+              }
+          
+              buildTypes {""",1)
           if 'signingConfig signingConfigs.release' not in s:
-            s=s.replace('buildTypes {\n        release {', 'buildTypes {\n        release {\n            signingConfig signingConfigs.release', 1)
+              s=s.replace('buildTypes {\n        release {', 'buildTypes {\n        release {\n            signingConfig signingConfigs.release', 1)
           p.write_text(s)
           PY
 
