@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
+  <link rel="stylesheet" href="{{ url_for('static', filename='oma-theme.css') }}">
   <title>Login</title>
   <style>
     body { font-family: -apple-system, Arial, sans-serif; background:#f4f5f7; display:flex; align-items:center; justify-content:center; height:100vh; margin:0; }
@@ -32,5 +33,6 @@
       <button type="submit">Log in</button>
     </form>
   </div>
+  <script src="{{ url_for('static', filename='oma-theme.js') }}"></script>
 </body>
 </html>
