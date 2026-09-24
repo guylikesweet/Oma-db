@@ -405,11 +405,11 @@ class SyncRepository {
           response = await api.stockAdjust(payload);
         } else if (type == 'create_batch') {
           response = await api.createBatch(payload);
-        } else if (type == 'batch_sale') {
+                } else if (type == 'batch_sale') {
           response = await api.addSaleToBatch(
             payload['batch_id'] as int,
+            payload['sale_id'] as int,
             {
-              'sale_id': payload['sale_id'],
               'operation_id': op,
             },
           );
