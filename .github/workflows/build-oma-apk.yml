@@ -1,5 +1,13 @@
-name: Build APK
+name: Build OmaSales Mobile
+
 on:
+  push:
+    paths:
+      - 'app/**'
+      - 'mobile/**'
+      - 'migrations/**'
+      - 'requirements.txt'
+      - '.github/workflows/build-oma-apk.yml'
   workflow_dispatch:
     inputs:
       api_url:
@@ -15,54 +23,79 @@ jobs:
         working-directory: mobile
     steps:
       - uses: actions/checkout@v4
+
+      - name: Backend and mobile preflight
+        working-directory: .
+        run: |
+          python3 -m compileall -q app
+          python3 - <<'PY'
+          from pathlib import Path
+          api = Path('app/api.py').read_text()
+          models = Path('app/models.py').read_text()
+          required_routes = [
+            '/v1/auth/login','/v1/auth/change-password','/v1/bootstrap','/v1/sync',
+            '/v1/products','/v1/stock/adjust','/v1/sales','/v1/batches',
+            '/v1/deliveries','/v1/shipping','/v1/rates/courier','/v1/rates/monthly',
+            '/v1/dashboard','/v1/reports/sales','/v1/reports/shipping','/v1/reports/inventory',
+            '/v1/settings','/v1/settings/logo','/v1/users','/v1/clear-test-data'
+          ]
+          missing=[r for r in required_routes if r not in api]
+          if missing: raise SystemExit('Missing API routes: '+', '.join(missing))
+          for cls in ('MobileOperation','MobileChange'):
+            if f'class {cls}' not in models: raise SystemExit(f'Missing model: {cls}')
+          versions=list(Path('migrations/versions').glob('*.py'))
+          if any('7f0f6f0c8a21_add_mobile_sync_tables' in p.name for p in versions):
+            raise SystemExit('Obsolete duplicate mobile-sync migration detected; remove it.')
+          print('Preflight OK')
+          PY
+
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
           flutter-version: '3.22.0'
+
       - uses: actions/setup-java@v4
         with:
-          distribution: 'temurin'
+          distribution: temurin
           java-version: '17'
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-      - run: pip install Pillow
+
       - run: flutter pub get
-      - name: Create android and fix everything
+      - run: flutter analyze
+
+      - name: Create Android project
         run: |
-          if [ ! -d android ]; then
-            flutter create --platforms=android .
-          fi
-          # Fix MainActivity v2 embedding
+          if [ ! -d android ]; then flutter create --platforms=android .; fi
           rm -rf android/app/src/main/java/io
           mkdir -p android/app/src/main/kotlin/com/example/oma_mobile
-          echo 'package com.example.oma_mobile
+          cat > android/app/src/main/kotlin/com/example/oma_mobile/MainActivity.kt <<'EOF'
+          package com.example.oma_mobile
           import io.flutter.embedding.android.FlutterActivity
-          class MainActivity: FlutterActivity()' > android/app/src/main/kotlin/com/example/oma_mobile/MainActivity.kt
-          find android/app/src/main -name "MainActivity.java" -delete || true
-          # FIX 1: App Name
-          sed -i 's/android:label=".*"/android:label="OmaSales Mobile"/' android/app/src/main/AndroidManifest.xml
-          # FIX 2: INTERNET PERMISSION - THIS IS WHY HOST LOOKUP FAILS
-          if ! grep -q "android.permission.INTERNET" android/app/src/main/AndroidManifest.xml; then
-            sed -i 's/<application/<uses-permission android:name="android.permission.INTERNET" \/>\n    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" \/>\n    <application/' android/app/src/main/AndroidManifest.xml
+          class MainActivity: FlutterActivity()
+          EOF
+          find android/app/src/main -name 'MainActivity.java' -delete || true
+          sed -i 's/android:label="[^"]*"/android:label="OmaSales Mobile"/' android/app/src/main/AndroidManifest.xml
+          if ! grep -q 'android.permission.INTERNET' android/app/src/main/AndroidManifest.xml; then
+            sed -i 's#<application#<uses-permission android:name="android.permission.INTERNET" />\n    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />\n    <application#' android/app/src/main/AndroidManifest.xml
           fi
-          cat android/app/src/main/AndroidManifest.xml
-          # Fix inner text Oma Mobile
-          sed -i 's/Oma Mobile/OmaSales Mobile/g' lib/main.dart 2>/dev/null || true
-          find lib -name "*.dart" -exec sed -i 's/Oma Mobile/OmaSales Mobile/g' {} \; || true
-          # Icon
-          python3 << 'PY'
+
+      - name: Validate and generate launcher icon
+        run: |
+          python3 - <<'PY'
           from PIL import Image
-          import os
-          src="assets/images/app_icon.png"
-          if os.path.exists(src):
-              im=Image.open(src).convert("RGBA")
-              s=max(im.size); bg=Image.new("RGBA",(s,s),(255,255,255,255)); bg.paste(im,((s-im.width)//2,(s-im.height)//2),im)
-              for f,p in {"mipmap-mdpi":48,"mipmap-hdpi":72,"mipmap-xhdpi":96,"mipmap-xxhdpi":144,"mipmap-xxxhdpi":192}.items():
-                  path=f"android/app/src/main/res/{f}"; os.makedirs(path,exist_ok=True)
-                  r=bg.resize((p,p),Image.LANCZOS); r.save(f"{path}/launcher_icon.png","PNG"); r.save(f"{path}/ic_launcher.png","PNG")
+          from pathlib import Path
+          src=Path('assets/images/app_icon.png')
+          if not src.exists(): raise SystemExit('assets/images/app_icon.png is missing')
+          im=Image.open(src).convert('RGBA')
+          s=max(im.size); bg=Image.new('RGBA',(s,s),(255,255,255,255)); bg.paste(im,((s-im.width)//2,(s-im.height)//2),im)
+          sizes={'mipmap-mdpi':48,'mipmap-hdpi':72,'mipmap-xhdpi':96,'mipmap-xxhdpi':144,'mipmap-xxxhdpi':192}
+          for folder,size in sizes.items():
+            out=Path('android/app/src/main/res')/folder; out.mkdir(parents=True,exist_ok=True)
+            r=bg.resize((size,size),Image.LANCZOS)
+            r.save(out/'launcher_icon.png','PNG'); r.save(out/'ic_launcher.png','PNG')
+          print('Icon OK:', im.size)
           PY
-      - name: Configure persistent Android release signing
+
+      - name: Configure release signing
         env:
           ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
@@ -70,9 +103,7 @@ jobs:
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
           if [ -z "$ANDROID_KEYSTORE_BASE64" ] || [ -z "$ANDROID_KEYSTORE_PASSWORD" ] || [ -z "$ANDROID_KEY_ALIAS" ] || [ -z "$ANDROID_KEY_PASSWORD" ]; then
-            echo "Missing Android release signing secrets."
-            echo "Configure ANDROID_KEYSTORE_BASE64, ANDROID_KEYSTORE_PASSWORD, ANDROID_KEY_ALIAS, and ANDROID_KEY_PASSWORD before building a production APK."
-            exit 1
+            echo 'Missing Android release signing secrets.'; exit 1
           fi
           echo "$ANDROID_KEYSTORE_BASE64" | base64 --decode > android/app/oma-release.jks
           cat > android/key.properties <<EOF
@@ -81,31 +112,44 @@ jobs:
           keyAlias=$ANDROID_KEY_ALIAS
           storeFile=oma-release.jks
           EOF
-          python3 - <<'PY2'
+          python3 - <<'PY'
           from pathlib import Path
           p=Path('android/app/build.gradle')
           s=p.read_text()
-          marker='android {\n'
-          loader="""def keystoreProperties = new Properties()\ndef keystorePropertiesFile = rootProject.file('key.properties')\nif (keystorePropertiesFile.exists()) {\n    keystoreProperties.load(new FileInputStream(keystorePropertiesFile))\n}\n\n"""
           if 'keystorePropertiesFile' not in s:
-              s=s.replace(marker, loader+marker, 1)
-          signing="""    signingConfigs {\n        release {\n            keyAlias keystoreProperties['keyAlias']\n            keyPassword keystoreProperties['keyPassword']\n            storeFile keystoreProperties['storeFile'] ? file(keystoreProperties['storeFile']) : null\n            storePassword keystoreProperties['storePassword']\n        }\n    }\n\n"""
+            s=s.replace('android {', """def keystoreProperties = new Properties()
+def keystorePropertiesFile = rootProject.file('key.properties')
+if (keystorePropertiesFile.exists()) {
+    keystoreProperties.load(new FileInputStream(keystorePropertiesFile))
+}
+
+android {""",1)
           if 'signingConfigs {' not in s:
-              s=s.replace(marker, marker+signing, 1)
-          s=s.replace('signingConfig = signingConfigs.debug', 'signingConfig = signingConfigs.release')
-          s=s.replace('signingConfig signingConfigs.debug', 'signingConfig signingConfigs.release')
+            s=s.replace('buildTypes {', """signingConfigs {
+        release {
+            keyAlias keystoreProperties['keyAlias']
+            keyPassword keystoreProperties['keyPassword']
+            storeFile keystoreProperties['storeFile'] ? file(keystoreProperties['storeFile']) : null
+            storePassword keystoreProperties['storePassword']
+        }
+    }
+
+    buildTypes {""",1)
+          if 'signingConfig signingConfigs.release' not in s:
+            s=s.replace('buildTypes {\n        release {', 'buildTypes {\n        release {\n            signingConfig signingConfigs.release', 1)
           p.write_text(s)
-          PY2
-      - run: flutter build apk --release --build-number="${{ github.run_number }}" --dart-define=API_BASE_URL="${{ inputs.api_url }}"
-      - run: flutter build appbundle --release --build-number="${{ github.run_number }}" --dart-define=API_BASE_URL="${{ inputs.api_url }}"
+          PY
+
+      - name: Build signed APK and AAB
+        env:
+          API_URL: ${{ github.event.inputs.api_url || 'https://oma-db.onrender.com/api' }}
+        run: |
+          flutter build apk --release --dart-define=API_BASE_URL="$API_URL"
+          flutter build appbundle --release --dart-define=API_BASE_URL="$API_URL"
+
       - uses: actions/upload-artifact@v4
         with:
-          name: OmaSales-Mobile-apk
-          path: mobile/build/app/outputs/flutter-apk/app-release.apk
-      - uses: actions/upload-artifact@v4
-        with:
-          name: OmaSales-Mobile-aab
-          path: mobile/build/app/outputs/bundle/release/app-release.aab
-      - name: Remove signing material from runner
-        if: always()
-        run: rm -f android/app/oma-release.jks android/key.properties
+          name: OmaSales-Mobile-${{ github.run_number }}
+          path: |
+            mobile/build/app/outputs/flutter-apk/app-release.apk
+            mobile/build/app/outputs/bundle/release/app-release.aab
