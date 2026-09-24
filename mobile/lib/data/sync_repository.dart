@@ -119,7 +119,7 @@ class SyncRepository {
       final result = await api.sync(cursor);
       final changes = List<dynamic>.from(result['changes'] as List? ?? const []);
       if (changes.isNotEmpty) { await local.applyChanges(changes); downloaded += changes.length; }
-      cursor = int.tryParse('${result['cursor'] ?? cursor}') ?? cursor;
+      cursor = int.tryParse('${result['next_cursor'] ?? result['cursor'] ?? cursor}') ?? cursor;
       await local.setMeta('sync_cursor', '$cursor');
       more = result['has_more'] == true;
     }
