@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
+  <link rel="stylesheet" href="{{ url_for('static', filename='oma-theme.css') }}">
   <title>Home</title>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/4.6.2/css/bootstrap.min.css">
   <style>
@@ -70,5 +71,6 @@
       <a href="{{ url_for('auth.logout') }}">Log Out</a>
     </div>
   </div>
+  <script src="{{ url_for('static', filename='oma-theme.js') }}"></script>
 </body>
 </html>
