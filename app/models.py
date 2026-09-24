@@ -1,5 +1,7 @@
 from datetime import datetime, date
-from sqlalchemy import Computed
+from decimal import Decimal
+from sqlalchemy import Computed, event
+from sqlalchemy.orm import Session
 from flask_login import UserMixin
 from app import db
 
@@ -183,6 +185,7 @@ class Sale(db.Model):
     # app/services/sales.py generate_order_id). Also doubles as the label's
     # tracking number.
     order_id = db.Column(db.String(20), unique=True, nullable=True)
+    client_operation_id = db.Column(db.String(100), unique=True, nullable=True)
     sale_date = db.Column(db.Date, default=date.today)
     customer_name = db.Column(db.String(255))
     customer_phone = db.Column(db.String(50))
@@ -292,6 +295,49 @@ class StockLog(db.Model):
 
 
 # ---------------------------------------------------------------------------
+# MOBILE SYNC
+# ---------------------------------------------------------------------------
+class MobileChange(db.Model):
+    """Append-only change feed consumed by the offline mobile client.
+
+    Each committed ORM mutation to a mobile-relevant model creates one row.
+    The monotonically increasing id is the mobile sync cursor.
+    """
+    __tablename__ = "mobile_changes"
+
+    sequence = db.Column(db.BigInteger, primary_key=True, autoincrement=True)
+    entity_type = db.Column(db.String(50), nullable=False)
+    entity_id = db.Column(db.String(100), nullable=False)
+    operation = db.Column(db.String(20), nullable=False)  # upsert, delete
+    payload = db.Column(db.JSON, nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+
+
+class MobileOperation(db.Model):
+    """Idempotency record for mobile write operations.
+
+    A phone may retry the same operation after a dropped connection. The
+    unique user/operation_id pair prevents the server from creating a second
+    sale when the first request actually succeeded but its response was lost.
+    """
+    __tablename__ = "mobile_operations"
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    operation_id = db.Column(db.String(100), nullable=False)
+    operation_type = db.Column(db.String(100), nullable=False)
+    status = db.Column(db.String(30), nullable=False, default="processing")
+    response_code = db.Column(db.Integer)
+    response_json = db.Column(db.JSON)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    completed_at = db.Column(db.DateTime)
+
+    __table_args__ = (
+        db.UniqueConstraint("operation_id", name="uq_mobile_operations_operation_id"),
+    )
+
+
+# ---------------------------------------------------------------------------
 # APP_SETTINGS — single row (id always 1). Shipping label size, business
 # info, and the logo image itself (stored as bytes, not a file on disk —
 # Render's filesystem is wiped on every deploy, so a disk file wouldn't survive).
@@ -312,25 +358,78 @@ class AppSettings(db.Model):
         return f"<AppSettings {self.label_width_mm}x{self.label_height_mm}mm>"
 
 
-# Mobile sync infrastructure (backed by migrations/versions/d4f2c7a91e60... and final_mobile_merge).
-class MobileOperation(db.Model):
-    __tablename__ = "mobile_operations"
-    id = db.Column(db.Integer, primary_key=True)
-    operation_id = db.Column(db.String(100), unique=True, nullable=False)
-    user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
-    operation_type = db.Column(db.String(100), nullable=False)
-    status = db.Column(db.String(30), nullable=False, default="processing")
-    response_code = db.Column(db.Integer)
-    response_json = db.Column(db.JSON)
-    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
-    completed_at = db.Column(db.DateTime)
+# Models whose changes are useful to the offline mobile client. Sensitive
+# account/settings data deliberately stays out of the mobile sync feed.
+_SYNC_MODELS = (
+    Product,
+    CourierRate,
+    MonthlyShippingRate,
+    ShipmentBatch,
+    Delivery,
+    Sale,
+    SaleItem,
+    Shipping,
+    StockLog,
+)
 
 
-class MobileChange(db.Model):
-    __tablename__ = "mobile_changes"
-    sequence = db.Column(db.BigInteger, primary_key=True, autoincrement=True)
-    entity_type = db.Column(db.String(50), nullable=False)
-    entity_id = db.Column(db.String(100), nullable=False)
-    operation = db.Column(db.String(20), nullable=False)
-    payload = db.Column(db.JSON)
-    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+def _json_value(value):
+    if isinstance(value, (datetime, date)):
+        return value.isoformat()
+    if isinstance(value, Decimal):
+        return float(value)
+    return value
+
+
+def _model_payload(obj):
+    return {
+        column.name: _json_value(getattr(obj, column.name))
+        for column in obj.__table__.columns
+    }
+
+
+@event.listens_for(Session, "after_flush")
+def _record_mobile_sync_changes(session, flush_context):
+    # Flask-SQLAlchemy's scoped session class is not guaranteed to be the same
+    # class across SQLAlchemy versions, so this listener is intentionally kept
+    # narrow. If the session is currently recording sync rows, do not record
+    # the SyncChange rows themselves.
+    if session.info.get("_recording_sync_changes"):
+        return
+
+    changes = []
+    for obj in list(session.new):
+        if isinstance(obj, _SYNC_MODELS):
+            changes.append((obj, "created"))
+
+    for obj in list(session.dirty):
+        if isinstance(obj, _SYNC_MODELS) and session.is_modified(obj, include_collections=False):
+            changes.append((obj, "updated"))
+
+    for obj in list(session.deleted):
+        if isinstance(obj, _SYNC_MODELS):
+            changes.append((obj, "deleted"))
+
+    if not changes:
+        return
+
+    session.info["_recording_sync_changes"] = True
+    try:
+        for obj, action in changes:
+            entity_id = getattr(obj, "id", None)
+            if entity_id is None:
+                continue
+            payload = None if action == "deleted" else _model_payload(obj)
+            session.add(MobileChange(
+                entity_type={
+                    "products": "product", "sales": "sale", "sale_items": "sale_item",
+                    "shipment_batches": "shipment_batch", "deliveries": "delivery",
+                    "shipping": "shipping", "courier_rates": "courier_rate",
+                    "monthly_shipping_rates": "monthly_shipping_rate", "stock_log": "stock_log",
+                }.get(obj.__tablename__, obj.__tablename__),
+                entity_id=str(entity_id),
+                operation="delete" if action == "deleted" else "upsert",
+                payload=payload,
+            ))
+    finally:
+        session.info["_recording_sync_changes"] = False
