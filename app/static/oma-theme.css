@@ -1,50 +1,10 @@
-/* Oma automatic day/night theme. 06:00-17:59 light, 18:00-05:59 dark. */
-:root {
-  --oma-bg:#f4f5f7; --oma-surface:#fff; --oma-surface-2:#f8f9fa;
-  --oma-text:#212529; --oma-muted:#6c757d; --oma-border:#dee2e6;
-  --oma-topbar:#212529; --oma-nav:#1a1d21; --oma-nav-border:#26292e;
-  --oma-input:#fff; --oma-link:#2563eb;
-}
-html[data-oma-theme="dark"] {
-  --oma-bg:#121417; --oma-surface:#1b1f24; --oma-surface-2:#22272d;
-  --oma-text:#f1f3f5; --oma-muted:#adb5bd; --oma-border:#343a40;
-  --oma-topbar:#0d0f11; --oma-nav:#0d0f11; --oma-nav-border:#252a30;
-  --oma-input:#22272d; --oma-link:#7db2ff;
-}
-html,body { background:var(--oma-bg) !important; color:var(--oma-text) !important; }
-body { transition:background-color .2s ease,color .2s ease; }
-a { color:var(--oma-link); }
-.text-muted { color:var(--oma-muted) !important; }
-.card,.modal-content,.dropdown-menu,.list-group-item,.table,.alert,.jumbotron,
-.form-control,.custom-select,.input-group-text { background-color:var(--oma-surface) !important; color:var(--oma-text) !important; border-color:var(--oma-border) !important; }
-.table { --bs-table-bg:var(--oma-surface); }
-.table td,.table th { border-color:var(--oma-border) !important; }
-.form-control,.custom-select { color:var(--oma-text) !important; background-color:var(--oma-input) !important; }
-.form-control::placeholder { color:var(--oma-muted) !important; }
-.topbar { background:var(--oma-topbar) !important; }
-#sideNav { background:var(--oma-nav) !important; }
-#sideNav .sidenav-header { border-bottom-color:var(--oma-nav-border) !important; }
-#sideNav a.nav-link-item { border-bottom-color:var(--oma-nav-border) !important; }
-/* Home page */
-.home-wrap .home-sub { color:var(--oma-muted) !important; }
-.home-wrap .action-btn { background:var(--oma-surface) !important; color:var(--oma-text) !important; border-color:var(--oma-border) !important; }
-.home-wrap .action-btn.primary { background:#2563eb !important; color:#fff !important; border-color:#2563eb !important; }
-.home-wrap .action-btn.danger { background:var(--oma-surface) !important; color:#dc2626 !important; border-color:var(--oma-border) !important; }
-.logout-row a { color:var(--oma-muted) !important; }
-/* Login page */
-.login-page .box { background:var(--oma-surface) !important; color:var(--oma-text) !important; }
-.login-page label { color:var(--oma-text) !important; }
-.login-page input { background:var(--oma-input) !important; color:var(--oma-text) !important; border-color:var(--oma-border) !important; }
-/* Flask-Admin pages */
-.admin-page, .admin-page .navbar, .admin-page .sidebar-nav, .admin-page .table { color:var(--oma-text) !important; }
-html[data-oma-theme="dark"] .navbar-default,
-html[data-oma-theme="dark"] .navbar-inverse,
-html[data-oma-theme="dark"] .sidebar-nav,
-html[data-oma-theme="dark"] .nav-tabs,
-html[data-oma-theme="dark"] .breadcrumb { background-color:var(--oma-surface) !important; border-color:var(--oma-border) !important; }
-html[data-oma-theme="dark"] .well,
-html[data-oma-theme="dark"] .panel,
-html[data-oma-theme="dark"] .panel-heading,
-html[data-oma-theme="dark"] .panel-body { background-color:var(--oma-surface) !important; color:var(--oma-text) !important; border-color:var(--oma-border) !important; }
-html[data-oma-theme="dark"] .table-striped>tbody>tr:nth-of-type(odd) { background-color:var(--oma-surface-2) !important; }
-@media (prefers-reduced-motion:reduce) { body { transition:none; } }
+:root{color-scheme:light;--oma-bg:#f4f5f7;--oma-surface:#fff;--oma-text:#212529;--oma-muted:#666;--oma-border:#e2e2e2;--oma-top:#212529;--oma-link:#2563eb;--oma-danger-bg:#fff5f5}
+html[data-oma-theme="dark"]{color-scheme:dark;--oma-bg:#101318;--oma-surface:#171b22;--oma-text:#f3f4f6;--oma-muted:#a8b0bd;--oma-border:#303744;--oma-top:#0b0d10;--oma-link:#7aa2ff;--oma-danger-bg:#321c20}
+html[data-oma-theme] body{background:var(--oma-bg)!important;color:var(--oma-text)!important}
+html[data-oma-theme] .box,html[data-oma-theme] .action-btn,html[data-oma-theme] .card,html[data-oma-theme] .table,html[data-oma-theme] .modal-content,html[data-oma-theme] .form-control,html[data-oma-theme] input,html[data-oma-theme] select,html[data-oma-theme] textarea{background:var(--oma-surface)!important;color:var(--oma-text)!important;border-color:var(--oma-border)!important}
+html[data-oma-theme] label,html[data-oma-theme] .home-sub{color:var(--oma-muted)!important}
+html[data-oma-theme] a{color:var(--oma-link)}
+html[data-oma-theme] .topbar,html[data-oma-theme] #sideNav{background:var(--oma-top)!important}
+html[data-oma-theme] .action-btn.danger{background:var(--oma-danger-bg)!important}
+html[data-oma-theme] .table th,html[data-oma-theme] .table td{border-color:var(--oma-border)!important}
+.oma-password-wrap{position:relative}.oma-password-wrap input{padding-right:44px!important}.oma-password-toggle{position:absolute;right:8px;top:50%;transform:translateY(-50%);border:0;background:transparent;color:var(--oma-muted);cursor:pointer;font-size:18px;line-height:1;padding:4px}
