@@ -1,181 +1,169 @@
 import 'dart:convert';
-import 'dart:typed_data';
-
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/http.dart' as http;
 
 import '../core/config.dart';
 
-class ApiException implements Exception {
-  ApiException(this.statusCode, this.message);
-
-  final int statusCode;
-  final String message;
-
-  @override
-  String toString() => 'API $statusCode: $message';
-}
-
 class ApiClient {
-  ApiClient({
-    http.Client? client,
-    FlutterSecureStorage? storage,
-  })  : _client = client ?? http.Client(),
-        _storage = storage ?? const FlutterSecureStorage();
+  ApiClient();
 
-  final http.Client _client;
-  final FlutterSecureStorage _storage;
+  final FlutterSecureStorage _storage =
+      const FlutterSecureStorage();
 
-  Future<String?> token() => _storage.read(key: 'api_token');
+  String get baseUrl => AppConfig.apiBaseUrl;
 
-  Future<void> saveToken(String value) =>
-      _storage.write(key: 'api_token', value: value);
+  Future<String?> token() async {
+    return _storage.read(key: 'api_token');
+  }
 
-  Future<void> clearToken() => _storage.delete(key: 'api_token');
+  Future<void> saveToken(String value) async {
+    await _storage.write(
+      key: 'api_token',
+      value: value,
+    );
+  }
+
+  Future<void> clearToken() async {
+    await _storage.delete(
+      key: 'api_token',
+    );
+  }
 
   Future<dynamic> _request(
     String method,
     String path, {
     Map<String, dynamic>? body,
-    Map<String, String>? query,
+    bool authenticated = true,
   }) async {
-    final token = await this.token();
+    final uri = Uri.parse(
+      '$baseUrl$path',
+    );
 
     final headers = <String, String>{
+      'Content-Type': 'application/json',
       'Accept': 'application/json',
     };
 
-    if (body != null) {
-      headers['Content-Type'] = 'application/json';
+    if (authenticated) {
+      final t = await token();
+
+      if (t != null && t.isNotEmpty) {
+        headers['Authorization'] = 'Bearer $t';
+      }
     }
-
-    if (token?.isNotEmpty == true) {
-      headers['Authorization'] = 'Bearer $token';
-    }
-
-    final base = Uri.parse(AppConfig.apiBaseUrl);
-
-    final uri = base.replace(
-      path:
-          '${base.path.replaceFirst(RegExp(r'/$'), '')}$path',
-      queryParameters: query,
-    );
 
     late http.Response response;
 
-    const timeout = Duration(seconds: 20);
-
-    final encoded = body == null ? null : jsonEncode(body);
-
-    switch (method) {
+    switch (method.toUpperCase()) {
       case 'GET':
-        response = await _client
-            .get(uri, headers: headers)
-            .timeout(timeout);
+        response = await http.get(
+          uri,
+          headers: headers,
+        );
         break;
 
       case 'POST':
-        response = await _client
-            .post(
-              uri,
-              headers: headers,
-              body: encoded,
-            )
-            .timeout(timeout);
+        response = await http.post(
+          uri,
+          headers: headers,
+          body: jsonEncode(body ?? {}),
+        );
         break;
 
       case 'PUT':
-        response = await _client
-            .put(
-              uri,
-              headers: headers,
-              body: encoded,
-            )
-            .timeout(timeout);
+        response = await http.put(
+          uri,
+          headers: headers,
+          body: jsonEncode(body ?? {}),
+        );
         break;
 
       case 'PATCH':
-        response = await _client
-            .patch(
-              uri,
-              headers: headers,
-              body: encoded,
-            )
-            .timeout(timeout);
+        response = await http.patch(
+          uri,
+          headers: headers,
+          body: jsonEncode(body ?? {}),
+        );
         break;
 
       case 'DELETE':
-        response = await _client
-            .delete(
-              uri,
-              headers: headers,
-              body: encoded,
-            )
-            .timeout(timeout);
+        response = await http.delete(
+          uri,
+          headers: headers,
+          body: jsonEncode(body ?? {}),
+        );
         break;
 
       default:
-        throw ArgumentError(
-          'Unsupported method: $method',
+        throw Exception(
+          'Unsupported HTTP method: $method',
         );
     }
 
     dynamic decoded;
 
-    try {
-      decoded = response.body.isEmpty
-          ? null
-          : jsonDecode(response.body);
-    } catch (_) {
-      decoded = null;
+    if (response.body.isEmpty) {
+      decoded = <String, dynamic>{};
+    } else {
+      try {
+        decoded = jsonDecode(response.body);
+      } catch (_) {
+        decoded = response.body;
+      }
     }
 
     if (response.statusCode < 200 ||
         response.statusCode >= 300) {
-      final message = decoded is Map &&
-              decoded['error'] != null
-          ? decoded['error'].toString()
-          : 'Request failed';
+      String message = 'Request failed (${response.statusCode})';
 
-      throw ApiException(
-        response.statusCode,
-        message,
-      );
+      if (decoded is Map<String, dynamic>) {
+        message =
+            decoded['error']?.toString() ??
+            decoded['message']?.toString() ??
+            message;
+      } else if (decoded is String &&
+          decoded.trim().isNotEmpty) {
+        message = decoded;
+      }
+
+      throw Exception(message);
     }
 
     return decoded;
   }
 
-  Future<Map<String, dynamic>> _map(
-    String method,
-    String path, {
-    Map<String, dynamic>? body,
-    Map<String, String>? query,
-  }) async {
-    return Map<String, dynamic>.from(
-      await _request(
-        method,
-        path,
-        body: body,
-        query: query,
-      ) as Map,
-    );
+  Map<String, dynamic> _map(dynamic value) {
+    if (value is Map<String, dynamic>) {
+      return value;
+    }
+
+    if (value is Map) {
+      return Map<String, dynamic>.from(value);
+    }
+
+    return <String, dynamic>{};
   }
 
-  Future<List<dynamic>> _list(
-    String method,
-    String path, {
-    Map<String, dynamic>? body,
-    Map<String, String>? query,
-  }) async {
-    return List<dynamic>.from(
-      await _request(
-        method,
-        path,
-        body: body,
-        query: query,
-      ) as List,
-    );
+  List<dynamic> _list(dynamic value) {
+    if (value is List) {
+      return value;
+    }
+
+    if (value is Map<String, dynamic>) {
+      final data = value['data'];
+
+      if (data is List) {
+        return data;
+      }
+
+      final items = value['items'];
+
+      if (items is List) {
+        return items;
+      }
+    }
+
+    return <dynamic>[];
   }
 
   // ============================================================
@@ -185,203 +173,287 @@ class ApiClient {
   Future<Map<String, dynamic>> login(
     String username,
     String password,
-  ) {
-    return _map(
-      'POST',
-      '/v1/auth/login',
-      body: {
-        'username': username,
-        'password': password,
-      },
+  ) async {
+    final result = _map(
+      await _request(
+        'POST',
+        '/v1/auth/login',
+        body: {
+          'username': username,
+          'password': password,
+        },
+        authenticated: false,
+      ),
     );
+
+    final tokenValue =
+        result['token']?.toString();
+
+    if (tokenValue != null &&
+        tokenValue.isNotEmpty) {
+      await saveToken(tokenValue);
+    }
+
+    return result;
   }
 
-  Future<Map<String, dynamic>> me() {
+  Future<Map<String, dynamic>> me() async {
     return _map(
-      'GET',
-      '/v1/auth/me',
-    );
-  }
-
-  Future<void> logout() async {
-    await _request(
-      'POST',
-      '/v1/auth/logout',
+      await _request(
+        'GET',
+        '/v1/auth/me',
+      ),
     );
   }
 
   Future<Map<String, dynamic>> changePassword(
-    String current,
-    String next,
-  ) {
+    String currentPassword,
+    String newPassword,
+  ) async {
     return _map(
-      'POST',
-      '/v1/auth/change-password',
-      body: {
-        'current_password': current,
-        'new_password': next,
-      },
+      await _request(
+        'POST',
+        '/v1/auth/change-password',
+        body: {
+          'current_password': currentPassword,
+          'new_password': newPassword,
+        },
+      ),
     );
+  }
+
+  Future<void> logout() async {
+    try {
+      await _request(
+        'POST',
+        '/v1/auth/logout',
+      );
+    } finally {
+      await clearToken();
+    }
   }
 
   // ============================================================
   // SYNC
   // ============================================================
 
-  Future<Map<String, dynamic>> bootstrap() {
+  Future<Map<String, dynamic>> bootstrap() async {
     return _map(
-      'GET',
-      '/v1/bootstrap',
+      await _request(
+        'GET',
+        '/v1/bootstrap',
+      ),
     );
   }
 
   Future<Map<String, dynamic>> sync(
-    int cursor, {
-    int limit = 500,
-  }) {
+    Map<String, dynamic> payload,
+  ) async {
     return _map(
-      'GET',
-      '/v1/sync',
-      query: {
-        'cursor': '$cursor',
-        'limit': '$limit',
-      },
+      await _request(
+        'POST',
+        '/v1/sync',
+        body: payload,
+      ),
     );
   }
 
   // ============================================================
-  // PRODUCTS / STOCK
+  // DASHBOARD
   // ============================================================
 
-  Future<List<dynamic>> products() {
+  Future<Map<String, dynamic>> dashboard() async {
+    return _map(
+      await _request(
+        'GET',
+        '/v1/dashboard',
+      ),
+    );
+  }
+
+  // ============================================================
+  // PRODUCTS
+  // ============================================================
+
+  Future<List<dynamic>> products() async {
     return _list(
-      'GET',
-      '/v1/products',
+      await _request(
+        'GET',
+        '/v1/products',
+      ),
     );
   }
 
   Future<Map<String, dynamic>> createProduct(
     Map<String, dynamic> payload,
-  ) {
+  ) async {
     return _map(
-      'POST',
-      '/v1/products',
-      body: payload,
+      await _request(
+        'POST',
+        '/v1/products',
+        body: payload,
+      ),
     );
   }
 
   Future<Map<String, dynamic>> updateProduct(
     int id,
     Map<String, dynamic> payload,
-  ) {
+  ) async {
     return _map(
-      'PUT',
-      '/v1/products/$id',
-      body: payload,
+      await _request(
+        'PUT',
+        '/v1/products/$id',
+        body: payload,
+      ),
     );
   }
 
   Future<Map<String, dynamic>> deleteProduct(
     int id,
     Map<String, dynamic> payload,
-  ) {
+  ) async {
     return _map(
-      'DELETE',
-      '/v1/products/$id',
-      body: payload,
+      await _request(
+        'DELETE',
+        '/v1/products/$id',
+        body: payload,
+      ),
     );
   }
 
   Future<Map<String, dynamic>> stockAdjust(
     Map<String, dynamic> payload,
-  ) {
+  ) async {
     return _map(
-      'POST',
-      '/v1/stock/adjust',
-      body: payload,
+      await _request(
+        'POST',
+        '/v1/products/stock-adjust',
+        body: payload,
+      ),
     );
   }
 
-  Future<List<dynamic>> stockLog() {
+  Future<List<dynamic>> stockLogs({
+    int? productId,
+  }) async {
+    final path = productId == null
+        ? '/v1/stock-log'
+        : '/v1/stock-log?product_id=$productId';
+
     return _list(
-      'GET',
-      '/v1/stock-log',
+      await _request(
+        'GET',
+        path,
+      ),
     );
+  }
+
+  Future<List<dynamic>> stockLog() async {
+    return stockLogs();
   }
 
   // ============================================================
   // SALES
   // ============================================================
 
-  Future<List<dynamic>> sales() {
+  Future<List<dynamic>> sales() async {
     return _list(
-      'GET',
-      '/v1/sales',
-      query: {
-        'limit': '1000',
-      },
+      await _request(
+        'GET',
+        '/v1/sales',
+      ),
+    );
+  }
+
+  Future<Map<String, dynamic>> sale(
+    int id,
+  ) async {
+    return saleDetail(id);
+  }
+
+  Future<Map<String, dynamic>> saleDetail(
+    int id,
+  ) async {
+    return _map(
+      await _request(
+        'GET',
+        '/v1/sales/$id',
+      ),
     );
   }
 
   Future<Map<String, dynamic>> createSale(
     Map<String, dynamic> payload,
-  ) {
+  ) async {
     return _map(
-      'POST',
-      '/v1/sales',
-      body: payload,
-    );
-  }
-
-  Future<Map<String, dynamic>> saleDetail(
-    int id,
-  ) {
-    return _map(
-      'GET',
-      '/v1/sales/$id',
+      await _request(
+        'POST',
+        '/v1/sales',
+        body: payload,
+      ),
     );
   }
 
   Future<Map<String, dynamic>> updateSaleStatus(
     int id,
     Map<String, dynamic> payload,
-  ) {
+  ) async {
     return _map(
-      'POST',
-      '/v1/sales/$id/status',
-      body: payload,
+      await _request(
+        'PUT',
+        '/v1/sales/$id/status',
+        body: payload,
+      ),
     );
   }
 
   Future<Map<String, dynamic>> settleShipping(
     int id,
     Map<String, dynamic> payload,
-  ) {
+  ) async {
     return _map(
-      'POST',
-      '/v1/sales/$id/settle-shipping',
-      body: payload,
+      await _request(
+        'POST',
+        '/v1/sales/$id/settle-shipping',
+        body: payload,
+      ),
     );
   }
 
   // ============================================================
-  // SHIPMENT BATCHES
+  // BATCHES
   // ============================================================
 
-  Future<List<dynamic>> batches() {
+  Future<List<dynamic>> batches() async {
     return _list(
-      'GET',
-      '/v1/batches',
+      await _request(
+        'GET',
+        '/v1/batches',
+      ),
+    );
+  }
+
+  Future<Map<String, dynamic>> batch(
+    int id,
+  ) async {
+    return _map(
+      await _request(
+        'GET',
+        '/v1/batches/$id',
+      ),
     );
   }
 
   Future<Map<String, dynamic>> createBatch(
     Map<String, dynamic> payload,
-  ) {
+  ) async {
     return _map(
-      'POST',
-      '/v1/batches',
-      body: payload,
+      await _request(
+        'POST',
+        '/v1/batches',
+        body: payload,
+      ),
     );
   }
 
@@ -389,14 +461,13 @@ class ApiClient {
     int batchId,
     int saleId,
     Map<String, dynamic> payload,
-  ) {
+  ) async {
     return _map(
-      'POST',
-      '/v1/batches/$batchId/sales/$saleId',
-      body: {
-        ...payload,
-        'action': 'add',
-      },
+      await _request(
+        'POST',
+        '/v1/batches/$batchId/sales/$saleId',
+        body: payload,
+      ),
     );
   }
 
@@ -404,113 +475,109 @@ class ApiClient {
     int batchId,
     int saleId,
     Map<String, dynamic> payload,
-  ) {
+  ) async {
     return _map(
-      'POST',
-      '/v1/batches/$batchId/sales/$saleId',
-      body: {
-        ...payload,
-        'action': 'remove',
-      },
+      await _request(
+        'DELETE',
+        '/v1/batches/$batchId/sales/$saleId',
+        body: payload,
+      ),
     );
   }
 
   Future<Map<String, dynamic>> arriveBatch(
     int id,
     Map<String, dynamic> payload,
-  ) {
+  ) async {
     return _map(
-      'POST',
-      '/v1/batches/$id/arrive',
-      body: payload,
+      await _request(
+        'POST',
+        '/v1/batches/$id/arrive',
+        body: payload,
+      ),
     );
   }
 
   // ============================================================
-  // DELIVERIES
+  // DELIVERIES / LABELS
   // ============================================================
 
-  Future<List<dynamic>> deliveries() {
+  Future<List<dynamic>> deliveries() async {
     return _list(
-      'GET',
-      '/v1/deliveries',
+      await _request(
+        'GET',
+        '/v1/deliveries',
+      ),
     );
   }
 
-  Future<List<dynamic>> readyDeliveries() {
+  Future<List<dynamic>> readyDeliveries() async {
     return _list(
-      'GET',
-      '/v1/deliveries/ready',
+      await _request(
+        'GET',
+        '/v1/deliveries/ready',
+      ),
     );
   }
 
   Future<Map<String, dynamic>> createDelivery(
     Map<String, dynamic> payload,
-  ) {
+  ) async {
     return _map(
-      'POST',
-      '/v1/deliveries',
-      body: payload,
+      await _request(
+        'POST',
+        '/v1/deliveries',
+        body: payload,
+      ),
     );
   }
 
   Future<Map<String, dynamic>> updateDeliveryStatus(
     int id,
     Map<String, dynamic> payload,
-  ) {
+  ) async {
     return _map(
-      'POST',
-      '/v1/deliveries/$id/status',
-      body: payload,
+      await _request(
+        'PUT',
+        '/v1/deliveries/$id/status',
+        body: payload,
+      ),
     );
   }
 
   Future<Map<String, dynamic>> prepareLabel(
     int id,
     Map<String, dynamic> payload,
-  ) {
+  ) async {
     return _map(
-      'POST',
-      '/v1/deliveries/$id/label',
-      body: payload,
+      await _request(
+        'POST',
+        '/v1/deliveries/$id/prepare-label',
+        body: payload,
+      ),
     );
   }
 
-  Future<Uint8List> labelPdf(int id) async {
-    final token = await this.token();
-
-    final base = Uri.parse(
-      AppConfig.apiBaseUrl,
+  Future<dynamic> labelPdf(
+    int id,
+  ) async {
+    return _request(
+      'GET',
+      '/v1/deliveries/$id/label.pdf',
     );
+  }
 
-    final uri = base.replace(
-      path:
-          '${base.path.replaceFirst(RegExp(r'/$'), '')}'
-          '/v1/deliveries/$id/label.pdf',
+  Future<Map<String, dynamic>> saveLabelData(
+    int id,
+    Map<String, dynamic> payload,
+  ) async {
+    return _map(
+      await _request(
+        'PUT',
+        '/v1/deliveries/$id/label',
+        body: payload,
+      ),
     );
-
-    final response = await _client
-        .get(
-          uri,
-          headers: {
-            'Accept': 'application/pdf',
-            'Authorization':
-                'Bearer ${token ?? ''}',
-          },
-        )
-        .timeout(
-          const Duration(seconds: 30),
-        );
-
-    if (response.statusCode < 200 ||
-        response.statusCode >= 300) {
-      throw ApiException(
-        response.statusCode,
-        'Could not generate label.',
-      );
-    }
-
-    return response.bodyBytes;
   }
 
   // ============================================================
@@ -520,37 +587,67 @@ class ApiClient {
   Future<List<dynamic>> shipping({
     String? trackingNumber,
     String? state,
-  }) {
+  }) async {
+    final params = <String, String>{};
+
+    if (trackingNumber != null &&
+        trackingNumber.trim().isNotEmpty) {
+      params['tracking_number'] =
+          trackingNumber.trim();
+    }
+
+    if (state != null &&
+        state.trim().isNotEmpty) {
+      params['state'] = state.trim();
+    }
+
+    final query = params.entries
+        .map(
+          (e) =>
+              '${Uri.encodeQueryComponent(e.key)}=${Uri.encodeQueryComponent(e.value)}',
+        )
+        .join('&');
+
     return _list(
-      'GET',
-      '/v1/shipping',
-      query: {
-        if (trackingNumber?.isNotEmpty == true)
-          'tracking_number': trackingNumber!,
-        if (state?.isNotEmpty == true)
-          'state': state!,
-      },
+      await _request(
+        'GET',
+        query.isEmpty
+            ? '/v1/shipping'
+            : '/v1/shipping?$query',
+      ),
+    );
+  }
+
+  Future<List<dynamic>> searchShipping(
+    String query,
+  ) async {
+    return shipping(
+      trackingNumber: query,
     );
   }
 
   Future<Map<String, dynamic>> createShipping(
     Map<String, dynamic> payload,
-  ) {
+  ) async {
     return _map(
-      'POST',
-      '/v1/shipping',
-      body: payload,
+      await _request(
+        'POST',
+        '/v1/shipping',
+        body: payload,
+      ),
     );
   }
 
   Future<Map<String, dynamic>> updateShipping(
     int id,
     Map<String, dynamic> payload,
-  ) {
+  ) async {
     return _map(
-      'POST',
-      '/v1/shipping/$id',
-      body: payload,
+      await _request(
+        'PUT',
+        '/v1/shipping/$id',
+        body: payload,
+      ),
     );
   }
 
@@ -558,42 +655,50 @@ class ApiClient {
   // COURIER RATES
   // ============================================================
 
-  Future<List<dynamic>> courierRates() {
+  Future<List<dynamic>> courierRates() async {
     return _list(
-      'GET',
-      '/v1/courier-rates',
+      await _request(
+        'GET',
+        '/v1/courier-rates',
+      ),
     );
   }
 
   Future<Map<String, dynamic>> createCourierRate(
     Map<String, dynamic> payload,
-  ) {
+  ) async {
     return _map(
-      'POST',
-      '/v1/courier-rates',
-      body: payload,
+      await _request(
+        'POST',
+        '/v1/courier-rates',
+        body: payload,
+      ),
     );
   }
 
   Future<Map<String, dynamic>> updateCourierRate(
     int id,
     Map<String, dynamic> payload,
-  ) {
+  ) async {
     return _map(
-      'PUT',
-      '/v1/courier-rates/$id',
-      body: payload,
+      await _request(
+        'PUT',
+        '/v1/courier-rates/$id',
+        body: payload,
+      ),
     );
   }
 
   Future<Map<String, dynamic>> deleteCourierRate(
     int id,
     Map<String, dynamic> payload,
-  ) {
+  ) async {
     return _map(
-      'DELETE',
-      '/v1/courier-rates/$id',
-      body: payload,
+      await _request(
+        'DELETE',
+        '/v1/courier-rates/$id',
+        body: payload,
+      ),
     );
   }
 
@@ -601,91 +706,126 @@ class ApiClient {
   // MONTHLY SHIPPING RATES
   // ============================================================
 
-  Future<List<dynamic>> monthlyRates() {
+  Future<List<dynamic>> monthlyRates() async {
     return _list(
-      'GET',
-      '/v1/monthly-shipping-rates',
+      await _request(
+        'GET',
+        '/v1/monthly-rates',
+      ),
     );
   }
 
   Future<Map<String, dynamic>> createMonthlyRate(
     Map<String, dynamic> payload,
-  ) {
+  ) async {
     return _map(
-      'POST',
-      '/v1/monthly-shipping-rates',
-      body: payload,
+      await _request(
+        'POST',
+        '/v1/monthly-rates',
+        body: payload,
+      ),
     );
   }
 
   Future<Map<String, dynamic>> updateMonthlyRate(
     int id,
     Map<String, dynamic> payload,
-  ) {
+  ) async {
     return _map(
-      'PUT',
-      '/v1/monthly-shipping-rates/$id',
-      body: payload,
+      await _request(
+        'PUT',
+        '/v1/monthly-rates/$id',
+        body: payload,
+      ),
     );
   }
 
   Future<Map<String, dynamic>> deleteMonthlyRate(
     int id,
     Map<String, dynamic> payload,
-  ) {
+  ) async {
     return _map(
-      'DELETE',
-      '/v1/monthly-shipping-rates/$id',
-      body: payload,
+      await _request(
+        'DELETE',
+        '/v1/monthly-rates/$id',
+        body: payload,
+      ),
     );
   }
 
   // ============================================================
-  // SETTINGS / USERS
+  // SETTINGS
   // ============================================================
 
-  Future<Map<String, dynamic>> settings() {
+  Future<Map<String, dynamic>> settings() async {
     return _map(
-      'GET',
-      '/v1/settings',
+      await _request(
+        'GET',
+        '/v1/settings',
+      ),
     );
   }
 
   Future<Map<String, dynamic>> updateSettings(
     Map<String, dynamic> payload,
-  ) {
+  ) async {
     return _map(
-      'POST',
-      '/v1/settings',
-      body: payload,
+      await _request(
+        'PUT',
+        '/v1/settings',
+        body: payload,
+      ),
     );
   }
 
-  Future<List<dynamic>> users() {
+  // ============================================================
+  // USERS
+  // ============================================================
+
+  Future<List<dynamic>> users() async {
     return _list(
-      'GET',
-      '/v1/users',
+      await _request(
+        'GET',
+        '/v1/users',
+      ),
     );
   }
 
   Future<Map<String, dynamic>> createUser(
     Map<String, dynamic> payload,
-  ) {
+  ) async {
     return _map(
-      'POST',
-      '/v1/users',
-      body: payload,
+      await _request(
+        'POST',
+        '/v1/users',
+        body: payload,
+      ),
     );
   }
 
   Future<Map<String, dynamic>> updateUser(
     int id,
     Map<String, dynamic> payload,
-  ) {
+  ) async {
     return _map(
-      'PUT',
-      '/v1/users/$id',
-      body: payload,
+      await _request(
+        'PUT',
+        '/v1/users/$id',
+        body: payload,
+      ),
+    );
+  }
+
+  Future<Map<String, dynamic>> deleteUser(
+    int id,
+    Map<String, dynamic> payload,
+  ) async {
+    return _map(
+      await _request(
+        'DELETE',
+        '/v1/users/$id',
+        body: payload,
+      ),
     );
   }
 
@@ -693,49 +833,57 @@ class ApiClient {
   // REPORTS
   // ============================================================
 
-  Future<Map<String, dynamic>> salesReport({
-    String? startDate,
-    String? endDate,
-  }) {
+  Future<Map<String, dynamic>> salesReport() async {
     return _map(
-      'GET',
-      '/v1/reports/sales',
-      query: {
-        if (startDate != null)
-          'start_date': startDate,
-        if (endDate != null)
-          'end_date': endDate,
-      },
+      await _request(
+        'GET',
+        '/v1/reports/sales',
+      ),
     );
   }
 
-  Future<List<dynamic>> shippingReport() {
+  Future<List<dynamic>> shippingReport() async {
     return _list(
-      'GET',
-      '/v1/reports/shipping',
+      await _request(
+        'GET',
+        '/v1/reports/shipping',
+      ),
     );
   }
 
-  Future<List<dynamic>> inventoryReport() {
+  Future<List<dynamic>> inventoryReport() async {
     return _list(
-      'GET',
-      '/v1/reports/inventory',
+      await _request(
+        'GET',
+        '/v1/reports/inventory',
+      ),
     );
   }
 
   // ============================================================
-  // ADMIN
+  // ADMIN / TEST DATA
   // ============================================================
+
+  Future<Map<String, dynamic>> clearTestDataInfo() async {
+    return _map(
+      await _request(
+        'GET',
+        '/v1/admin/clear-test-data',
+      ),
+    );
+  }
 
   Future<Map<String, dynamic>> clearTestData(
     String confirmation,
-  ) {
+  ) async {
     return _map(
-      'POST',
-      '/v1/admin/clear-test-data',
-      body: {
-        'confirmation': confirmation,
-      },
+      await _request(
+        'POST',
+        '/v1/admin/clear-test-data',
+        body: {
+          'confirmation': confirmation,
+        },
+      ),
     );
   }
 }
