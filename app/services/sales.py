@@ -33,11 +33,16 @@ class SaleValidationError(Exception):
 
 
 def create_sale(customer_name, customer_phone, customer_address, customer_state,
-                 payment_status, notes, line_items):
+                 payment_status, notes, line_items, commit=True):
     """
     line_items: list of dicts: {"product_id": int, "qty": int, "unit_price": Decimal, "variant_note": str (optional)}
     Returns the created Sale. Raises SaleValidationError on any problem — nothing
     is written to the database if validation fails (atomic).
+
+    commit: pass False to leave the transaction open (flushed but not committed) so
+    the caller can add more rows — e.g. a MobileOperation idempotency record — and
+    commit everything together atomically. Defaults to True for existing callers
+    that expect create_sale() to commit on its own.
     """
     if not line_items:
         raise SaleValidationError("A sale needs at least one product line.")
@@ -110,7 +115,10 @@ def create_sale(customer_name, customer_phone, customer_address, customer_state,
     sale.estimated_shipping_cost = total_cbm * rate  # rough estimate only
     sale.total_amount = subtotal  # goods only; actual shipping added once the batch arrives
 
-    db.session.commit()
+    if commit:
+        db.session.commit()
+    else:
+        db.session.flush()  # sale.id and all rows above are usable, just not committed yet
     return sale
 
 
