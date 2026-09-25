@@ -31,7 +31,17 @@ flutter:
 flutter_launcher_icons:
   android: "launcher_icon"
   ios: false
-  image_path: "assets/images/app_icon.png"
+  # Legacy/fallback icon (pre-Android 8 and any launcher that doesn't support
+  # adaptive icons). Must be fully opaque — a transparent legacy icon is what
+  # was causing the black background, since several launchers fill transparent
+  # pixels on non-adaptive icons with black instead of leaving them clear.
+  image_path: "assets/images/app_icon_legacy.png"
+  # Adaptive icon (Android 8+): background + foreground are composited and
+  # masked by the OS into whatever corner shape that device/launcher uses
+  # (circle, squircle, rounded square...), so curvature is consistent with
+  # every other icon on the phone instead of a custom baked-in radius.
+  adaptive_icon_background: "#FFFFFF"
+  adaptive_icon_foreground: "assets/images/app_icon_foreground.png"
   min_sdk_android: 21
   web:
     generate: false
