@@ -1,12 +1,21 @@
 import 'dart:async';
 import 'package:connectivity_plus/connectivity_plus.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:sqflite_common_ffi_web/sqflite_ffi_web.dart';
 import 'data/api_client.dart';
 import 'data/local_database.dart';
 import 'data/sync_repository.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  if (kIsWeb) {
+    // Plain sqflite has no browser implementation — this swaps in the
+    // IndexedDB-backed factory so the exact same LocalDatabase/SyncRepository
+    // code (queries, transactions, the offline sync queue) works unmodified
+    // on the web build too, instead of needing a separate web-only data layer.
+    databaseFactory = databaseFactoryFfiWeb;
+  }
   await LocalDatabase.instance.db;
   runApp(const OmaMobileApp());
 }
