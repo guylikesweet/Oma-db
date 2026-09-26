@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:path/path.dart' as p;
 import 'package:sqflite/sqflite.dart';
 
@@ -9,9 +10,13 @@ class LocalDatabase {
 
   Future<Database> get db async {
     if (_db != null) return _db!;
-    final dir = await getDatabasesPath();
+    // On web, databaseFactory is set to databaseFactoryFfiWeb (see main.dart)
+    // before this is ever called. That factory stores data in IndexedDB, not
+    // a filesystem, so there is no real directory to resolve — a plain
+    // database name is all it needs.
+    final path = kIsWeb ? 'oma_mobile.db' : p.join(await getDatabasesPath(), 'oma_mobile.db');
     _db = await openDatabase(
-      p.join(dir, 'oma_mobile.db'),
+      path,
       version: 5,
       onCreate: (database, version) => _create(database),
       onUpgrade: (database, oldVersion, newVersion) async {
