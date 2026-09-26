@@ -48,16 +48,16 @@ class _WebsiteFeaturesPageState extends State<WebsiteFeaturesPage> {
 
           _tile(
             Icons.inventory_2,
-            'Products',
-            'Create, edit, delete and stock',
-            () => open(ProductsPage(api: widget.api)),
+            'Manage products',
+            'Full admin: create, edit, delete and stock (see the Products tab for the everyday offline view)',
+            () => open(WebProductsPage(api: widget.api)),
           ),
 
           _tile(
             Icons.receipt_long,
-            'Sales',
-            'Sales, status and shipping settlement',
-            () => open(SalesPage(api: widget.api)),
+            'Manage sales',
+            'Full admin: status and shipping settlement (see the Sales tab for the everyday offline view)',
+            () => open(WebSalesPage(api: widget.api)),
           ),
 
           _tile(
@@ -84,13 +84,6 @@ class _WebsiteFeaturesPageState extends State<WebsiteFeaturesPage> {
             'Deliveries',
             'Ready sales, consolidation, status and labels',
             () => open(DeliveriesPage(api: widget.api)),
-          ),
-
-          _tile(
-            Icons.track_changes,
-            'Shipping',
-            'Search shipping and tracking records',
-            () => open(ShippingPage(api: widget.api)),
           ),
 
           _tile(
@@ -157,16 +150,16 @@ class _WebsiteFeaturesPageState extends State<WebsiteFeaturesPage> {
   }
 }
 
-class ProductsPage extends StatefulWidget {
-  const ProductsPage({super.key, required this.api});
+class WebProductsPage extends StatefulWidget {
+  const WebProductsPage({super.key, required this.api});
 
   final ApiClient api;
 
   @override
-  State<ProductsPage> createState() => _ProductsPageState();
+  State<WebProductsPage> createState() => _WebProductsPageState();
 }
 
-class _ProductsPageState extends State<ProductsPage> {
+class _WebProductsPageState extends State<WebProductsPage> {
   List<dynamic> rows = [];
   bool busy = true;
 
@@ -482,16 +475,16 @@ class _ProductsPageState extends State<ProductsPage> {
   }
 }
 
-class SalesPage extends StatefulWidget {
-  const SalesPage({super.key, required this.api});
+class WebSalesPage extends StatefulWidget {
+  const WebSalesPage({super.key, required this.api});
 
   final ApiClient api;
 
   @override
-  State<SalesPage> createState() => _SalesPageState();
+  State<WebSalesPage> createState() => _WebSalesPageState();
 }
 
-class _SalesPageState extends State<SalesPage> {
+class _WebSalesPageState extends State<WebSalesPage> {
   List<dynamic> rows = [];
 
   @override
@@ -1382,112 +1375,6 @@ class _DeliveriesPageState
                   );
                 },
               ),
-      ),
-    );
-  }
-}
-
-class ShippingPage extends StatefulWidget {
-  const ShippingPage({super.key, required this.api});
-
-  final ApiClient api;
-
-  @override
-  State<ShippingPage> createState() =>
-      _ShippingPageState();
-}
-
-class _ShippingPageState
-    extends State<ShippingPage> {
-  List<dynamic> rows = [];
-  final query = TextEditingController();
-
-  Future<void> load() async {
-    try {
-      rows = await widget.api.searchShipping(
-        trackingNumber: query.text.trim(),
-      );
-    } catch (_) {}
-
-    if (mounted) {
-      setState(() {});
-    }
-  }
-
-  @override
-  void dispose() {
-    query.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Shipping'),
-      ),
-      body: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.all(12),
-            child: Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: query,
-                    onSubmitted: (_) => load(),
-                    decoration:
-                        const InputDecoration(
-                      labelText: 'Tracking number',
-                      prefixIcon:
-                          Icon(Icons.search),
-                    ),
-                  ),
-                ),
-                IconButton(
-                  onPressed: load,
-                  icon: const Icon(Icons.search),
-                ),
-              ],
-            ),
-          ),
-          Expanded(
-            child: RefreshIndicator(
-              onRefresh: load,
-              child: rows.isEmpty
-                  ? ListView(
-                      children: const [
-                        SizedBox(height: 120),
-                        Center(
-                          child: Text(
-                            'No shipping records found.',
-                          ),
-                        ),
-                      ],
-                    )
-                  : ListView.builder(
-                      itemCount: rows.length,
-                      itemBuilder: (_, index) {
-                        final shipping =
-                            Map<String, dynamic>.from(
-                          rows[index] as Map,
-                        );
-
-                        return ListTile(
-                          title: Text(
-                            '${shipping['tracking_number'] ?? 'No tracking'}',
-                          ),
-                          subtitle: Text(
-                            '${shipping['courier'] ?? ''}'
-                            ' • ${shipping['shipping_status'] ?? ''}'
-                            ' • Sale ${shipping['sale_id'] ?? ''}',
-                          ),
-                        );
-                      },
-                    ),
-            ),
-          ),
-        ],
       ),
     );
   }
