@@ -1,0 +1,123 @@
+name: Build OmaSales Web
+
+on:
+  push:
+    paths:
+      - 'app/**'
+      - 'mobile/**'
+      - 'migrations/**'
+      - 'requirements.txt'
+      - '.github/workflows/build-oma-web.yml'
+
+  workflow_dispatch:
+    inputs:
+      api_url:
+        description: 'Backend API base URL'
+        required: true
+        default: 'https://oma-db.onrender.com/api'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: oma-web-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: mobile
+
+    steps:
+
+      # ------------------------------------------------------------
+      # 1. CHECKOUT
+      # ------------------------------------------------------------
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # ------------------------------------------------------------
+      # 2. INSTALL FLUTTER
+      # ------------------------------------------------------------
+      - name: Install Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: '3.22.0'
+          cache: true
+
+      # ------------------------------------------------------------
+      # 3. FLUTTER DEPENDENCIES
+      # ------------------------------------------------------------
+      - name: Get Flutter dependencies
+        run: flutter pub get
+
+      # ------------------------------------------------------------
+      # 4. CREATE WEB PROJECT
+      # (mirrors "Create Android project" in build-oma-apk.yml — the
+      # web/ platform folder is generated fresh on every run rather
+      # than committed to the repo.)
+      # ------------------------------------------------------------
+      - name: Create Flutter web project
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [ ! -d web ]; then
+            echo "Web project does not exist."
+            echo "Creating web project..."
+
+            flutter create \
+              --platforms=web \
+              --org com.example \
+              .
+          else
+            echo "Web project already exists."
+          fi
+
+          python3 - <<'PY'
+          from pathlib import Path
+
+          index = Path("web/index.html")
+          if not index.exists():
+              raise SystemExit("web/index.html was not generated.")
+
+          s = index.read_text(encoding="utf-8")
+          s = s.replace(
+              "<title>mobile</title>",
+              "<title>OmaSales</title>",
+          )
+          index.write_text(s, encoding="utf-8")
+
+          print("Web project prepared.")
+          PY
+
+      # ------------------------------------------------------------
+      # 5. BUILD CHECK (compile-only for now)
+      #
+      # NOTE: this is expected to fail until the offline-storage
+      # dependency (sqflite) is made conditional for web builds —
+      # sqflite has no web implementation. This step exists so CI
+      # tells us clearly, on every push, whether that work is done
+      # yet, rather than us finding out at deploy time.
+      # ------------------------------------------------------------
+      - name: Build web (release)
+        env:
+          API_URL: ${{ github.event.inputs.api_url || 'https://oma-db.onrender.com/api' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          flutter build web --release --dart-define=API_BASE_URL="$API_URL"
+
+      # ------------------------------------------------------------
+      # 6. UPLOAD BUILD ARTIFACT
+      # ------------------------------------------------------------
+      - name: Upload web build
+        uses: actions/upload-artifact@v4
+        with:
+          name: OmaSales-Web-${{ github.run_number }}
+          if-no-files-found: error
+          path: mobile/build/web
