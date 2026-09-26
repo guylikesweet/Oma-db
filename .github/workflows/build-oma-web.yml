@@ -96,6 +96,19 @@ jobs:
           PY
 
       # ------------------------------------------------------------
+      # 4b. SQLITE WEB BINARIES
+      #
+      # sqflite has no browser implementation, so the app uses
+      # sqflite_common_ffi_web (IndexedDB-backed) on web instead — see
+      # databaseFactoryFfiWeb in main.dart. That factory needs a wasm
+      # SQLite build and a shared-worker JS file inside web/, generated
+      # by this package's own setup command (not something we hand-write).
+      # ------------------------------------------------------------
+      - name: Install sqflite web binaries
+        shell: bash
+        run: dart run sqflite_common_ffi_web:setup
+
+      # ------------------------------------------------------------
       # 5. BUILD CHECK (compile-only for now)
       #
       # NOTE: this is expected to fail until the offline-storage
