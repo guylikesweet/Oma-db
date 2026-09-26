@@ -6,6 +6,7 @@ import 'package:sqflite_common_ffi_web/sqflite_ffi_web.dart';
 import 'data/api_client.dart';
 import 'data/local_database.dart';
 import 'data/sync_repository.dart';
+import 'full_features.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -2150,6 +2151,25 @@ class MorePage extends StatelessWidget {
         body: ListView(
           padding: const EdgeInsets.all(16),
           children: [
+            Card(
+              child: ListTile(
+                leading: const Icon(Icons.apps),
+                title: const Text('More features'),
+                subtitle: const Text(
+                  'Batches, deliveries, rates, reports, settings, users, clear test data',
+                ),
+                trailing:
+                    const Icon(Icons.chevron_right),
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => WebsiteFeaturesPage(
+                      api: api,
+                    ),
+                  ),
+                ),
+              ),
+            ),
             Card(
               child: ListTile(
                 leading:
