@@ -2,6 +2,7 @@ from flask import Flask, redirect, url_for, render_template
 from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
 from flask_login import LoginManager, login_required
+from flask_cors import CORS
 
 db = SQLAlchemy()
 migrate = Migrate()
@@ -16,6 +17,14 @@ def create_app(config_object="config.Config"):
     migrate.init_app(app, db)
     login_manager.init_app(app)
     login_manager.login_view = "auth.login"
+
+    # /api/* is called from the mobile app (no browser, no CORS involved)
+    # and now also from the Flutter Web build — browsers enforce CORS on
+    # any cross-origin fetch, so without this every request from the web
+    # build fails before it even reaches these routes. Every /api/* route
+    # authenticates via an Authorization: Bearer <token> header, not
+    # cookies, so an open origin policy here doesn't expose any session.
+    CORS(app, resources={r"/api/*": {"origins": "*"}})
 
     with app.app_context():
         from app import models  # noqa: F401  (register models for migrations)
