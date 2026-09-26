@@ -382,84 +382,20 @@ jobs:
           java-version: '17'
 
       # ------------------------------------------------------------
-      # 9. VALIDATE APP ICON - FIXED FOR ROUND EDGES
+      # 9. GENERATE LAUNCHER ICON (adaptive icon: background + foreground,
+      #    driven entirely by the flutter_launcher_icons config in
+      #    pubspec.yaml — no hand-rolled masking here. This replaces the
+      #    previous manual Pillow script, which baked a rounded shape onto
+      #    a transparent legacy icon and reproduced the black-background
+      #    bug on launchers that do not composite legacy icon transparency
+      #    correctly.)
       # ------------------------------------------------------------
-      - name: Validate and install launcher icon (rounded)
+      - name: Generate launcher icon
         shell: bash
         run: |
           set -euo pipefail
-          pip install Pillow -q
-
-          python3 - <<'PY'
-          from pathlib import Path
-          from PIL import Image, ImageDraw
-          import struct
-
-          src = Path("assets/images/app_icon.png")
-
-          if not src.is_file():
-              raise SystemExit("Missing assets/images/app_icon.png")
-
-          data = src.read_bytes()
-
-          # Validate PNG
-          if not data.startswith(b"\x89PNG\r\n\x1a\n"):
-              raise SystemExit("assets/images/app_icon.png is not a valid PNG.")
-
-          width, height = struct.unpack(">II", data[16:24])
-          if width <= 0 or height <= 0:
-              raise SystemExit("PNG has invalid dimensions.")
-
-          print(f"Original icon: {width}x{height}")
-
-          # Load and create rounded version with transparent bg
-          im = Image.open(src).convert("RGBA")
-          s = max(im.size)
-
-          # Transparent canvas, not white - this is the key fix
-          canvas = Image.new("RGBA", (s, s), (0, 0, 0, 0))
-          canvas.paste(im, ((s - im.width)//2, (s - im.height)//2), im)
-
-          # Create rounded mask - radius = 22% like Android adaptive icons
-          mask = Image.new("L", (s, s), 0)
-          draw = ImageDraw.Draw(mask)
-          radius = s // 5  # 20% rounding, looks like normal apps
-          draw.rounded_rectangle([0, 0, s, s], radius=radius, fill=255)
-
-          canvas.putalpha(ImageChops.multiply(canvas.split()[3], mask) if False else mask)
-          # Simpler: apply mask to alpha
-          r, g, b, a = canvas.split()
-          # Multiply existing alpha with rounded mask
-          new_alpha = Image.new("L", (s, s), 0)
-          new_alpha.paste(a, mask=mask)
-          # Actually combine
-          final = Image.merge("RGBA", (r, g, b, new_alpha))
-          # Better approach: just set mask as alpha if image was opaque
-          # Keep transparency of original but clip to rounded rect
-          final = canvas
-          final.putalpha(mask)
-
-          # For each density, resize
-          res = Path("android/app/src/main/res")
-          folders = {
-              "mipmap-mdpi": 48,
-              "mipmap-hdpi": 72,
-              "mipmap-xhdpi": 96,
-              "mipmap-xxhdpi": 144,
-              "mipmap-xxxhdpi": 192,
-          }
-
-          for folder, size in folders.items():
-              target = res / folder
-              target.mkdir(parents=True, exist_ok=True)
-              resized = final.resize((size, size), Image.LANCZOS)
-              # Save all three names Android looks for
-              resized.save(target / "ic_launcher.png", "PNG")
-              resized.save(target / "launcher_icon.png", "PNG")
-              resized.save(target / "ic_launcher_round.png", "PNG")
-
-          print(f"Rounded launcher icon created: {width}x{height} -> rounded corners")
-          PY
+          dart run flutter_launcher_icons
+          echo "Launcher icon generated from pubspec.yaml adaptive icon config."
 
       # ------------------------------------------------------------
       # 10. CONFIGURE ANDROID SIGNING
