@@ -1,6 +1,7 @@
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:printing/printing.dart';
 import 'package:share_plus/share_plus.dart';
 
 import 'data/api_client.dart';
@@ -800,48 +801,78 @@ class _BatchesPageState extends State<BatchesPage> {
                 ),
 
               ...assigned.map(
-                (sale) => ListTile(
-                  title: Text(
-                    '${sale['order_id'] ?? sale['id']}'
-                    ' • ${sale['customer_name'] ?? ''}',
-                  ),
-                  trailing:
-                      batch['status'] == 'In Transit'
-                          ? IconButton(
-                              icon: const Icon(
-                                Icons.remove_circle_outline,
+                (sale) {
+                  final settled =
+                      sale['shipping_payment_settled'] == true;
+                  final cost = sale['actual_shipping_cost'];
+                  final arrived = batch['status'] ==
+                      'Arrived - Awaiting Shipping Payment';
+
+                  Widget? trailing;
+                  if (batch['status'] == 'In Transit') {
+                    trailing = IconButton(
+                      icon: const Icon(
+                        Icons.remove_circle_outline,
+                      ),
+                      onPressed: () async {
+                        try {
+                          await widget.api
+                              .removeSaleFromBatch(
+                            batch['id'] as int,
+                            sale['id'] as int,
+                            {
+                              'action': 'remove',
+                            },
+                          );
+
+                          if (sheetContext.mounted) {
+                            Navigator.pop(sheetContext);
+                          }
+
+                          await load();
+                        } catch (e) {
+                          if (sheetContext.mounted) {
+                            ScaffoldMessenger.of(
+                              sheetContext,
+                            ).showSnackBar(
+                              SnackBar(
+                                content: Text('$e'),
                               ),
-                              onPressed: () async {
-                                try {
-                                  await widget.api
-                                      .removeSaleFromBatch(
-                                    batch['id'] as int,
-                                    sale['id'] as int,
-                                    {
-                                      'action': 'remove',
-                                    },
-                                  );
+                            );
+                          }
+                        }
+                      },
+                    );
+                  } else if (arrived && !settled) {
+                    trailing = FilledButton.tonal(
+                      onPressed: () => settleFromBatch(
+                        sheetContext,
+                        sale['id'] as int,
+                      ),
+                      child: const Text('Settle'),
+                    );
+                  } else if (settled) {
+                    trailing = const Icon(
+                      Icons.check_circle,
+                      color: Colors.green,
+                    );
+                  }
 
-                                  if (sheetContext.mounted) {
-                                    Navigator.pop(sheetContext);
-                                  }
-
-                                  await load();
-                                } catch (e) {
-                                  if (sheetContext.mounted) {
-                                    ScaffoldMessenger.of(
-                                      sheetContext,
-                                    ).showSnackBar(
-                                      SnackBar(
-                                        content: Text('$e'),
-                                      ),
-                                    );
-                                  }
-                                }
-                              },
-                            )
-                          : null,
-                ),
+                  return ListTile(
+                    title: Text(
+                      '${sale['order_id'] ?? sale['id']}'
+                      ' • ${sale['customer_name'] ?? ''}',
+                    ),
+                    subtitle: cost == null
+                        ? null
+                        : Text(
+                            settled
+                                ? 'Shipping ₦${(cost as num).toStringAsFixed(2)} — settled, ready for delivery'
+                                : 'Shipping cost: ₦${(cost as num).toStringAsFixed(2)} — awaiting payment',
+                          ),
+                    trailing: trailing,
+                  );
+                },
               ),
 
               if (batch['status'] == 'In Transit') ...[
@@ -901,12 +932,73 @@ class _BatchesPageState extends State<BatchesPage> {
   }
 
   Future<void> arriveBatch(int id) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Mark batch as arrived?'),
+        content: const Text(
+          'This calculates the actual shipping cost for every sale in '
+          'this batch, using this month\'s rate × each sale\'s CBM, and '
+          'locks the batch to "Arrived — Awaiting Shipping Payment". '
+          'This cannot be undone.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Confirm arrival'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+
     try {
       await widget.api.arriveBatch(id, {});
       await load();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Batch marked arrived — shipping costs calculated.',
+            ),
+          ),
+        );
+      }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('$e')),
+        );
+      }
+    }
+  }
+
+  Future<void> settleFromBatch(
+    BuildContext sheetContext,
+    int saleId,
+  ) async {
+    try {
+      await widget.api.settleShipping(saleId, {});
+      if (sheetContext.mounted) {
+        Navigator.pop(sheetContext);
+      }
+      await load();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Shipping settled — sale is now ready for delivery.',
+            ),
+          ),
+        );
+      }
+    } catch (e) {
+      if (sheetContext.mounted) {
+        ScaffoldMessenger.of(sheetContext).showSnackBar(
           SnackBar(content: Text('$e')),
         );
       }
@@ -961,9 +1053,12 @@ class _BatchesPageState extends State<BatchesPage> {
                       onTap: () => manageBatch(batch),
                       trailing:
                           batch['status'] == 'In Transit'
-                              ? IconButton(
+                              ? TextButton.icon(
                                   icon: const Icon(
                                     Icons.flight_land,
+                                  ),
+                                  label: const Text(
+                                    'Mark arrived',
                                   ),
                                   onPressed: () =>
                                       arriveBatch(
@@ -1254,6 +1349,27 @@ class _DeliveriesPageState
     }
   }
 
+  Future<void> printPdf(int id) async {
+    try {
+      final Uint8List bytes =
+          await widget.api.labelPdf(id);
+
+      // Printing.layoutPdf opens the platform's native print dialog (and a
+      // PDF preview first, on most platforms) — works the same way on
+      // Android, iOS, desktop and web, with no per-platform code needed here.
+      await Printing.layoutPdf(
+        name: 'label-$id.pdf',
+        onLayout: (_) async => bytes,
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('$e')),
+        );
+      }
+    }
+  }
+
   Future<void> updateStatus(
     int id,
     String status,
@@ -1336,6 +1452,11 @@ class _DeliveriesPageState
                             return;
                           }
 
+                          if (value == 'print') {
+                            await printPdf(id);
+                            return;
+                          }
+
                           await updateStatus(
                             id,
                             value,
@@ -1364,9 +1485,15 @@ class _DeliveriesPageState
                             ),
                           ),
                           PopupMenuItem(
+                            value: 'print',
+                            child: Text(
+                              'Print label',
+                            ),
+                          ),
+                          PopupMenuItem(
                             value: 'pdf',
                             child: Text(
-                              'Share label PDF',
+                              'Download / share label PDF',
                             ),
                           ),
                         ],
