@@ -68,6 +68,7 @@ class _WebsiteFeaturesPageState extends State<WebsiteFeaturesPage> {
             () => open(
               ReportPage(
                 title: 'Inventory Report',
+                type: 'inventory',
                 load: widget.api.inventoryReport,
               ),
             ),
