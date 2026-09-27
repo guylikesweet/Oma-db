@@ -1,0 +1,34 @@
+"""
+Serves the compiled Flutter Web build (app/static/webapp/, committed by
+build-oma-web.yml) under /webapp/ — a deliberately separate path from the
+existing "/" homepage, so the new UI can be tested on the real production
+domain without touching or replacing anything currently live.
+
+Not @login_required: this route only ever hands back static HTML/JS. The
+Flutter app authenticates itself against /api/v1/auth/login with its own
+login screen and a bearer token — gating this route with Flask-Login's
+session-based login would just redirect an unauthenticated visitor to the
+OLD Jinja login page instead, which is wrong for a client that manages its
+own auth state.
+"""
+import os
+
+from flask import Blueprint, send_from_directory
+
+webapp_bp = Blueprint("webapp", __name__)
+
+WEBAPP_DIR = os.path.join(os.path.dirname(__file__), "static", "webapp")
+
+
+@webapp_bp.route("/webapp/")
+@webapp_bp.route("/webapp/<path:subpath>")
+def serve_webapp(subpath=""):
+    # A real, existing file (main.dart.js, assets/*, canvaskit/*, etc.) is
+    # served directly. Anything else — including every client-side Flutter
+    # route like /webapp/some/deep/link — falls back to index.html so
+    # Flutter's own router handles it; this is the standard SPA pattern.
+    if subpath:
+        candidate = os.path.join(WEBAPP_DIR, subpath)
+        if os.path.isfile(candidate):
+            return send_from_directory(WEBAPP_DIR, subpath)
+    return send_from_directory(WEBAPP_DIR, "index.html")
