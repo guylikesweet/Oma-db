@@ -1701,13 +1701,29 @@ class _NewSalePageState extends State<NewSalePage> {
         items: items,
       );
 
+      // The sale is always written locally first (that's what makes the
+      // app work offline at all) — but whether it then syncs immediately
+      // depends on whether we're actually online right now. Check instead
+      // of always claiming "offline", and try a real sync so the message
+      // reflects what happened rather than a guess.
+      final connectivityResult =
+          await Connectivity().checkConnectivity();
+      final isOnline =
+          !connectivityResult.contains(ConnectivityResult.none);
+
+      var message = 'Sale saved — will sync once you\'re back online.';
+      if (isOnline) {
+        try {
+          await widget.repo.syncOnce();
+          message = 'Sale saved and synced.';
+        } catch (_) {
+          message = 'Sale saved — will sync shortly.';
+        }
+      }
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-              'Sale saved offline and queued for sync.',
-            ),
-          ),
+          SnackBar(content: Text(message)),
         );
 
         Navigator.pop(context);
@@ -1798,7 +1814,80 @@ class _NewSalePageState extends State<NewSalePage> {
                     },
                   ),
                   const SizedBox(height: 16),
-                  ...products.map(
+                  Autocomplete<Map<String, dynamic>>(
+                    displayStringForOption: (p) =>
+                        '${p['name']}',
+                    optionsBuilder: (value) {
+                      if (value.text.trim().isEmpty) {
+                        return const Iterable<
+                            Map<String, dynamic>>.empty();
+                      }
+                      final q =
+                          value.text.trim().toLowerCase();
+                      return products.where((p) {
+                        final name =
+                            '${p['name']}'.toLowerCase();
+                        final added =
+                            (qty[p['id'] as int] ?? 0) > 0;
+                        return !added && name.contains(q);
+                      });
+                    },
+                    onSelected: (p) {
+                      final id = p['id'] as int;
+                      setState(() => qty[id] = 1);
+                    },
+                    optionsViewBuilder:
+                        (context, onSelected, options) =>
+                            Align(
+                      alignment: Alignment.topLeft,
+                      child: Material(
+                        elevation: 4,
+                        child: ConstrainedBox(
+                          constraints: const BoxConstraints(
+                            maxHeight: 260,
+                          ),
+                          child: ListView.builder(
+                            padding: EdgeInsets.zero,
+                            shrinkWrap: true,
+                            itemCount: options.length,
+                            itemBuilder: (_, i) {
+                              final p =
+                                  options.elementAt(i);
+                              return ListTile(
+                                title: Text('${p['name']}'),
+                                subtitle: Text(
+                                  'Stock: ${p['stock']}',
+                                ),
+                                onTap: () => onSelected(p),
+                              );
+                            },
+                          ),
+                        ),
+                      ),
+                    ),
+                    fieldViewBuilder: (
+                      context,
+                      controller,
+                      focusNode,
+                      onFieldSubmitted,
+                    ) =>
+                        TextField(
+                      controller: controller,
+                      focusNode: focusNode,
+                      decoration: const InputDecoration(
+                        labelText: 'Search products to add',
+                        prefixIcon: Icon(Icons.search),
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  ...products
+                      .where(
+                    (p) =>
+                        (qty[p['id'] as int] ?? 0) > 0,
+                  )
+                      .map(
                     (p) {
                       final id = p['id'] as int;
                       final q = qty[id] ?? 0;
@@ -1811,12 +1900,32 @@ class _NewSalePageState extends State<NewSalePage> {
                             crossAxisAlignment:
                                 CrossAxisAlignment.start,
                             children: [
-                              Text(
-                                '${p['name']}',
-                                style: const TextStyle(
-                                  fontWeight:
-                                      FontWeight.bold,
-                                ),
+                              Row(
+                                mainAxisAlignment:
+                                    MainAxisAlignment
+                                        .spaceBetween,
+                                children: [
+                                  Expanded(
+                                    child: Text(
+                                      '${p['name']}',
+                                      style: const TextStyle(
+                                        fontWeight:
+                                            FontWeight.bold,
+                                      ),
+                                    ),
+                                  ),
+                                  IconButton(
+                                    onPressed: () =>
+                                        setState(
+                                      () => qty[id] = 0,
+                                    ),
+                                    icon: const Icon(
+                                      Icons.close,
+                                    ),
+                                    tooltip:
+                                        'Remove from sale',
+                                  ),
+                                ],
                               ),
                               Text(
                                 'Stock: ${p['stock']}',
@@ -1877,6 +1986,20 @@ class _NewSalePageState extends State<NewSalePage> {
                       );
                     },
                   ),
+                  if (products
+                      .where((p) =>
+                          (qty[p['id'] as int] ?? 0) > 0)
+                      .isEmpty)
+                    const Padding(
+                      padding: EdgeInsets.symmetric(
+                        vertical: 16,
+                      ),
+                      child: Text(
+                        'No products added yet — search above to add one.',
+                        style:
+                            TextStyle(color: Colors.grey),
+                      ),
+                    ),
                   TextField(
                     controller: notes,
                     maxLines: 2,
@@ -1890,9 +2013,7 @@ class _NewSalePageState extends State<NewSalePage> {
                     onPressed: saving ? null : save,
                     icon: const Icon(Icons.save),
                     label: Text(
-                      saving
-                          ? 'Saving...'
-                          : 'Save sale offline',
+                      saving ? 'Saving...' : 'Save sale',
                     ),
                   ),
                 ],
