@@ -26,6 +26,8 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
 
     defaults:
       run:
@@ -109,13 +111,15 @@ jobs:
         run: dart run sqflite_common_ffi_web:setup
 
       # ------------------------------------------------------------
-      # 5. BUILD CHECK (compile-only for now)
+      # 5. BUILD (release)
       #
-      # NOTE: this is expected to fail until the offline-storage
-      # dependency (sqflite) is made conditional for web builds —
-      # sqflite has no web implementation. This step exists so CI
-      # tells us clearly, on every push, whether that work is done
-      # yet, rather than us finding out at deploy time.
+      # --base-href /webapp/ : this build is served by Flask under the
+      # /webapp/ prefix (see app/webapp.py) — a deliberately separate,
+      # non-default path so this can be tested on the real production
+      # domain without touching the existing site at "/". Once that's
+      # confirmed working, promoting it to the actual homepage is a
+      # separate, later decision — not automatic just because this
+      # build succeeds.
       # ------------------------------------------------------------
       - name: Build web (release)
         env:
@@ -123,10 +127,14 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          flutter build web --release --dart-define=API_BASE_URL="$API_URL"
+          flutter build web --release --base-href /webapp/ --dart-define=API_BASE_URL="$API_URL"
+          # Flutter Web routes unknown paths to index.html itself, but
+          # GitHub Pages needs an explicit 404.html to do the same —
+          # otherwise a page refresh on any route but "/" 404s.
+          cp build/web/index.html build/web/404.html
 
       # ------------------------------------------------------------
-      # 6. UPLOAD BUILD ARTIFACT
+      # 6. UPLOAD BUILD ARTIFACT (downloadable zip, as before)
       # ------------------------------------------------------------
       - name: Upload web build
         uses: actions/upload-artifact@v4
@@ -134,3 +142,64 @@ jobs:
           name: OmaSales-Web-${{ github.run_number }}
           if-no-files-found: error
           path: mobile/build/web
+
+      # ------------------------------------------------------------
+      # 7. UPLOAD FOR GITHUB PAGES
+      #
+      # This is a TESTING convenience only — a stable, phone-friendly
+      # URL to click through the build on, since a downloaded zip can't
+      # be served locally from a phone. This is not the production
+      # hosting decision (step 10 in our plan); that may end up being
+      # this, Render, or somewhere else entirely.
+      # ------------------------------------------------------------
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: mobile/build/web
+
+      # ------------------------------------------------------------
+      # 8. COMMIT COMPILED WEB APP BACK INTO THE REPO
+      #
+      # Render auto-deploys on every push to this repo, but its build
+      # is plain Python — it can't run Flutter itself. So instead: this
+      # job builds it here, then commits the compiled output into
+      # app/static/webapp/, which Render then picks up and deploys like
+      # any other file change, no separate hosting service involved.
+      #
+      # "[skip ci]" is essential — without it, this commit would match
+      # this workflow's own "app/**" trigger and re-run itself forever.
+      # ------------------------------------------------------------
+      - name: Commit compiled web app
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          rm -rf "$GITHUB_WORKSPACE/app/static/webapp"
+          mkdir -p "$GITHUB_WORKSPACE/app/static/webapp"
+          cp -r build/web/. "$GITHUB_WORKSPACE/app/static/webapp/"
+
+          cd "$GITHUB_WORKSPACE"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add app/static/webapp
+
+          if git diff --cached --quiet; then
+            echo "No changes to the compiled web app — nothing to commit."
+          else
+            git commit -m "chore: update compiled web app [skip ci]"
+            git push
+          fi
+
+  deploy-preview:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
