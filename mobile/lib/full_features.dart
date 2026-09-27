@@ -1854,36 +1854,42 @@ class ReportsPage extends StatelessWidget {
       body: ListView(
         children: [
           ListTile(
+            leading: const Icon(Icons.point_of_sale),
             title: const Text('Sales'),
             onTap: () => Navigator.push(
               context,
               MaterialPageRoute(
                 builder: (_) => ReportPage(
                   title: 'Sales',
+                  type: 'sales',
                   load: api.salesReport,
                 ),
               ),
             ),
           ),
           ListTile(
+            leading: const Icon(Icons.local_shipping),
             title: const Text('Shipping'),
             onTap: () => Navigator.push(
               context,
               MaterialPageRoute(
                 builder: (_) => ReportPage(
                   title: 'Shipping',
+                  type: 'shipping',
                   load: api.shippingReport,
                 ),
               ),
             ),
           ),
           ListTile(
+            leading: const Icon(Icons.inventory_2),
             title: const Text('Inventory'),
             onTap: () => Navigator.push(
               context,
               MaterialPageRoute(
                 builder: (_) => ReportPage(
                   title: 'Inventory',
+                  type: 'inventory',
                   load: api.inventoryReport,
                 ),
               ),
@@ -1895,14 +1901,22 @@ class ReportsPage extends StatelessWidget {
   }
 }
 
+String _money(dynamic v) {
+  if (v == null) return '₦0.00';
+  final n = v is num ? v : num.tryParse('$v') ?? 0;
+  return '₦${n.toStringAsFixed(2)}';
+}
+
 class ReportPage extends StatelessWidget {
   const ReportPage({
     super.key,
     required this.title,
+    required this.type,
     required this.load,
   });
 
   final String title;
+  final String type;
   final Future<dynamic> Function() load;
 
   @override
@@ -1933,15 +1947,18 @@ class ReportPage extends StatelessWidget {
 
           final data = snapshot.data;
 
+          Map<String, dynamic>? totals;
           final List<dynamic> list;
 
-          if (data is List) {
+          if (data is Map && data['sales'] is List) {
+            list = List<dynamic>.from(data['sales'] as List);
+            if (data['totals'] is Map) {
+              totals = Map<String, dynamic>.from(
+                data['totals'] as Map,
+              );
+            }
+          } else if (data is List) {
             list = data;
-          } else if (data is Map &&
-              data['sales'] is List) {
-            list = List<dynamic>.from(
-              data['sales'] as List,
-            );
           } else {
             list = [data];
           }
@@ -1952,23 +1969,188 @@ class ReportPage extends StatelessWidget {
             );
           }
 
-          return ListView.builder(
-            itemCount: list.length,
-            itemBuilder: (_, index) {
-              return Padding(
-                padding: const EdgeInsets.all(8),
-                child: Card(
-                  child: Padding(
-                    padding: const EdgeInsets.all(12),
-                    child: Text(
-                      '${list[index]}',
-                    ),
-                  ),
-                ),
-              );
-            },
+          final rows = list
+              .whereType<Map>()
+              .map((m) => Map<String, dynamic>.from(m))
+              .toList();
+
+          return ListView(
+            padding: const EdgeInsets.all(12),
+            children: [
+              if (totals != null) _TotalsCard(totals: totals),
+              ...rows.map((row) {
+                switch (type) {
+                  case 'shipping':
+                    return _ShippingRow(row: row);
+                  case 'inventory':
+                    return _InventoryRow(row: row);
+                  default:
+                    return _SalesRow(row: row);
+                }
+              }),
+            ],
           );
         },
+      ),
+    );
+  }
+}
+
+class _TotalsCard extends StatelessWidget {
+  const _TotalsCard({required this.totals});
+
+  final Map<String, dynamic> totals;
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      margin: const EdgeInsets.only(bottom: 12),
+      color: Theme.of(context).colorScheme.secondaryContainer,
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Wrap(
+          spacing: 20,
+          runSpacing: 8,
+          children: [
+            _totalItem('Subtotal', totals['subtotal']),
+            _totalItem(
+              'Est. shipping',
+              totals['estimated_shipping'],
+            ),
+            _totalItem(
+              'Actual shipping',
+              totals['actual_shipping'],
+            ),
+            _totalItem('Total', totals['total']),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _totalItem(String label, dynamic value) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: const TextStyle(fontSize: 12),
+        ),
+        Text(
+          _money(value),
+          style: const TextStyle(
+            fontWeight: FontWeight.bold,
+            fontSize: 16,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _SalesRow extends StatelessWidget {
+  const _SalesRow({required this.row});
+
+  final Map<String, dynamic> row;
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      margin: const EdgeInsets.only(bottom: 8),
+      child: ListTile(
+        title: Text(
+          '${row['order_id'] ?? row['id'] ?? ''}'
+          ' • ${row['customer_name'] ?? ''}',
+          style: const TextStyle(fontWeight: FontWeight.bold),
+        ),
+        subtitle: Text(
+          '${row['payment_status'] ?? ''} • '
+          '${row['order_status'] ?? ''}'
+          '${row['sale_date'] != null ? ' • ${'${row['sale_date']}'.split('T').first}' : ''}',
+        ),
+        trailing: Text(
+          _money(row['total_amount']),
+          style: const TextStyle(fontWeight: FontWeight.bold),
+        ),
+      ),
+    );
+  }
+}
+
+class _ShippingRow extends StatelessWidget {
+  const _ShippingRow({required this.row});
+
+  final Map<String, dynamic> row;
+
+  @override
+  Widget build(BuildContext context) {
+    final settled = row['shipping_payment_settled'] == true;
+
+    return Card(
+      margin: const EdgeInsets.only(bottom: 8),
+      child: ListTile(
+        leading: Icon(
+          settled ? Icons.check_circle : Icons.schedule,
+          color: settled ? Colors.green : Colors.orange,
+        ),
+        title: Text(
+          '${row['customer_name'] ?? 'Sale #${row['sale_id']}'}',
+          style: const TextStyle(fontWeight: FontWeight.bold),
+        ),
+        subtitle: Text(
+          '${row['batch_name'] ?? 'No batch'} • '
+          '${row['batch_status'] ?? ''}\n'
+          'Est: ${_money(row['estimated_shipping_cost'])} • '
+          'Actual: ${_money(row['actual_shipping_cost'])}',
+        ),
+        isThreeLine: true,
+        trailing: Text(
+          settled ? 'Settled' : 'Pending',
+          style: TextStyle(
+            color: settled ? Colors.green : Colors.orange,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _InventoryRow extends StatelessWidget {
+  const _InventoryRow({required this.row});
+
+  final Map<String, dynamic> row;
+
+  @override
+  Widget build(BuildContext context) {
+    final stock = row['stock'] is int
+        ? row['stock'] as int
+        : int.tryParse('${row['stock']}') ?? 0;
+    final low = stock <= 5;
+
+    return Card(
+      margin: const EdgeInsets.only(bottom: 8),
+      child: ListTile(
+        title: Text(
+          '${row['name'] ?? ''}',
+          style: const TextStyle(fontWeight: FontWeight.bold),
+        ),
+        subtitle: Text(
+          'SKU: ${row['sku'] ?? '—'} • '
+          'Cost: ${_money(row['cost'])} • '
+          'CBM: ${row['cbm'] ?? '—'}',
+        ),
+        trailing: Chip(
+          label: Text('Stock: $stock'),
+          backgroundColor:
+              low ? Colors.red.shade100 : Colors.green.shade100,
+          labelStyle: TextStyle(
+            color: low
+                ? Colors.red.shade900
+                : Colors.green.shade900,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
       ),
     );
   }
