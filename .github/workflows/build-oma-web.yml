@@ -193,6 +193,11 @@ jobs:
   deploy-preview:
     needs: build
     runs-on: ubuntu-latest
+    # The GitHub Pages copy is only a convenience preview. If Pages isn't
+    # enabled for the repo (Settings > Pages > Source: GitHub Actions) this
+    # job 404s - that must not mark the real build (which commits the web
+    # app that Render serves) as failed.
+    continue-on-error: true
     permissions:
       pages: write
       id-token: write
