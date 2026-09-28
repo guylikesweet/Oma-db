@@ -40,7 +40,9 @@
 
   <table class="table table-borderless" style="max-width:450px;">
     <tr><th>Subtotal</th><td>{{ sale.subtotal_amount }}</td></tr>
+    {% if not sale.is_stock_sale %}
     <tr><th>Estimated Shipping</th><td>{{ sale.estimated_shipping_cost if sale.estimated_shipping_cost is not none else '—' }}</td></tr>
+    {% endif %}
     {% if sale.actual_shipping_cost is not none %}
     <tr><th>Actual Shipping (calculated at arrival)</th><td><strong>{{ sale.actual_shipping_cost }}</strong></td></tr>
     <tr><th>Shipping Payment</th><td>
