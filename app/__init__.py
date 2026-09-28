@@ -56,6 +56,9 @@ def create_app(config_object="config.Config"):
         from app.webapp import webapp_bp
         app.register_blueprint(webapp_bp)
 
+        from app.verify import verify_bp
+        app.register_blueprint(verify_bp)
+
         from app.admin_views import init_admin
         init_admin(app)
 
