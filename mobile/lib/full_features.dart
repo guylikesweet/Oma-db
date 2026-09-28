@@ -1495,6 +1495,15 @@ class _DeliveriesPageState
 
                   return Card(
                     child: ListTile(
+                      onTap: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => DeliveryDetailPage(
+                            api: widget.api,
+                            delivery: delivery,
+                          ),
+                        ),
+                      ).then((_) => load()),
                       title: Text(
                         'Delivery #${delivery['id']}'
                         ' • ${delivery['method'] ?? ''}',
@@ -1571,6 +1580,301 @@ class _DeliveriesPageState
             ],
           ),
       ),
+    );
+  }
+}
+
+class DeliveryDetailPage extends StatefulWidget {
+  const DeliveryDetailPage({
+    super.key,
+    required this.api,
+    required this.delivery,
+  });
+
+  final ApiClient api;
+  final Map<String, dynamic> delivery;
+
+  @override
+  State<DeliveryDetailPage> createState() =>
+      _DeliveryDetailPageState();
+}
+
+class _DeliveryDetailPageState
+    extends State<DeliveryDetailPage> {
+  late Map<String, dynamic> delivery;
+  List<Map<String, dynamic>> sales = [];
+  bool loading = true;
+  String? error;
+
+  int get id => delivery['id'] as int;
+
+  @override
+  void initState() {
+    super.initState();
+    delivery = Map<String, dynamic>.from(widget.delivery);
+    load();
+  }
+
+  Future<void> load() async {
+    try {
+      final results = await Future.wait([
+        widget.api.deliveries(),
+        widget.api.sales(),
+      ]);
+
+      final fresh = (results[0] as List)
+          .whereType<Map>()
+          .map((m) => Map<String, dynamic>.from(m))
+          .where((d) => d['id'] == id);
+      if (fresh.isNotEmpty) delivery = fresh.first;
+
+      final ids = ((delivery['sale_ids'] as List?) ?? []).toSet();
+      sales = (results[1] as List)
+          .whereType<Map>()
+          .map((m) => Map<String, dynamic>.from(m))
+          .where((s) => ids.contains(s['id']))
+          .toList();
+      error = null;
+    } catch (e) {
+      error = '$e';
+    }
+
+    if (mounted) setState(() => loading = false);
+  }
+
+  void _snack(Object e) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('$e')),
+    );
+  }
+
+  Future<void> setStatus(String status) async {
+    try {
+      await widget.api.updateDeliveryStatus(
+        id,
+        {'status': status},
+      );
+      await load();
+    } catch (e) {
+      _snack(e);
+    }
+  }
+
+  Future<void> printLabel() async {
+    try {
+      final Uint8List bytes = await widget.api.labelPdf(id);
+      await Printing.layoutPdf(
+        name: 'label-$id.pdf',
+        onLayout: (_) async => bytes,
+      );
+    } catch (e) {
+      _snack(e);
+    }
+  }
+
+  Future<void> shareLabel() async {
+    try {
+      final Uint8List bytes = await widget.api.labelPdf(id);
+      await Share.shareXFiles(
+        [
+          XFile.fromData(
+            bytes,
+            mimeType: 'application/pdf',
+            name: 'label-$id.pdf',
+          ),
+        ],
+        text: 'Delivery label #$id',
+      );
+    } catch (e) {
+      _snack(e);
+    }
+  }
+
+  String _dt(dynamic v) => v == null
+      ? '—'
+      : '$v'.replaceFirst('T', ' ').split('.').first;
+
+  Widget _kv(String k, String v) => Padding(
+        padding: const EdgeInsets.symmetric(vertical: 4),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            SizedBox(
+              width: 130,
+              child: Text(
+                k,
+                style: const TextStyle(
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+            Expanded(child: Text(v.isEmpty ? '—' : v)),
+          ],
+        ),
+      );
+
+  @override
+  Widget build(BuildContext context) {
+    final status = '${delivery['status'] ?? ''}';
+
+    return Scaffold(
+      appBar: AppBar(title: Text('Delivery #$id')),
+      body: loading
+          ? const Center(child: CircularProgressIndicator())
+          : RefreshIndicator(
+              onRefresh: load,
+              child: ListView(
+                padding: const EdgeInsets.all(16),
+                children: [
+                  if (error != null)
+                    Padding(
+                      padding:
+                          const EdgeInsets.only(bottom: 12),
+                      child: Text(
+                        error!,
+                        style: TextStyle(
+                          color: Theme.of(context)
+                              .colorScheme
+                              .error,
+                        ),
+                      ),
+                    ),
+                  Wrap(
+                    spacing: 8,
+                    children: [
+                      Chip(label: Text(status)),
+                      if (delivery['is_consolidated'] == true)
+                        Chip(
+                          label: Text(
+                            'Consolidated'
+                            ' (${delivery['consolidation_type'] ?? ''})',
+                          ),
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  _kv('Method', '${delivery['method'] ?? ''}'),
+                  _kv(
+                    'Delivery address',
+                    '${delivery['delivery_address'] ?? ''}',
+                  ),
+                  _kv('Created', _dt(delivery['created_at'])),
+                  _kv('Shipped', _dt(delivery['shipped_at'])),
+                  _kv(
+                    'Delivered at',
+                    _dt(delivery['delivered_at']),
+                  ),
+                  _kv('Notes', '${delivery['notes'] ?? ''}'),
+                  if (delivery['package_weight_kg'] != null)
+                    _kv(
+                      'Package weight',
+                      '${delivery['package_weight_kg']} kg',
+                    ),
+                  if (delivery['package_dimensions'] != null)
+                    _kv(
+                      'Dimensions',
+                      '${delivery['package_dimensions']}',
+                    ),
+                  if (delivery['remarks'] != null)
+                    _kv('Remarks', '${delivery['remarks']}'),
+                  const SizedBox(height: 12),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      OutlinedButton(
+                        onPressed: status == 'Pending'
+                            ? () => setStatus('Out for Delivery')
+                            : null,
+                        child:
+                            const Text('Mark out for delivery'),
+                      ),
+                      FilledButton(
+                        onPressed: status == 'Delivered'
+                            ? null
+                            : () => setStatus('Delivered'),
+                        child: const Text('Mark delivered'),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      OutlinedButton.icon(
+                        onPressed: printLabel,
+                        icon: const Icon(Icons.print),
+                        label: const Text('Print label'),
+                      ),
+                      OutlinedButton.icon(
+                        onPressed: shareLabel,
+                        icon: const Icon(Icons.download),
+                        label: const Text('Download / share'),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    'Sales in this parcel (${sales.length})',
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  if (sales.isEmpty)
+                    const Text('No sales found for this delivery.'),
+                  ...sales.map((sale) {
+                    final items =
+                        (sale['items'] as List?) ?? const [];
+                    return Card(
+                      child: Padding(
+                        padding: const EdgeInsets.all(12),
+                        child: Column(
+                          crossAxisAlignment:
+                              CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              '${sale['order_id'] ?? sale['id']}'
+                              ' • ${sale['customer_name'] ?? ''}',
+                              style: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            Text(
+                              '${sale['customer_phone'] ?? ''}'
+                              ' • ${sale['customer_state'] ?? ''}',
+                            ),
+                            const Divider(),
+                            ...items.whereType<Map>().map(
+                                  (item) => Padding(
+                                    padding:
+                                        const EdgeInsets.symmetric(
+                                      vertical: 2,
+                                    ),
+                                    child: Row(
+                                      children: [
+                                        Expanded(
+                                          child: Text(
+                                            '${item['product_name'] ?? item['product_id']}'
+                                            '${(item['variant_note'] ?? '').toString().isEmpty ? '' : ' (${item['variant_note']})'}',
+                                          ),
+                                        ),
+                                        Text('× ${item['qty']}'),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                          ],
+                        ),
+                      ),
+                    );
+                  }),
+                ],
+              ),
+            ),
     );
   }
 }
@@ -1931,6 +2235,7 @@ class ReportsPage extends StatelessWidget {
                   title: 'Sales',
                   type: 'sales',
                   load: api.salesReport,
+                  loadRange: api.salesReport,
                 ),
               ),
             ),
@@ -1975,90 +2280,198 @@ String _money(dynamic v) {
   return '₦${n.toStringAsFixed(2)}';
 }
 
-class ReportPage extends StatelessWidget {
+class ReportPage extends StatefulWidget {
   const ReportPage({
     super.key,
     required this.title,
     required this.type,
     required this.load,
+    this.loadRange,
   });
 
   final String title;
   final String type;
   final Future<dynamic> Function() load;
 
+  /// Only the sales report supports a date range (the API's other reports
+  /// are not date-based). When provided, a range picker is shown.
+  final Future<dynamic> Function({
+    String? startDate,
+    String? endDate,
+  })? loadRange;
+
+  @override
+  State<ReportPage> createState() => _ReportPageState();
+}
+
+class _ReportPageState extends State<ReportPage> {
+  DateTimeRange? range;
+  late Future<dynamic> future;
+
+  @override
+  void initState() {
+    super.initState();
+    future = _fetch();
+  }
+
+  String _iso(DateTime d) =>
+      '${d.year.toString().padLeft(4, '0')}-'
+      '${d.month.toString().padLeft(2, '0')}-'
+      '${d.day.toString().padLeft(2, '0')}';
+
+  Future<dynamic> _fetch() {
+    final lr = widget.loadRange;
+    if (lr != null) {
+      return lr(
+        startDate: range == null ? null : _iso(range!.start),
+        endDate: range == null ? null : _iso(range!.end),
+      );
+    }
+    return widget.load();
+  }
+
+  Future<void> pick() async {
+    final now = DateTime.now();
+    final picked = await showDateRangePicker(
+      context: context,
+      firstDate: DateTime(2020),
+      lastDate: DateTime(now.year + 1),
+      initialDateRange: range,
+    );
+    if (picked != null) {
+      setState(() {
+        range = picked;
+        future = _fetch();
+      });
+    }
+  }
+
+  void clear() {
+    setState(() {
+      range = null;
+      future = _fetch();
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: Text(title),
-      ),
-      body: FutureBuilder<dynamic>(
-        future: load(),
-        builder: (_, snapshot) {
-          if (snapshot.hasError) {
-            return Center(
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Text(
-                  '${snapshot.error}',
-                ),
+      appBar: AppBar(title: Text(widget.title)),
+      body: Column(
+        children: [
+          if (widget.loadRange != null)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: pick,
+                      icon: const Icon(Icons.date_range),
+                      label: Text(
+                        range == null
+                            ? 'Date range (default: last 30 days)'
+                            : '${_iso(range!.start)}  →  ${_iso(range!.end)}',
+                      ),
+                    ),
+                  ),
+                  if (range != null)
+                    IconButton(
+                      onPressed: clear,
+                      icon: const Icon(Icons.close),
+                      tooltip: 'Back to last 30 days',
+                    ),
+                ],
               ),
-            );
-          }
-
-          if (!snapshot.hasData) {
-            return const Center(
-              child: CircularProgressIndicator(),
-            );
-          }
-
-          final data = snapshot.data;
-
-          Map<String, dynamic>? totals;
-          final List<dynamic> list;
-
-          if (data is Map && data['sales'] is List) {
-            list = List<dynamic>.from(data['sales'] as List);
-            if (data['totals'] is Map) {
-              totals = Map<String, dynamic>.from(
-                data['totals'] as Map,
-              );
-            }
-          } else if (data is List) {
-            list = data;
-          } else {
-            list = [data];
-          }
-
-          if (list.isEmpty) {
-            return const Center(
-              child: Text('No report data.'),
-            );
-          }
-
-          final rows = list
-              .whereType<Map>()
-              .map((m) => Map<String, dynamic>.from(m))
-              .toList();
-
-          return ListView(
-            padding: const EdgeInsets.all(12),
-            children: [
-              if (totals != null) _TotalsCard(totals: totals),
-              ...rows.map((row) {
-                switch (type) {
-                  case 'shipping':
-                    return _ShippingRow(row: row);
-                  case 'inventory':
-                    return _InventoryRow(row: row);
-                  default:
-                    return _SalesRow(row: row);
+            ),
+          Expanded(
+            child: FutureBuilder<dynamic>(
+              future: future,
+              builder: (_, snapshot) {
+                if (snapshot.hasError) {
+                  return Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Text('${snapshot.error}'),
+                    ),
+                  );
                 }
-              }),
-            ],
-          );
-        },
+
+                if (snapshot.connectionState !=
+                        ConnectionState.done &&
+                    !snapshot.hasData) {
+                  return const Center(
+                    child: CircularProgressIndicator(),
+                  );
+                }
+
+                final data = snapshot.data;
+
+                Map<String, dynamic>? totals;
+                final List<dynamic> list;
+
+                if (data is Map && data['sales'] is List) {
+                  list = List<dynamic>.from(data['sales'] as List);
+                  if (data['totals'] is Map) {
+                    totals = Map<String, dynamic>.from(
+                      data['totals'] as Map,
+                    );
+                  }
+                } else if (data is List) {
+                  list = data;
+                } else {
+                  list = [data];
+                }
+
+                final period = (data is Map &&
+                        data['start_date'] != null)
+                    ? 'Showing ${data['start_date']} to ${data['end_date']}'
+                    : null;
+
+                final rows = list
+                    .whereType<Map>()
+                    .map((m) => Map<String, dynamic>.from(m))
+                    .toList();
+
+                return ListView(
+                  padding: const EdgeInsets.all(12),
+                  children: [
+                    if (period != null)
+                      Padding(
+                        padding:
+                            const EdgeInsets.only(bottom: 8),
+                        child: Text(
+                          period,
+                          style: const TextStyle(
+                            color: Colors.grey,
+                          ),
+                        ),
+                      ),
+                    if (totals != null)
+                      _TotalsCard(totals: totals),
+                    if (rows.isEmpty)
+                      const Padding(
+                        padding: EdgeInsets.all(32),
+                        child: Center(
+                          child: Text('No report data.'),
+                        ),
+                      ),
+                    ...rows.map((row) {
+                      switch (widget.type) {
+                        case 'shipping':
+                          return _ShippingRow(row: row);
+                        case 'inventory':
+                          return _InventoryRow(row: row);
+                        default:
+                          return _SalesRow(row: row);
+                      }
+                    }),
+                  ],
+                );
+              },
+            ),
+          ),
+        ],
       ),
     );
   }
