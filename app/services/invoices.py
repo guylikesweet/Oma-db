@@ -9,14 +9,64 @@ with reportlab's platypus (tables/paragraphs) rather than hand-drawn
 coordinates, since it's a simple top-to-bottom document with no fixed
 physical page size to fit.
 """
+import hashlib
+import hmac
 import io
+import os
 from datetime import datetime
 from xml.sax.saxutils import escape
+
+from flask import current_app, request
 
 from app.services.settings import get_settings
 from app.services.labels import get_logo_bytes
 
 NA = "N/A"
+
+# Shown on every invoice. Edit here to change the wording/timeframe.
+SHIPPING_WINDOW_TEXT = "30-45 days"
+
+
+def _canonical(sale):
+    """The facts the signature vouches for. Change any of these on a printed
+    invoice (price, quantity, product, customer, total) and it stops
+    matching the server's record."""
+    items = sorted(
+        (
+            (it.product.name if it.product else str(it.product_id)),
+            int(it.qty or 0),
+            f"{(it.unit_price or 0):.2f}",
+        )
+        for it in sale.items
+    )
+    parts = [
+        sale.order_id or f"#{sale.id}",
+        sale.sale_date.isoformat() if sale.sale_date else "",
+        (sale.customer_name or "").strip(),
+        f"{(sale.total_amount or 0):.2f}",
+    ] + [f"{n}|{q}|{p}" for n, q, p in items]
+    return "\n".join(parts)
+
+
+def invoice_signature(sale):
+    """Unforgeable without the server's SECRET_KEY (HMAC-SHA256)."""
+    key = current_app.config["SECRET_KEY"].encode()
+    digest = hmac.new(key, _canonical(sale).encode(), hashlib.sha256).hexdigest()
+    return digest[:20].upper()
+
+
+def signature_matches(sale, presented):
+    return hmac.compare_digest(invoice_signature(sale), (presented or "").upper())
+
+
+def verify_url(sale):
+    base = os.environ.get("PUBLIC_BASE_URL", "").rstrip("/")
+    if not base:
+        base = request.url_root.rstrip("/")
+        host = request.host.split(":")[0]
+        if host not in ("localhost", "127.0.0.1") and base.startswith("http://"):
+            base = "https://" + base[len("http://"):]
+    return f"{base}/verify/{sale.order_id or sale.id}/{invoice_signature(sale)}"
 
 
 def _money(value):
@@ -51,15 +101,11 @@ def get_invoice_context(sale):
             "line_total": unit_price * qty,
         })
 
-    # Whichever shipping figure is actually known for this sale — the
-    # locked-in actual cost once a batch has arrived, otherwise the
-    # order-time estimate. Never both, so the invoice always shows one
-    # unambiguous shipping line.
-    shipping_cost = sale.actual_shipping_cost
-    shipping_label = "Shipping"
-    if shipping_cost is None:
-        shipping_cost = sale.estimated_shipping_cost
-        shipping_label = "Shipping (estimated)"
+    # Shipping is NOT part of what the customer paid. Show the order-time
+    # estimate (if any) as information only, or the actual figure once the
+    # batch has arrived and it has been calculated.
+    actual_shipping = sale.actual_shipping_cost
+    estimated_shipping = sale.estimated_shipping_cost
 
     return {
         "settings": settings,
@@ -79,9 +125,11 @@ def get_invoice_context(sale):
         "order_status": sale.order_status or NA,
         "line_items": line_items,
         "subtotal": sale.subtotal_amount or 0,
-        "shipping_label": shipping_label,
-        "shipping_cost": shipping_cost,
+        "estimated_shipping": estimated_shipping,
+        "actual_shipping": actual_shipping,
         "total": sale.total_amount or 0,
+        "signature": invoice_signature(sale),
+        "verify_url": verify_url(sale),
         "notes": sale.notes or "",
     }
 
@@ -199,31 +247,104 @@ def generate_invoice_pdf(sale):
     story.append(items_table)
     story.append(Spacer(1, 6 * mm))
 
-    # ---- Totals ----
-    totals_rows = [["Subtotal", _money(ctx["subtotal"])]]
-    if ctx["shipping_cost"] is not None:
-        totals_rows.append([ctx["shipping_label"], _money(ctx["shipping_cost"])])
-    totals_rows.append(["Total", _money(ctx["total"])])
-
-    totals_table = Table(totals_rows, colWidths=[140 * mm, 27 * mm], hAlign="RIGHT")
+    # ---- Total: goods only ----
+    totals_table = Table(
+        [["TOTAL PAID (products only)", _money(ctx["total"])]],
+        colWidths=[140 * mm, 27 * mm], hAlign="RIGHT",
+    )
     totals_table.setStyle(TableStyle([
         ("FONTSIZE", (0, 0), (-1, -1), 10),
         ("ALIGN", (1, 0), (1, -1), "RIGHT"),
-        ("LINEABOVE", (0, -1), (-1, -1), 0.75, colors.black),
-        ("FONTNAME", (0, -1), (-1, -1), "Helvetica-Bold"),
-        ("TOPPADDING", (0, 0), (-1, -1), 3),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
+        ("LINEABOVE", (0, 0), (-1, 0), 0.75, colors.black),
+        ("FONTNAME", (0, 0), (-1, -1), "Helvetica-Bold"),
+        ("TOPPADDING", (0, 0), (-1, -1), 4),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
     ]))
     story.append(totals_table)
+    story.append(Spacer(1, 6 * mm))
+
+    # ---- Shipping notice ----
+    ship_lines = ["<b>SHIPPING NOTICE</b>"]
+    if ctx["actual_shipping"] is not None:
+        ship_lines.append(
+            f"Shipping for this order has been calculated at "
+            f"<b>NGN {_money(ctx['actual_shipping'])}</b> based on the month your "
+            f"goods arrived. It is payable separately and is not included in the total above."
+        )
+    else:
+        if ctx["estimated_shipping"] is not None:
+            ship_lines.append(
+                f"Estimated shipping: <b>NGN {_money(ctx['estimated_shipping'])}</b> "
+                f"(estimate only - not charged now and not included in the total above)."
+            )
+        ship_lines.append(
+            "Shipping is only charged when your goods arrive, and is calculated "
+            "using the shipping rate for the month of arrival, so the final amount "
+            "may differ from the estimate."
+        )
+    ship_lines.append(
+        f"Please prepare your shipping payment - expect to settle it within "
+        f"<b>{SHIPPING_WINDOW_TEXT}</b>."
+    )
+    ship_box = Table(
+        [[[Paragraph(l, normal_style) for l in ship_lines]]],
+        colWidths=[167 * mm],
+    )
+    ship_box.setStyle(TableStyle([
+        ("BOX", (0, 0), (-1, -1), 0.75, colors.HexColor("#999999")),
+        ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#faf6e8")),
+        ("LEFTPADDING", (0, 0), (-1, -1), 8),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 8),
+        ("TOPPADDING", (0, 0), (-1, -1), 6),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+    ]))
+    story.append(ship_box)
 
     if ctx["notes"]:
         story.append(Spacer(1, 8 * mm))
         story.append(Paragraph("NOTES", label_style))
         story.append(Paragraph(_safe(ctx["notes"]), normal_style))
 
-    story.append(Spacer(1, 12 * mm))
+    story.append(Spacer(1, 8 * mm))
+
+    # ---- Authenticity: signed code + QR to the live record ----
+    from reportlab.graphics.barcode.qr import QrCodeWidget
+    from reportlab.graphics.shapes import Drawing
+
+    widget = QrCodeWidget(ctx["verify_url"])
+    x0, y0, x1, y1 = widget.getBounds()
+    size = 28 * mm
+    qr_drawing = Drawing(
+        size, size,
+        transform=[size / (x1 - x0), 0, 0, size / (y1 - y0), 0, 0],
+    )
+    qr_drawing.add(widget)
+
+    sig = ctx["signature"]
+    sig_grouped = "-".join(sig[i:i + 5] for i in range(0, len(sig), 5))
+    verify_text = [
+        Paragraph("<b>VERIFY THIS INVOICE</b>", normal_style),
+        Paragraph(f"Verification code: <b>{sig_grouped}</b>", normal_style),
+        Paragraph(
+            "Scan the QR code, or open the link below, to confirm this invoice "
+            "against our records. The page shows the real items and amount paid. "
+            "If it does not match this document, or says the code is invalid, "
+            "the invoice has been altered and should not be trusted.",
+            small_muted,
+        ),
+        Paragraph(_safe(ctx["verify_url"]), small_muted),
+    ]
+    verify_table = Table([[qr_drawing, verify_text]], colWidths=[32 * mm, 135 * mm])
+    verify_table.setStyle(TableStyle([
+        ("BOX", (0, 0), (-1, -1), 0.75, colors.HexColor("#999999")),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("LEFTPADDING", (0, 0), (-1, -1), 6),
+    ]))
+    story.append(verify_table)
+
+    story.append(Spacer(1, 6 * mm))
     story.append(Paragraph(
-        f"Generated {ctx['generated_at']} — thank you for your order.",
+        f"Generated {ctx['generated_at']} - thank you for your order.",
         small_muted,
     ))
 
