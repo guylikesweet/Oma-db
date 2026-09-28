@@ -17,7 +17,7 @@ class LocalDatabase {
     final path = kIsWeb ? 'oma_mobile.db' : p.join(await getDatabasesPath(), 'oma_mobile.db');
     _db = await openDatabase(
       path,
-      version: 5,
+      version: 6,
       onCreate: (database, version) => _create(database),
       onUpgrade: (database, oldVersion, newVersion) async {
         if (oldVersion < 2) {
@@ -39,6 +39,9 @@ class LocalDatabase {
           await database.execute("ALTER TABLE sync_queue ADD COLUMN next_attempt_at TEXT");
           await database.execute("ALTER TABLE sync_queue ADD COLUMN response_json TEXT");
         }
+        if (oldVersion < 6) {
+          await database.execute("ALTER TABLE sales ADD COLUMN sale_type TEXT NOT NULL DEFAULT 'preorder'");
+        }
       },
     );
     return _db!;
@@ -57,7 +60,8 @@ class LocalDatabase {
       subtotal_amount TEXT, estimated_shipping_cost TEXT, actual_shipping_cost TEXT,
       shipping_payment_settled INTEGER NOT NULL DEFAULT 0, total_amount TEXT,
       batch_id INTEGER, delivery_id INTEGER, raw_json TEXT, updated_at TEXT,
-      local_only INTEGER NOT NULL DEFAULT 0, sync_error TEXT)''');
+      local_only INTEGER NOT NULL DEFAULT 0, sync_error TEXT,
+      sale_type TEXT NOT NULL DEFAULT 'preorder')''');
     await database.execute('''CREATE TABLE sale_items (
       id INTEGER PRIMARY KEY, sale_id INTEGER NOT NULL, product_id INTEGER NOT NULL,
       product_name TEXT, qty INTEGER NOT NULL, unit_cost TEXT, unit_price TEXT,
@@ -126,24 +130,30 @@ class LocalDatabase {
     final database = await db;
     final localId = await nextLocalSaleId();
     final now = DateTime.now().toUtc().toIso8601String();
+    final isStock = sale['sale_type'] == 'stock';
     await database.transaction((txn) async {
-      for (final item in items) {
-        final pid = item['product_id'] as int;
-        final qty = item['qty'] as int;
-        final rows = await txn.query('products', columns: ['stock'], where: 'id = ?', whereArgs: [pid], limit: 1);
-        if (rows.isEmpty) throw Exception('Product no longer exists locally.');
-        final stock = rows.first['stock'] as int? ?? 0;
-        if (stock < qty) throw Exception('Not enough local stock for product #$pid.');
+      if (isStock) {
+        // Only stocked sales are constrained by (and deduct) local stock —
+        // preorders don't care what's on hand.
+        for (final item in items) {
+          final pid = item['product_id'] as int;
+          final qty = item['qty'] as int;
+          final rows = await txn.query('products', columns: ['stock'], where: 'id = ?', whereArgs: [pid], limit: 1);
+          if (rows.isEmpty) throw Exception('Product no longer exists locally.');
+          final stock = rows.first['stock'] as int? ?? 0;
+          if (stock < qty) throw Exception('Not enough local stock for product #$pid.');
+        }
       }
+      final prefix = isStock ? 'OFFSTK-' : 'OFF-';
       await txn.insert('sales', {
-        'id': localId, 'order_id': 'OFF-${(-localId).toString().padLeft(6, '0')}',
+        'id': localId, 'order_id': '$prefix${(-localId).toString().padLeft(6, '0')}',
         'client_operation_id': sale['operation_id'], 'sale_date': now.substring(0, 10),
         'customer_name': sale['customer_name'], 'customer_phone': sale['customer_phone'],
         'customer_address': sale['customer_address'], 'customer_state': sale['customer_state'],
         'order_status': 'Pending Sync', 'payment_status': sale['payment_status'] ?? 'Paid',
         'notes': sale['notes'], 'subtotal_amount': sale['subtotal_amount']?.toString(),
         'total_amount': sale['subtotal_amount']?.toString(), 'raw_json': jsonEncode(sale),
-        'updated_at': now, 'local_only': 1,
+        'updated_at': now, 'local_only': 1, 'sale_type': sale['sale_type'] ?? 'preorder',
       });
       final itemIdRows = await txn.rawQuery('SELECT MIN(id) AS min_id FROM sale_items WHERE id < 0');
       var itemId = ((itemIdRows.first['min_id'] as int?) ?? 0) - 1;
@@ -154,7 +164,9 @@ class LocalDatabase {
           'id': itemId--, 'sale_id': localId, 'product_id': item['product_id'], 'product_name': name,
           'qty': item['qty'], 'unit_price': item['unit_price']?.toString(), 'variant_note': item['variant_note'],
         });
-        await txn.rawUpdate('UPDATE products SET stock = stock - ? WHERE id = ?', [item['qty'], item['product_id']]);
+        if (isStock) {
+          await txn.rawUpdate('UPDATE products SET stock = stock - ? WHERE id = ?', [item['qty'], item['product_id']]);
+        }
       }
     });
     return localId;
@@ -238,6 +250,7 @@ class LocalDatabase {
       'estimated_shipping_cost': s['estimated_shipping_cost']?.toString(), 'actual_shipping_cost': s['actual_shipping_cost']?.toString(),
       'shipping_payment_settled': s['shipping_payment_settled'] == true ? 1 : 0, 'total_amount': s['total_amount']?.toString(),
       'batch_id': s['batch_id'], 'delivery_id': s['delivery_id'], 'raw_json': jsonEncode(s), 'updated_at': s['created_at'], 'local_only': 0, 'sync_error': null,
+      'sale_type': s['sale_type'] ?? 'preorder',
     }, conflictAlgorithm: ConflictAlgorithm.replace);
     await txn.delete('sale_items', where: 'sale_id = ?', whereArgs: [serverId]);
     for (final raw in (s['items'] as List? ?? const [])) {

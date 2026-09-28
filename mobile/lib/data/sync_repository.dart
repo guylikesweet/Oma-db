@@ -66,6 +66,7 @@ class SyncRepository {
     required String paymentStatus,
     required String notes,
     required List<Map<String, dynamic>> items,
+    String saleType = 'preorder',
   }) async {
     final op = _uuid.v4();
 
@@ -86,6 +87,7 @@ class SyncRepository {
       'payment_status': paymentStatus,
       'notes': notes.trim(),
       'subtotal_amount': subtotal.toStringAsFixed(2),
+      'sale_type': saleType,
       'items': items,
     };
 
