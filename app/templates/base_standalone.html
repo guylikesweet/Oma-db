@@ -43,13 +43,13 @@
 <body>
   <div class="topbar">
     <button id="navToggle" aria-label="Open menu">&#9776;</button>
-    <a class="home-link" href="{{ url_for('root') }}">Home</a>
+    <a class="home-link" href="{{ url_for('classic_home') }}">Home</a>
   </div>
 
   <div id="navBackdrop"></div>
   <nav id="sideNav">
     <button class="close-btn" id="navClose" aria-label="Close menu">&times;</button>
-    <div class="sidenav-header"><a href="{{ url_for('root') }}">Home</a></div>
+    <div class="sidenav-header"><a href="{{ url_for('classic_home') }}">Home</a></div>
     <a class="nav-link-item" href="{{ url_for('product.index_view') }}">Products</a>
     <a class="nav-link-item" href="{{ url_for('sales.new_sale') }}">+ New Sale</a>
     <a class="nav-link-item" href="{{ url_for('sale.index_view') }}">Sales</a>
