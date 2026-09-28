@@ -1738,7 +1738,99 @@ class _DeliveryDetailPageState
     }
   }
 
+  bool get _hasPackageDetails =>
+      delivery['package_weight_kg'] != null &&
+      '${delivery['package_dimensions'] ?? ''}'.trim().isNotEmpty;
+
+  /// Weight + dimensions are required before a label can be generated
+  /// (same rule as the website). Returns true once they are saved.
+  Future<bool> enterPackageDetails() async {
+    final weight = TextEditingController(
+      text: delivery['package_weight_kg'] == null
+          ? ''
+          : '${delivery['package_weight_kg']}',
+    );
+    final dimensions = TextEditingController(
+      text: '${delivery['package_dimensions'] ?? ''}',
+    );
+    final remarks = TextEditingController(
+      text: '${delivery['remarks'] ?? ''}',
+    );
+
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Package weight & dimensions'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: weight,
+                keyboardType: const TextInputType.numberWithOptions(
+                  decimal: true,
+                ),
+                decoration: const InputDecoration(
+                  labelText: 'Weight (kg)',
+                ),
+              ),
+              TextField(
+                controller: dimensions,
+                decoration: const InputDecoration(
+                  labelText: 'Dimensions',
+                  hintText: 'e.g. 30 x 20 x 15 cm',
+                ),
+              ),
+              TextField(
+                controller: remarks,
+                decoration: const InputDecoration(
+                  labelText: 'Remarks (optional)',
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+
+    if (ok != true) return false;
+
+    final parsedWeight = double.tryParse(weight.text.trim());
+    if (parsedWeight == null || parsedWeight <= 0) {
+      _snack('Enter a valid package weight (greater than 0).');
+      return false;
+    }
+    if (dimensions.text.trim().isEmpty) {
+      _snack('Enter the package dimensions.');
+      return false;
+    }
+
+    try {
+      await widget.api.saveLabelData(id, {
+        'package_weight_kg': parsedWeight,
+        'package_dimensions': dimensions.text.trim(),
+        'remarks': remarks.text.trim(),
+      });
+      await load();
+      return true;
+    } catch (e) {
+      _snack(e);
+      return false;
+    }
+  }
+
   Future<void> printLabel() async {
+    if (!_hasPackageDetails && !await enterPackageDetails()) return;
     try {
       final Uint8List bytes = await widget.api.labelPdf(id);
       await Printing.layoutPdf(
@@ -1751,6 +1843,7 @@ class _DeliveryDetailPageState
   }
 
   Future<void> shareLabel() async {
+    if (!_hasPackageDetails && !await enterPackageDetails()) return;
     try {
       final Uint8List bytes = await widget.api.labelPdf(id);
       await Share.shareXFiles(
@@ -1880,6 +1973,15 @@ class _DeliveryDetailPageState
                     spacing: 8,
                     runSpacing: 8,
                     children: [
+                      FilledButton.tonalIcon(
+                        onPressed: enterPackageDetails,
+                        icon: const Icon(Icons.scale),
+                        label: Text(
+                          _hasPackageDetails
+                              ? 'Edit weight & dimensions'
+                              : 'Enter weight & dimensions',
+                        ),
+                      ),
                       OutlinedButton.icon(
                         onPressed: printLabel,
                         icon: const Icon(Icons.print),
