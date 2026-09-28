@@ -1185,6 +1185,30 @@ class _SalesPageState extends State<SalesPage> {
   final search = TextEditingController();
   String q = '';
   String status = 'All';
+  String payment = 'All';
+  DateTimeRange? range;
+
+  bool get _filtered =>
+      status != 'All' ||
+      payment != 'All' ||
+      range != null ||
+      q.isNotEmpty;
+
+  String _d(DateTime d) =>
+      '${d.year.toString().padLeft(4, '0')}-'
+      '${d.month.toString().padLeft(2, '0')}-'
+      '${d.day.toString().padLeft(2, '0')}';
+
+  Future<void> _pickRange() async {
+    final now = DateTime.now();
+    final picked = await showDateRangePicker(
+      context: context,
+      firstDate: DateTime(2020),
+      lastDate: DateTime(now.year + 1),
+      initialDateRange: range,
+    );
+    if (picked != null) setState(() => range = picked);
+  }
 
   @override
   Widget build(BuildContext context) => Scaffold(
@@ -1220,7 +1244,7 @@ class _SalesPageState extends State<SalesPage> {
                         prefixIcon:
                             Icon(Icons.search),
                         hintText:
-                            'Order, customer or phone',
+                            'Order, customer, phone or state',
                         border: OutlineInputBorder(),
                       ),
                     ),
@@ -1246,6 +1270,56 @@ class _SalesPageState extends State<SalesPage> {
                     onChanged: (v) =>
                         setState(() => status = v ?? 'All'),
                   ),
+                ],
+              ),
+            ),
+            Padding(
+              padding:
+                  const EdgeInsets.fromLTRB(16, 0, 16, 8),
+              child: Wrap(
+                spacing: 8,
+                runSpacing: 4,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  const Text('Payment:'),
+                  DropdownButton<String>(
+                    value: payment,
+                    items: const [
+                      'All',
+                      'Paid',
+                      'Pending',
+                      'Refunded',
+                    ]
+                        .map(
+                          (x) => DropdownMenuItem(
+                            value: x,
+                            child: Text(x),
+                          ),
+                        )
+                        .toList(),
+                    onChanged: (v) =>
+                        setState(() => payment = v ?? 'All'),
+                  ),
+                  OutlinedButton.icon(
+                    onPressed: _pickRange,
+                    icon: const Icon(Icons.date_range),
+                    label: Text(
+                      range == null
+                          ? 'Any date'
+                          : '${_d(range!.start)} → ${_d(range!.end)}',
+                    ),
+                  ),
+                  if (_filtered)
+                    TextButton(
+                      onPressed: () => setState(() {
+                        search.clear();
+                        q = '';
+                        status = 'All';
+                        payment = 'All';
+                        range = null;
+                      }),
+                      child: const Text('Clear filters'),
+                    ),
                 ],
               ),
             ),
@@ -1342,6 +1416,35 @@ class _SalesPageState extends State<SalesPage> {
           .toList();
     }
 
+    if (payment != 'All') {
+      rows = rows
+          .where((x) => x['payment_status'] == payment)
+          .toList();
+    }
+
+    if (range != null) {
+      final start = DateTime(
+        range!.start.year,
+        range!.start.month,
+        range!.start.day,
+      );
+      final end = DateTime(
+        range!.end.year,
+        range!.end.month,
+        range!.end.day,
+        23,
+        59,
+        59,
+      );
+      rows = rows.where((x) {
+        final d = DateTime.tryParse('${x['sale_date'] ?? ''}');
+        // A sale saved offline has no sale_date until it syncs — keep it
+        // visible rather than silently hiding a sale you just made.
+        if (d == null) return true;
+        return !d.isBefore(start) && !d.isAfter(end);
+      }).toList();
+    }
+
     if (q.isNotEmpty) {
       final l = q.toLowerCase();
 
@@ -1355,6 +1458,9 @@ class _SalesPageState extends State<SalesPage> {
                     .toLowerCase()
                     .contains(l) ||
                 '${x['customer_phone'] ?? ''}'
+                    .toLowerCase()
+                    .contains(l) ||
+                '${x['customer_state'] ?? ''}'
                     .toLowerCase()
                     .contains(l),
           )
