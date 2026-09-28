@@ -5,6 +5,7 @@ import 'package:printing/printing.dart';
 import 'package:share_plus/share_plus.dart';
 
 import 'data/api_client.dart';
+import 'data/sale_kind.dart';
 
 class WebsiteFeaturesPage extends StatefulWidget {
   const WebsiteFeaturesPage({super.key, required this.api});
@@ -836,7 +837,8 @@ class _BatchesPageState extends State<BatchesPage> {
         final available = allSales.where((sale) {
           return sale['id'] != null &&
               sale['batch_id'] == null &&
-              sale['order_status'] != 'Cancelled';
+              sale['order_status'] != 'Cancelled' &&
+              !isStockSale(sale); // stocked sales aren't shipped in batches
         }).take(50).toList();
 
         return SafeArea(
@@ -1164,10 +1166,8 @@ class _DeliveriesPageState
         widget.api.readyDeliveries(),
       ]);
 
-      rows = List<dynamic>.from(results[0] as List);
-      readySales = List<dynamic>.from(
-        results[1] as List,
-      );
+      rows = List<dynamic>.from(results[0]);
+      readySales = List<dynamic>.from(results[1]);
       loadError = null;
     } catch (e) {
       loadError = '$e';
@@ -1699,14 +1699,14 @@ class _DeliveryDetailPageState
         widget.api.sales(),
       ]);
 
-      final fresh = (results[0] as List)
+      final fresh = results[0]
           .whereType<Map>()
           .map((m) => Map<String, dynamic>.from(m))
           .where((d) => d['id'] == id);
       if (fresh.isNotEmpty) delivery = fresh.first;
 
       final ids = ((delivery['sale_ids'] as List?) ?? []).toSet();
-      sales = (results[1] as List)
+      sales = results[1]
           .whereType<Map>()
           .map((m) => Map<String, dynamic>.from(m))
           .where((s) => ids.contains(s['id']))

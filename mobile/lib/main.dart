@@ -9,6 +9,7 @@ import 'package:sqflite/sqflite.dart' show databaseFactory;
 import 'package:sqflite_common_ffi_web/sqflite_ffi_web.dart';
 import 'data/api_client.dart';
 import 'data/local_database.dart';
+import 'data/sale_kind.dart';
 import 'data/sync_repository.dart';
 import 'full_features.dart';
 
@@ -702,10 +703,32 @@ class _DashboardPageState extends State<DashboardPage> {
                             icon: const Icon(
                               Icons.add_shopping_cart,
                             ),
-                            label: const Text('New sale'),
+                            label: const Text('Preorder sale'),
                           ),
                         ),
                         const SizedBox(width: 10),
+                        Expanded(
+                          child: FilledButton.tonalIcon(
+                            onPressed: () => Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => NewSalePage(
+                                  repo: widget.repo,
+                                  stocked: true,
+                                ),
+                              ),
+                            ),
+                            icon: const Icon(
+                              Icons.inventory_2_outlined,
+                            ),
+                            label: const Text('Stock sale'),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
                         Expanded(
                           child: OutlinedButton.icon(
                             onPressed: () => Navigator.push(
@@ -1189,9 +1212,11 @@ class _SalesPageState extends State<SalesPage> {
   String q = '';
   String status = 'All';
   String payment = 'All';
+  String saleKind = 'All'; // All, Preorder, Stocked
   DateTimeRange? range;
 
   bool get _filtered =>
+      saleKind != 'All' ||
       status != 'All' ||
       payment != 'All' ||
       range != null ||
@@ -1219,6 +1244,20 @@ class _SalesPageState extends State<SalesPage> {
           title: const Text('Sales'),
           actions: [
             IconButton(
+              tooltip: 'New stock sale (OMBSTK-)',
+              onPressed: () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => NewSalePage(
+                    repo: widget.repo,
+                    stocked: true,
+                  ),
+                ),
+              ).then((_) => setState(() {})),
+              icon: const Icon(Icons.inventory_2_outlined),
+            ),
+            IconButton(
+              tooltip: 'New preorder sale',
               onPressed: () => Navigator.push(
                 context,
                 MaterialPageRoute(
@@ -1284,6 +1323,20 @@ class _SalesPageState extends State<SalesPage> {
                 runSpacing: 4,
                 crossAxisAlignment: WrapCrossAlignment.center,
                 children: [
+                  const Text('Type:'),
+                  DropdownButton<String>(
+                    value: saleKind,
+                    items: const ['All', 'Preorder', 'Stocked']
+                        .map(
+                          (x) => DropdownMenuItem(
+                            value: x,
+                            child: Text(x),
+                          ),
+                        )
+                        .toList(),
+                    onChanged: (v) =>
+                        setState(() => saleKind = v ?? 'All'),
+                  ),
                   const Text('Payment:'),
                   DropdownButton<String>(
                     value: payment,
@@ -1319,6 +1372,7 @@ class _SalesPageState extends State<SalesPage> {
                         q = '';
                         status = 'All';
                         payment = 'All';
+                        saleKind = 'All';
                         range = null;
                       }),
                       child: const Text('Clear filters'),
@@ -1422,6 +1476,13 @@ class _SalesPageState extends State<SalesPage> {
     if (payment != 'All') {
       rows = rows
           .where((x) => x['payment_status'] == payment)
+          .toList();
+    }
+
+    if (saleKind != 'All') {
+      final wantStocked = saleKind == 'Stocked';
+      rows = rows
+          .where((x) => isStockSale(x) == wantStocked)
           .toList();
     }
 
@@ -1749,9 +1810,14 @@ class NewSalePage extends StatefulWidget {
   const NewSalePage({
     super.key,
     required this.repo,
+    this.stocked = false,
   });
 
   final SyncRepository repo;
+
+  /// false = preorder sale (stock ignored, OMB-); true = stocked goods (stock
+  /// checked and deducted, no shipping cost, OMBSTK-).
+  final bool stocked;
 
   @override
   State<NewSalePage> createState() =>
@@ -1785,7 +1851,7 @@ class _NewSalePageState extends State<NewSalePage> {
 
     final rows = await db.query(
       'products',
-      where: 'stock>0',
+      where: widget.stocked ? 'stock>0' : null,
       orderBy: 'name ASC',
     );
 
@@ -1873,6 +1939,7 @@ class _NewSalePageState extends State<NewSalePage> {
         paymentStatus: payment,
         notes: notes.text,
         items: items,
+        saleType: widget.stocked ? 'stock' : 'preorder',
       );
 
       // The sale is always written locally first (that's what makes the
@@ -1920,7 +1987,9 @@ class _NewSalePageState extends State<NewSalePage> {
   @override
   Widget build(BuildContext context) => Scaffold(
         appBar: AppBar(
-          title: const Text('New Sale'),
+          title: Text(
+            widget.stocked ? 'New Stock Sale' : 'New Preorder Sale',
+          ),
         ),
         body: loading
             ? const Center(
@@ -1929,6 +1998,23 @@ class _NewSalePageState extends State<NewSalePage> {
             : ListView(
                 padding: const EdgeInsets.all(16),
                 children: [
+                  Card(
+                    color: widget.stocked
+                        ? Colors.green.shade50
+                        : Colors.amber.shade50,
+                    child: Padding(
+                      padding: const EdgeInsets.all(12),
+                      child: Text(
+                        widget.stocked
+                            ? 'Stocked goods: stock is checked and deducted. '
+                                'No shipping cost — delivery is settled off record. '
+                                'Sale ID starts with OMBSTK-.'
+                            : 'Preorder goods: stock does not matter here. '
+                                'Enter the quantity the customer requested.',
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
                   TextField(
                     controller: name,
                     decoration: const InputDecoration(
@@ -2029,9 +2115,9 @@ class _NewSalePageState extends State<NewSalePage> {
                                   options.elementAt(i);
                               return ListTile(
                                 title: Text('${p['name']}'),
-                                subtitle: Text(
-                                  'Stock: ${p['stock']}',
-                                ),
+                                subtitle: widget.stocked
+                                    ? Text('Stock: ${p['stock']}')
+                                    : null,
                                 onTap: () => onSelected(p),
                               );
                             },
@@ -2101,9 +2187,10 @@ class _NewSalePageState extends State<NewSalePage> {
                                   ),
                                 ],
                               ),
-                              Text(
-                                'Stock: ${p['stock']}',
-                              ),
+                              if (widget.stocked)
+                                Text(
+                                  'Stock: ${p['stock']}',
+                                ),
                               Row(
                                 children: [
                                   IconButton(
@@ -2120,9 +2207,8 @@ class _NewSalePageState extends State<NewSalePage> {
                                   ),
                                   Text('$q'),
                                   IconButton(
-                                    onPressed: q <
-                                            (p['stock']
-                                                as int)
+                                    onPressed: (!widget.stocked ||
+                                            q < (p['stock'] as int))
                                         ? () => setState(
                                               () => qty[id] =
                                                   q + 1,
