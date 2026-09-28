@@ -230,7 +230,13 @@ jobs:
                   "mobile/pubspec.yaml does not define oma_mobile."
               )
 
-          if "sdk: '>=3.3.0 <4.0.0'" not in pubspec:
+          # Accept any '>=3.x.y <4.0.0' constraint so bumping the SDK
+          # floor in pubspec.yaml never breaks this preflight again.
+          import re
+          if not re.search(
+              r"sdk:\s*['\"]>=3\.\d+\.\d+ <4\.0\.0['\"]",
+              pubspec,
+          ):
               raise SystemExit(
                   "Unexpected Dart SDK constraint."
               )
