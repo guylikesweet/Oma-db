@@ -35,8 +35,20 @@
     </form>
   </div>
 
-  <div style="margin-bottom:16px;">
-    <a href="{{ url_for('delivery.label', delivery_id=delivery.id) }}" class="btn btn-default btn-sm">Print / Download Shipping Label</a>
+  <div style="margin-bottom:16px; padding:10px; border:1px solid #eee; border-radius:6px;">
+    <strong>Package details (needed for the label)</strong><br>
+    {% if delivery.package_weight_kg is not none and delivery.package_dimensions %}
+      Weight: {{ delivery.package_weight_kg }} kg &nbsp;|&nbsp; Dimensions: {{ delivery.package_dimensions }}
+      {% if delivery.remarks %}&nbsp;|&nbsp; Remarks: {{ delivery.remarks }}{% endif %}
+    {% else %}
+      <span class="text-danger">Not entered yet - enter the weight and dimensions before printing the label.</span>
+    {% endif %}
+    <div style="margin-top:8px;">
+      <a href="{{ url_for('delivery.label_prepare', delivery_id=delivery.id) }}" class="btn btn-primary btn-sm">
+        {{ 'Edit' if delivery.package_weight_kg is not none else 'Enter' }} package weight &amp; dimensions
+      </a>
+      <a href="{{ url_for('delivery.label', delivery_id=delivery.id) }}" class="btn btn-default btn-sm">Print / Download Shipping Label</a>
+    </div>
   </div>
 
   <h4>Sales in this parcel ({{ delivery.sales|length }})</h4>
