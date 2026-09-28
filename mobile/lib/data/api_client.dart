@@ -413,6 +413,70 @@ class ApiClient {
     );
   }
 
+  /// Downloads a PDF invoice/receipt for one sale — same
+  /// authenticated-binary-fetch pattern as [labelPdf] below.
+  Future<Uint8List> invoicePdf(
+    int id,
+  ) async {
+    final savedToken = await token();
+
+    final base = Uri.parse(
+      AppConfig.apiBaseUrl,
+    );
+
+    final basePath = base.path.replaceFirst(
+      RegExp(r'/$'),
+      '',
+    );
+
+    final uri = base.replace(
+      path: '$basePath/v1/sales/$id/invoice.pdf',
+    );
+
+    final headers = <String, String>{
+      'Accept': 'application/pdf',
+    };
+
+    if (savedToken != null &&
+        savedToken.isNotEmpty) {
+      headers['Authorization'] =
+          'Bearer $savedToken';
+    }
+
+    final response = await _client
+        .get(
+          uri,
+          headers: headers,
+        )
+        .timeout(
+          const Duration(seconds: 30),
+        );
+
+    if (response.statusCode < 200 ||
+        response.statusCode >= 300) {
+      String message =
+          'Could not generate invoice.';
+
+      try {
+        final decoded =
+            jsonDecode(response.body);
+
+        if (decoded is Map &&
+            decoded['error'] != null) {
+          message =
+              decoded['error'].toString();
+        }
+      } catch (_) {}
+
+      throw ApiException(
+        response.statusCode,
+        message,
+      );
+    }
+
+    return response.bodyBytes;
+  }
+
   // ============================================================
   // SHIPMENT BATCHES
   // ============================================================
@@ -495,8 +559,8 @@ class ApiClient {
     );
   }
 
-  Future<Map<String, dynamic>> readyDeliveries() {
-    return _map(
+  Future<List<dynamic>> readyDeliveries() {
+    return _list(
       'GET',
       '/v1/deliveries/ready',
     );
