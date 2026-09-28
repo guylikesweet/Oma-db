@@ -1,7 +1,10 @@
 import 'dart:async';
+import 'dart:typed_data';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:printing/printing.dart';
+import 'package:share_plus/share_plus.dart';
 import 'package:sqflite/sqflite.dart' show databaseFactory;
 import 'package:sqflite_common_ffi_web/sqflite_ffi_web.dart';
 import 'data/api_client.dart';
@@ -1526,6 +1529,53 @@ class _SaleDetailPageState extends State<SaleDetailPage> {
     }
   }
 
+  /// Generating a PDF invoice needs the live server (it's built from
+  /// current pricing/settings, not the offline copy), so this is a
+  /// plain network call rather than something queued through [repo]
+  /// for later sync — it will simply fail with a clear message if
+  /// there's no connection right now.
+  Future<void> shareInvoice() async {
+    try {
+      final Uint8List bytes =
+          await widget.api.invoicePdf(widget.saleId);
+
+      await Share.shareXFiles(
+        [
+          XFile.fromData(
+            bytes,
+            mimeType: 'application/pdf',
+            name: 'invoice-${widget.saleId}.pdf',
+          ),
+        ],
+        text: 'Invoice / receipt for ${sale?['order_id'] ?? widget.saleId}',
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('$e')),
+        );
+      }
+    }
+  }
+
+  Future<void> printInvoice() async {
+    try {
+      final Uint8List bytes =
+          await widget.api.invoicePdf(widget.saleId);
+
+      await Printing.layoutPdf(
+        name: 'invoice-${widget.saleId}.pdf',
+        onLayout: (_) async => bytes,
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('$e')),
+        );
+      }
+    }
+  }
+
   Future<void> status(String value) async {
     try {
       await widget.repo.queueSaleStatus(
@@ -1569,6 +1619,24 @@ class _SaleDetailPageState extends State<SaleDetailPage> {
     return Scaffold(
       appBar: AppBar(
         title: Text('${s['order_id'] ?? 'Sale'}'),
+        actions: [
+          PopupMenuButton<String>(
+            onSelected: (value) {
+              if (value == 'share_invoice') shareInvoice();
+              if (value == 'print_invoice') printInvoice();
+            },
+            itemBuilder: (_) => const [
+              PopupMenuItem(
+                value: 'share_invoice',
+                child: Text('Share invoice / receipt'),
+              ),
+              PopupMenuItem(
+                value: 'print_invoice',
+                child: Text('Print invoice / receipt'),
+              ),
+            ],
+          ),
+        ],
       ),
       body: RefreshIndicator(
         onRefresh: load,

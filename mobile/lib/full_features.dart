@@ -588,6 +588,44 @@ class _WebSalesPageState extends State<WebSalesPage> {
     }
   }
 
+  Future<void> shareInvoice(int id) async {
+    try {
+      final Uint8List bytes = await widget.api.invoicePdf(id);
+      await Share.shareXFiles(
+        [
+          XFile.fromData(
+            bytes,
+            mimeType: 'application/pdf',
+            name: 'invoice-$id.pdf',
+          ),
+        ],
+        text: 'Invoice / receipt #$id',
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('$e')),
+        );
+      }
+    }
+  }
+
+  Future<void> printInvoice(int id) async {
+    try {
+      final Uint8List bytes = await widget.api.invoicePdf(id);
+      await Printing.layoutPdf(
+        name: 'invoice-$id.pdf',
+        onLayout: (_) async => bytes,
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('$e')),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -637,6 +675,18 @@ class _WebSalesPageState extends State<WebSalesPage> {
                               sale['id'] as int,
                             );
                           }
+
+                          if (value == 'share_invoice') {
+                            await shareInvoice(
+                              sale['id'] as int,
+                            );
+                          }
+
+                          if (value == 'print_invoice') {
+                            await printInvoice(
+                              sale['id'] as int,
+                            );
+                          }
                         },
                         itemBuilder: (_) => [
                           const PopupMenuItem(
@@ -654,6 +704,15 @@ class _WebSalesPageState extends State<WebSalesPage> {
                                 'Settle shipping',
                               ),
                             ),
+                          const PopupMenuDivider(),
+                          const PopupMenuItem(
+                            value: 'share_invoice',
+                            child: Text('Share invoice / receipt'),
+                          ),
+                          const PopupMenuItem(
+                            value: 'print_invoice',
+                            child: Text('Print invoice / receipt'),
+                          ),
                         ],
                       ),
                     ),
@@ -1090,6 +1149,7 @@ class _DeliveriesPageState
     extends State<DeliveriesPage> {
   List<dynamic> rows = [];
   List<dynamic> readySales = [];
+  String? loadError;
 
   @override
   void initState() {
@@ -1108,7 +1168,10 @@ class _DeliveriesPageState
       readySales = List<dynamic>.from(
         results[1] as List,
       );
-    } catch (_) {}
+      loadError = null;
+    } catch (e) {
+      loadError = '$e';
+    }
 
     if (mounted) {
       setState(() {});
@@ -1407,6 +1470,20 @@ class _DeliveriesPageState
         onRefresh: load,
         child: ListView(
           children: [
+            if (loadError != null)
+              Card(
+                margin: const EdgeInsets.all(12),
+                color: Theme.of(context).colorScheme.errorContainer,
+                child: ListTile(
+                  leading: const Icon(Icons.error_outline),
+                  title: const Text('Could not load deliveries'),
+                  subtitle: Text(loadError!),
+                  trailing: IconButton(
+                    onPressed: load,
+                    icon: const Icon(Icons.refresh),
+                  ),
+                ),
+              ),
             if (readySales.isNotEmpty)
               Card(
                 margin: const EdgeInsets.all(12),
