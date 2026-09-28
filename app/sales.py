@@ -12,6 +12,7 @@ sales_bp = Blueprint("sales", __name__, url_prefix="/sales", template_folder="te
 @sales_bp.route("/new", methods=("GET", "POST"))
 @login_required
 def new_sale():
+    sale_type = "stock" if (request.values.get("type") or "").lower() == "stock" else "preorder"
     if request.method == "POST":
         product_ids = request.form.getlist("product_id[]")
         qtys = request.form.getlist("qty[]")
@@ -31,7 +32,7 @@ def new_sale():
                 })
             except (ValueError, TypeError):
                 flash("Every line needs a valid quantity and price.", "error")
-                return redirect(url_for("sales.new_sale"))
+                return redirect(url_for("sales.new_sale", type=sale_type))
 
         try:
             sale = create_sale(
@@ -42,15 +43,19 @@ def new_sale():
                 payment_status=request.form.get("payment_status", "Paid"),
                 notes=request.form.get("notes", "").strip(),
                 line_items=line_items,
+                sale_type=sale_type,
             )
-            flash(f"Order {sale.order_id} created. Estimated shipping: {sale.estimated_shipping_cost}", "success")
+            if sale.is_stock_sale:
+                flash(f"Stock sale {sale.order_id} created.", "success")
+            else:
+                flash(f"Order {sale.order_id} created. Estimated shipping: {sale.estimated_shipping_cost}", "success")
             return redirect(url_for("sales.sale_detail", sale_id=sale.id))
         except SaleValidationError as e:
             flash(str(e), "error")
-            return redirect(url_for("sales.new_sale"))
+            return redirect(url_for("sales.new_sale", type=sale_type))
 
     products = Product.query.order_by(Product.name).all()
-    return render_template("sales/new.html", products=products)
+    return render_template("sales/new.html", products=products, sale_type=sale_type)
 
 
 @sales_bp.route("/<int:sale_id>")

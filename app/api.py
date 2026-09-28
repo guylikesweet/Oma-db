@@ -107,6 +107,8 @@ def _sale_json(s):
     return {
         "id": s.id,
         "order_id": s.order_id,
+        "sale_type": s.sale_type or "preorder",
+        "ready_for_delivery": s.ready_for_delivery,
         "sale_date": s.sale_date.isoformat() if s.sale_date else None,
         "customer_name": s.customer_name,
         "customer_phone": s.customer_phone,
@@ -376,6 +378,7 @@ def _create_sale_api(require_operation_id):
             notes=(data.get("notes") or "").strip(),
             line_items=line_items,
             commit=False,
+            sale_type=(data.get("sale_type") or "preorder").strip().lower(),
         )
 
         payload = _sale_json(sale)
@@ -539,7 +542,7 @@ def mobile_sale_status(sale_id):
         sale = Sale.query.get_or_404(sale_id)
         status = str(data.get("status") or data.get("order_status") or "")
         if status not in {"New", "Packed", "Shipped", "Delivered", "Cancelled"}: raise ValueError("Invalid order status.")
-        if status == "Cancelled" and sale.order_status != "Cancelled":
+        if status == "Cancelled" and sale.order_status != "Cancelled" and sale.is_stock_sale:
             for item in sale.items:
                 product = Product.query.get(item.product_id)
                 if product:
@@ -559,6 +562,7 @@ def mobile_settle_shipping(sale_id):
         op, existing = _mobile_operation(data)
         if existing: return _mobile_replay(existing)
         sale = Sale.query.get_or_404(sale_id)
+        if sale.is_stock_sale: raise ValueError("Stocked sales have no shipping to settle.")
         if not sale.batch_id or not sale.batch: raise ValueError("Sale is not in a batch.")
         if sale.batch.status != ShipmentBatch.STATUS_ARRIVED: raise ValueError("Batch must be arrived first.")
         sale.shipping_payment_settled = True
@@ -614,6 +618,7 @@ def mobile_batch_sale(batch_id, sale_id):
             if s.batch_id != b.id: raise ValueError("Sale is not in this batch.")
             s.batch_id = None
         else:
+            if s.is_stock_sale: raise ValueError("Stocked sales are not shipped in batches.")
             if b.status != ShipmentBatch.STATUS_IN_TRANSIT: raise ValueError("Batch is no longer in transit.")
             if s.order_status == "Cancelled": raise ValueError("Cancelled sales cannot be added.")
             s.batch_id = b.id
@@ -652,7 +657,8 @@ def mobile_deliveries():
 @api_bp.route("/v1/deliveries/ready", methods=("GET",))
 @require_api_token
 def mobile_ready_deliveries():
-    rows = Sale.query.filter(Sale.shipping_payment_settled.is_(True), Sale.delivery_id.is_(None), Sale.order_status != "Cancelled").order_by(Sale.id.desc()).all()
+    from sqlalchemy import or_
+    rows = Sale.query.filter(or_(Sale.shipping_payment_settled.is_(True), Sale.sale_type == "stock"), Sale.delivery_id.is_(None), Sale.order_status != "Cancelled").order_by(Sale.id.desc()).all()
     return jsonify([_sale_json(x) for x in rows])
 
 
@@ -669,7 +675,7 @@ def mobile_create_delivery():
         if len(sales) != len(ids): raise ValueError("One or more sales were not found.")
         for s in sales:
             if s.delivery_id is not None: raise ValueError(f"Sale #{s.id} is already assigned to a delivery.")
-            if not s.shipping_payment_settled: raise ValueError(f"Sale #{s.id} is not ready for delivery.")
+            if not s.ready_for_delivery: raise ValueError(f"Sale #{s.id} is not ready for delivery.")
         if len(sales)>1:
             phones={s.customer_phone for s in sales if s.customer_phone}; names={(s.customer_name or '').strip().lower() for s in sales if s.customer_name}
             if len(phones)>1 and len(names)>1: raise ValueError("Consolidated delivery must be for the same customer.")

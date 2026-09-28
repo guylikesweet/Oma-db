@@ -194,6 +194,10 @@ class Sale(db.Model):
 
     order_status = db.Column(db.String(50), default="New")  # New, Packed, Shipped, Delivered, Cancelled
 
+    # 'preorder' (OMB-, stock ignored, shipping settled on arrival) or
+    # 'stock' (OMBSTK-, stock deducted, no shipping cost, delivery settled off record).
+    sale_type = db.Column(db.String(20), default="preorder", nullable=False, server_default="preorder")
+
     subtotal_amount = db.Column(db.Numeric(12, 2), default=0.00)
     estimated_shipping_cost = db.Column(db.Numeric(12, 2))  # Stage 8: deprecated, no longer calculated
     total_amount = db.Column(db.Numeric(12, 2), default=0.00)
@@ -221,6 +225,15 @@ class Sale(db.Model):
 
     items = db.relationship("SaleItem", backref="sale", lazy=True, cascade="all, delete-orphan")
     shipping = db.relationship("Shipping", backref="sale", uselist=False, cascade="all, delete-orphan")
+
+    @property
+    def is_stock_sale(self):
+        return self.sale_type == "stock"
+
+    @property
+    def ready_for_delivery(self):
+        """Stock sales have no shipping to settle, so they are ready straight away."""
+        return self.order_status != "Cancelled" and (self.is_stock_sale or bool(self.shipping_payment_settled))
 
     def __repr__(self):
         return f"<Sale #{self.id} {self.customer_name}>"

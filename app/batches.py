@@ -14,7 +14,7 @@ batches_bp = Blueprint("batches", __name__, url_prefix="/batches", template_fold
 def batch_detail(batch_id):
     batch = ShipmentBatch.query.get_or_404(batch_id)
     eligible_sales = (
-        Sale.query.filter(Sale.batch_id.is_(None), Sale.order_status != "Cancelled")
+        Sale.query.filter(Sale.batch_id.is_(None), Sale.order_status != "Cancelled", Sale.sale_type != "stock")
         .order_by(Sale.sale_date.desc())
         .limit(100)
         .all()
