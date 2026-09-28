@@ -1405,22 +1405,88 @@ class _DeliveriesPageState
       ),
       body: RefreshIndicator(
         onRefresh: load,
-        child: rows.isEmpty
-            ? ListView(
-                children: const [
-                  SizedBox(height: 160),
-                  Center(
-                    child: Text('No deliveries found.'),
+        child: ListView(
+          children: [
+            if (readySales.isNotEmpty)
+              Card(
+                margin: const EdgeInsets.all(12),
+                color: Theme.of(context)
+                    .colorScheme
+                    .secondaryContainer,
+                child: Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: Column(
+                    crossAxisAlignment:
+                        CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment
+                            .spaceBetween,
+                        children: [
+                          Text(
+                            'Ready for delivery (${readySales.length})',
+                            style: const TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 16,
+                            ),
+                          ),
+                          FilledButton.icon(
+                            onPressed: create,
+                            icon: const Icon(
+                              Icons.local_shipping,
+                            ),
+                            label: const Text(
+                              'Create delivery',
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      ...readySales.map(
+                        (sale) => ListTile(
+                          dense: true,
+                          contentPadding: EdgeInsets.zero,
+                          title: Text(
+                            '${sale['order_id'] ?? sale['id']}'
+                            ' • ${sale['customer_name'] ?? ''}',
+                          ),
+                          subtitle: sale[
+                                      'actual_shipping_cost'] !=
+                                  null
+                              ? Text(
+                                  'Shipping settled: ₦${(sale['actual_shipping_cost'] as num).toStringAsFixed(2)}',
+                                )
+                              : null,
+                        ),
+                      ),
+                    ],
                   ),
-                ],
+                ),
+              ),
+            const Padding(
+              padding: EdgeInsets.symmetric(
+                horizontal: 16,
+                vertical: 4,
+              ),
+              child: Text(
+                'Deliveries',
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 16,
+                ),
+              ),
+            ),
+            if (rows.isEmpty)
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 40),
+                child: Center(
+                  child: Text('No deliveries found.'),
+                ),
               )
-            : ListView.builder(
-                itemCount: rows.length,
-                itemBuilder: (_, index) {
-                  final delivery =
-                      Map<String, dynamic>.from(
-                    rows[index] as Map,
-                  );
+            else
+              ...rows.map((row) {
+                final delivery =
+                    Map<String, dynamic>.from(row as Map);
 
                   final count =
                       (delivery['sale_ids'] as List?)
@@ -1501,8 +1567,9 @@ class _DeliveriesPageState
                       ),
                     ),
                   );
-                },
-              ),
+                }),
+            ],
+          ),
       ),
     );
   }
