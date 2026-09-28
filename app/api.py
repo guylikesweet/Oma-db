@@ -568,6 +568,17 @@ def mobile_settle_shipping(sale_id):
         db.session.rollback(); return jsonify({"error": str(e)}), 400
 
 
+@api_bp.route("/v1/sales/<int:sale_id>/invoice.pdf", methods=("GET",))
+@require_api_token
+def mobile_invoice_pdf(sale_id):
+    from app.services.invoices import generate_invoice_pdf
+    from flask import send_file
+    sale = Sale.query.get_or_404(sale_id)
+    pdf = generate_invoice_pdf(sale)
+    name = sale.order_id or str(sale.id)
+    return send_file(pdf, mimetype="application/pdf", as_attachment=True, download_name=f"invoice-{name}.pdf")
+
+
 @api_bp.route("/v1/batches", methods=("GET",))
 @require_api_token
 def mobile_batches():

@@ -62,8 +62,18 @@ def create_app(config_object="config.Config"):
         register_cli(app)
 
     @app.route("/")
-    @login_required
     def root():
+        # The Flutter web app is now the main site. Its index.html declares
+        # <base href="/webapp/">, so every asset it loads still resolves
+        # under /webapp/ (served by webapp_bp) - no rebuild needed. The app
+        # handles its own login, hence no @login_required here.
+        from app.webapp import serve_webapp
+        return serve_webapp("")
+
+    @app.route("/classic")
+    @login_required
+    def classic_home():
+        # The original server-rendered dashboard, kept as a fallback.
         return render_template("home.html")
 
     @app.route("/healthz")

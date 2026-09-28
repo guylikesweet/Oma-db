@@ -1,9 +1,10 @@
 from itertools import zip_longest
-from flask import Blueprint, render_template, request, redirect, url_for, flash
+from flask import Blueprint, render_template, request, redirect, url_for, flash, send_file
 from flask_login import login_required
 
 from app.models import Product, Sale
 from app.services.sales import create_sale, update_sale_status, SaleValidationError
+from app.services.invoices import generate_invoice_pdf
 
 sales_bp = Blueprint("sales", __name__, url_prefix="/sales", template_folder="templates/sales")
 
@@ -57,6 +58,19 @@ def new_sale():
 def sale_detail(sale_id):
     sale = Sale.query.get_or_404(sale_id)
     return render_template("sales/detail.html", sale=sale)
+
+
+@sales_bp.route("/<int:sale_id>/invoice.pdf")
+@login_required
+def invoice_pdf(sale_id):
+    sale = Sale.query.get_or_404(sale_id)
+    pdf_buf = generate_invoice_pdf(sale)
+    return send_file(
+        pdf_buf,
+        mimetype="application/pdf",
+        as_attachment=False,
+        download_name=f"invoice-{sale.order_id or sale.id}.pdf",
+    )
 
 
 @sales_bp.route("/<int:sale_id>/status", methods=("POST",))
