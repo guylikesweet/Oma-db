@@ -61,6 +61,12 @@
     </td></tr>
   </table>
 
+  <p style="margin-top:20px;">
+    <a href="{{ url_for('sales.invoice_pdf', sale_id=sale.id) }}" target="_blank" class="btn btn-default btn-sm">
+      View / Print Invoice-Receipt
+    </a>
+  </p>
+
   <h4 style="margin-top:20px;">Update Status</h4>
   <form method="post" action="{{ url_for('sales.set_status', sale_id=sale.id) }}" style="display:inline-block; margin-right:8px;">
     <input type="hidden" name="order_status" value="Packed">
