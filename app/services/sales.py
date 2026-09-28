@@ -18,11 +18,16 @@ from app.services.rates import get_rate_for_month
 
 ORDER_ID_ALPHABET = string.ascii_uppercase + string.digits
 
+SALE_TYPE_PREORDER = "preorder"
+SALE_TYPE_STOCK = "stock"
+ORDER_ID_PREFIX = {SALE_TYPE_PREORDER: "OMB-", SALE_TYPE_STOCK: "OMBSTK-"}
 
-def generate_order_id():
-    """OMB- + 6 random alphanumeric chars, checked for uniqueness. Not sequential/guessable."""
+
+def generate_order_id(sale_type=SALE_TYPE_PREORDER):
+    """OMB- (preorder) or OMBSTK- (stocked) + 6 random alphanumeric chars, checked for uniqueness."""
+    prefix = ORDER_ID_PREFIX.get(sale_type, "OMB-")
     for _ in range(50):  # practically always succeeds on the first try
-        candidate = "OMB-" + "".join(random.choices(ORDER_ID_ALPHABET, k=6))
+        candidate = prefix + "".join(random.choices(ORDER_ID_ALPHABET, k=6))
         if not Sale.query.filter_by(order_id=candidate).first():
             return candidate
     raise RuntimeError("Could not generate a unique order ID after 50 attempts.")
@@ -33,7 +38,7 @@ class SaleValidationError(Exception):
 
 
 def create_sale(customer_name, customer_phone, customer_address, customer_state,
-                 payment_status, notes, line_items, commit=True):
+                 payment_status, notes, line_items, commit=True, sale_type=SALE_TYPE_PREORDER):
     """
     line_items: list of dicts: {"product_id": int, "qty": int, "unit_price": Decimal, "variant_note": str (optional)}
     Returns the created Sale. Raises SaleValidationError on any problem — nothing
@@ -44,6 +49,9 @@ def create_sale(customer_name, customer_phone, customer_address, customer_state,
     commit everything together atomically. Defaults to True for existing callers
     that expect create_sale() to commit on its own.
     """
+    if sale_type not in ORDER_ID_PREFIX:
+        raise SaleValidationError("Invalid sale type.")
+    is_stock = sale_type == SALE_TYPE_STOCK
     if not line_items:
         raise SaleValidationError("A sale needs at least one product line.")
 
@@ -56,7 +64,9 @@ def create_sale(customer_name, customer_phone, customer_address, customer_state,
         product = Product.query.get(line["product_id"])
         if not product:
             raise SaleValidationError(f"Product id {line['product_id']} does not exist.")
-        if product.stock < qty:
+        # Preorders are for goods still to be shipped in, so stock is irrelevant:
+        # the quantity is simply what the customer asked for. Only stocked sales check it.
+        if is_stock and product.stock < qty:
             raise SaleValidationError(
                 f"Not enough stock for '{product.name}' (have {product.stock}, need {qty})."
             )
@@ -71,11 +81,13 @@ def create_sale(customer_name, customer_phone, customer_address, customer_state,
         payment_status=payment_status or "Paid",
         notes=notes,
         order_status="New",
+        sale_type=sale_type,
     )
-    sale.order_id = generate_order_id()
+    sale.order_id = generate_order_id(sale_type)
     sale.sale_date = date.today()
-    sale.estimated_arrival_start = sale.sale_date + timedelta(days=60)
-    sale.estimated_arrival_end = sale.sale_date + timedelta(days=70)
+    if not is_stock:
+        sale.estimated_arrival_start = sale.sale_date + timedelta(days=60)
+        sale.estimated_arrival_end = sale.sale_date + timedelta(days=70)
     db.session.add(sale)
     db.session.flush()  # assigns sale.id, needed for stock_log "Sale #<id>" reason
 
@@ -102,17 +114,20 @@ def create_sale(customer_name, customer_phone, customer_address, customer_state,
             variant_note=line.get("variant_note") or None,
         ))
 
-        # Deduct stock + audit trail
-        product.stock -= qty
-        db.session.add(StockLog(product_id=product.id, change_qty=-qty, reason=f"Sale #{sale.id}"))
+        # Only stocked sales draw down inventory (+ audit trail)
+        if is_stock:
+            product.stock -= qty
+            db.session.add(StockLog(product_id=product.id, change_qty=-qty, reason=f"Sale {sale.order_id}"))
 
         subtotal += unit_price * qty
         total_cbm += line_cbm
 
-    rate = get_rate_for_month(date.today())
-
     sale.subtotal_amount = subtotal
-    sale.estimated_shipping_cost = total_cbm * rate  # rough estimate only
+    if is_stock:
+        sale.estimated_shipping_cost = None  # no shipping on stocked sales; delivery is settled off record
+    else:
+        rate = get_rate_for_month(date.today())
+        sale.estimated_shipping_cost = total_cbm * rate  # rough estimate only
     sale.total_amount = subtotal  # goods only; actual shipping added once the batch arrives
 
     if commit:
@@ -135,7 +150,8 @@ def update_sale_status(sale_id, new_status):
     if new_status not in valid_statuses:
         raise SaleValidationError(f"Invalid status '{new_status}'.")
 
-    if new_status == "Cancelled" and sale.order_status != "Cancelled":
+    if new_status == "Cancelled" and sale.order_status != "Cancelled" and sale.is_stock_sale:
+        # Only stocked sales deducted stock, so only they restock.
         for item in sale.items:
             product = Product.query.get(item.product_id)
             if product:

@@ -41,6 +41,8 @@ def add_sale_to_batch(batch_id, sale_id):
         raise BatchValidationError("Sale not found.")
     if sale.order_status == "Cancelled":
         raise BatchValidationError("Cannot add a cancelled sale to a batch.")
+    if sale.is_stock_sale:
+        raise BatchValidationError("Stocked sales are not shipped in batches.")
 
     sale.batch_id = batch.id
     db.session.commit()

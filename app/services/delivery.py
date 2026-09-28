@@ -12,6 +12,8 @@ their mind.
 from datetime import datetime
 from collections import defaultdict
 
+from sqlalchemy import or_
+
 from app import db
 from app.models import Sale, Delivery
 
@@ -24,7 +26,7 @@ def get_ready_for_delivery_sales():
     """Sales whose OWN shipping payment has been settled, not cancelled, not yet in a delivery."""
     return (
         Sale.query.filter(
-            Sale.shipping_payment_settled.is_(True),
+            or_(Sale.shipping_payment_settled.is_(True), Sale.sale_type == "stock"),
             Sale.delivery_id.is_(None),
             Sale.order_status != "Cancelled",
         )
@@ -75,7 +77,7 @@ def create_delivery(sale_ids, method, consolidation_type=None, delivery_address=
     for sale in sales:
         if sale.delivery_id is not None:
             raise DeliveryValidationError(f"Sale #{sale.id} is already assigned to a delivery.")
-        if not sale.shipping_payment_settled:
+        if not sale.ready_for_delivery:
             raise DeliveryValidationError(
                 f"Sale #{sale.id} isn't ready for delivery yet — its shipping payment hasn't been settled."
             )

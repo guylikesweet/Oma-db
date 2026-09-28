@@ -43,7 +43,9 @@ def _canonical(sale):
         sale.order_id or f"#{sale.id}",
         sale.sale_date.isoformat() if sale.sale_date else "",
         (sale.customer_name or "").strip(),
-        f"{(sale.total_amount or 0):.2f}",
+        # Products-only figure. total_amount changes when shipping is added at batch
+        # arrival, which would wrongly invalidate invoices issued before that.
+        f"{(sale.subtotal_amount or 0):.2f}",
     ] + [f"{n}|{q}|{p}" for n, q, p in items]
     return "\n".join(parts)
 
@@ -127,7 +129,11 @@ def get_invoice_context(sale):
         "subtotal": sale.subtotal_amount or 0,
         "estimated_shipping": estimated_shipping,
         "actual_shipping": actual_shipping,
-        "total": sale.total_amount or 0,
+        # Products only. sale.total_amount gains the actual shipping once a batch
+        # arrives, but shipping is billed separately and must never be in this figure.
+        "total": sale.subtotal_amount or 0,
+        "is_stock_sale": sale.is_stock_sale,
+        "sale_month": sale.sale_date.strftime("%B %Y") if sale.sale_date else "the month of your order",
         "signature": invoice_signature(sale),
         "verify_url": verify_url(sale),
         "notes": sale.notes or "",
@@ -249,7 +255,7 @@ def generate_invoice_pdf(sale):
 
     # ---- Total: goods only ----
     totals_table = Table(
-        [["TOTAL PAID (products only)", _money(ctx["total"])]],
+        [["TOTAL PAID" if ctx["is_stock_sale"] else "TOTAL PAID (products only)", _money(ctx["total"])]],
         colWidths=[140 * mm, 27 * mm], hAlign="RIGHT",
     )
     totals_table.setStyle(TableStyle([
@@ -265,7 +271,9 @@ def generate_invoice_pdf(sale):
 
     # ---- Shipping notice ----
     ship_lines = ["<b>SHIPPING NOTICE</b>"]
-    if ctx["actual_shipping"] is not None:
+    if ctx["is_stock_sale"]:
+        ship_lines = []
+    elif ctx["actual_shipping"] is not None:
         ship_lines.append(
             f"Shipping for this order has been calculated at "
             f"<b>NGN {_money(ctx['actual_shipping'])}</b> based on the month your "
@@ -274,31 +282,33 @@ def generate_invoice_pdf(sale):
     else:
         if ctx["estimated_shipping"] is not None:
             ship_lines.append(
-                f"Estimated shipping: <b>NGN {_money(ctx['estimated_shipping'])}</b> "
-                f"(estimate only - not charged now and not included in the total above)."
+                f"Estimated shipping: <b>NGN {_money(ctx['estimated_shipping'])}</b>. "
+                f"This is only an estimate, calculated using this month's shipping rate "
+                f"({ctx['sale_month']}). It is not charged now and is not included in the total above."
             )
         ship_lines.append(
-            "Shipping is only charged when your goods arrive, and is calculated "
-            "using the shipping rate for the month of arrival, so the final amount "
-            "may differ from the estimate."
+            "The actual shipping cost will be calculated using the shipping rate of the "
+            "month your goods arrive, so the final amount may differ from this estimate."
         )
-    ship_lines.append(
-        f"Please prepare your shipping payment - expect to settle it within "
-        f"<b>{SHIPPING_WINDOW_TEXT}</b>."
-    )
-    ship_box = Table(
-        [[[Paragraph(l, normal_style) for l in ship_lines]]],
-        colWidths=[167 * mm],
-    )
-    ship_box.setStyle(TableStyle([
-        ("BOX", (0, 0), (-1, -1), 0.75, colors.HexColor("#999999")),
-        ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#faf6e8")),
-        ("LEFTPADDING", (0, 0), (-1, -1), 8),
-        ("RIGHTPADDING", (0, 0), (-1, -1), 8),
-        ("TOPPADDING", (0, 0), (-1, -1), 6),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
-    ]))
-    story.append(ship_box)
+    if ship_lines:
+        if not ctx["is_stock_sale"]:
+            ship_lines.append(
+                f"Please prepare your shipping payment - expect to settle it within "
+                f"<b>{SHIPPING_WINDOW_TEXT}</b>."
+            )
+        ship_box = Table(
+            [[[Paragraph(l, normal_style) for l in ship_lines]]],
+            colWidths=[167 * mm],
+        )
+        ship_box.setStyle(TableStyle([
+            ("BOX", (0, 0), (-1, -1), 0.75, colors.HexColor("#999999")),
+            ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#faf6e8")),
+            ("LEFTPADDING", (0, 0), (-1, -1), 8),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 8),
+            ("TOPPADDING", (0, 0), (-1, -1), 6),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+        ]))
+        story.append(ship_box)
 
     if ctx["notes"]:
         story.append(Spacer(1, 8 * mm))
