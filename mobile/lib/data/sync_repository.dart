@@ -105,6 +105,40 @@ class SyncRepository {
     return localId;
   }
 
+  /// Used on the web build instead of [saveSaleOffline]. The web app has no
+  /// real offline mode — every "local" write there just lives in the
+  /// browser tab's IndexedDB, which isn't a database anyone should rely on,
+  /// so instead of queuing a placeholder sale (OFF-/OFFSTK-) and reconciling
+  /// it later, this posts straight to the server and writes the real,
+  /// final sale record locally the moment it comes back — nothing
+  /// placeholder-shaped ever exists on screen.
+  Future<Map<String, dynamic>> createSaleOnline({
+    required String customerName,
+    required String customerPhone,
+    required String customerAddress,
+    required String customerState,
+    required String paymentStatus,
+    required String notes,
+    required List<Map<String, dynamic>> items,
+    String saleType = 'preorder',
+  }) async {
+    final payload = {
+      'operation_id': _uuid.v4(),
+      'customer_name': customerName.trim(),
+      'customer_phone': customerPhone.trim(),
+      'customer_address': customerAddress.trim(),
+      'customer_state': customerState.trim(),
+      'payment_status': paymentStatus,
+      'notes': notes.trim(),
+      'sale_type': saleType,
+      'items': items,
+    };
+
+    final sale = await api.createSale(payload);
+    await local.upsertSaleFromResponse(sale);
+    return sale;
+  }
+
   Future<void> saveStockAdjustment({
     required int productId,
     required int changeQty,

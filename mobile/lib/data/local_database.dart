@@ -96,6 +96,22 @@ class LocalDatabase {
     });
   }
 
+  /// Mirrors the backend's "Clear test data" tool: sales, sale items,
+  /// shipping, batches and deliveries are wiped locally too, straight after
+  /// a successful server-side clear. Products are left untouched (as on the
+  /// server), and this does NOT touch sync_queue/sync_meta — unlike
+  /// [clearAllData], this isn't a logout wipe. Needed because the server
+  /// deletion doesn't reach an already-cached local copy on its own; the
+  /// phone has to be told directly.
+  Future<void> clearTestDataLocally() async {
+    final database = await db;
+    await database.transaction((txn) async {
+      for (final table in ['sale_items', 'sales', 'shipping', 'deliveries', 'batches']) {
+        await txn.delete(table);
+      }
+    });
+  }
+
   Future<void> applyBootstrap(Map<String, dynamic> data) async {
     final database = await db;
     await database.transaction((txn) async {
@@ -185,6 +201,29 @@ class LocalDatabase {
       }
       await txn.delete('sale_items', where: 'sale_id = ?', whereArgs: [localSaleId]);
       await txn.delete('sales', where: 'id = ?', whereArgs: [localSaleId]);
+    });
+  }
+
+  /// Inserts/updates one sale straight from a plain API response (e.g. the
+  /// body of a successful POST /v1/sales), as opposed to [applyChanges]
+  /// which expects the /v1/sync change-log envelope. Used on the web build,
+  /// which creates sales directly online instead of queuing them — see
+  /// SyncRepository.createSaleOnline.
+  Future<void> upsertSaleFromResponse(Map<String, dynamic> sale) async {
+    final database = await db;
+    await database.transaction((txn) async {
+      await _upsertSale(txn, sale);
+      final items = sale['items'];
+      if (items is List) {
+        for (final raw in items) {
+          if (raw is Map) {
+            await _upsertSaleItem(txn, {
+              ...Map<String, dynamic>.from(raw),
+              'sale_id': sale['id'],
+            });
+          }
+        }
+      }
     });
   }
 

@@ -262,6 +262,18 @@ class ApiClient {
     );
   }
 
+  Future<Map<String, dynamic>> changeUsername(
+    String newUsername,
+  ) {
+    return _map(
+      'POST',
+      '/v1/auth/change-username',
+      body: {
+        'new_username': newUsername,
+      },
+    );
+  }
+
   // ============================================================
   // SYNC
   // ============================================================
