@@ -8,6 +8,7 @@ import 'package:share_plus/share_plus.dart';
 import 'package:sqflite/sqflite.dart' show databaseFactory;
 import 'package:sqflite_common_ffi_web/sqflite_ffi_web.dart';
 import 'data/api_client.dart';
+import 'data/app_session.dart';
 import 'data/local_database.dart';
 import 'data/sale_kind.dart';
 import 'data/sync_repository.dart';
@@ -150,6 +151,7 @@ class _LoginPageState extends State<LoginPage> {
       }
 
       await widget.api.saveToken(token);
+      await AppSession.refresh(widget.api);
 
       if (mounted) {
         Navigator.of(context).pushReplacement(
@@ -295,6 +297,8 @@ class _AppShellState extends State<AppShell> {
   void initState() {
     super.initState();
 
+    AppSession.refresh(widget.api);
+
     connectivity = Connectivity()
         .onConnectivityChanged
         .listen((_) => sync(silent: true));
@@ -343,6 +347,7 @@ class _AppShellState extends State<AppShell> {
 
   Future<void> logout() async {
     await widget.api.clearToken();
+    AppSession.reset();
 
     if (!mounted) return;
 
@@ -557,10 +562,11 @@ class _DashboardPageState extends State<DashboardPage> {
               title: const Text('Oma Dashboard'),
               actions: [
                 IconButton(
+                  tooltip: kIsWeb ? 'Refresh' : 'Sync',
                   onPressed: widget.syncing
                       ? null
                       : () => widget.onSync(silent: false),
-                  icon: const Icon(Icons.sync),
+                  icon: Icon(kIsWeb ? Icons.refresh : Icons.sync),
                 ),
               ],
             ),
@@ -569,6 +575,10 @@ class _DashboardPageState extends State<DashboardPage> {
               sliver: SliverList(
                 delegate: SliverChildListDelegate(
                   [
+                    // The web build has no real offline mode — nothing is
+                    // ever "waiting to sync" there, so this whole card
+                    // (which is about the offline queue) is mobile-only.
+                    if (!kIsWeb)
                     Card(
                       child: ListTile(
                         leading: Icon(
@@ -1931,34 +1941,51 @@ class _NewSalePageState extends State<NewSalePage> {
     setState(() => saving = true);
 
     try {
-      await widget.repo.saveSaleOffline(
-        customerName: name.text,
-        customerPhone: phone.text,
-        customerAddress: address.text,
-        customerState: state.text,
-        paymentStatus: payment,
-        notes: notes.text,
-        items: items,
-        saleType: widget.stocked ? 'stock' : 'preorder',
-      );
+      String message;
 
-      // The sale is always written locally first (that's what makes the
-      // app work offline at all) — but whether it then syncs immediately
-      // depends on whether we're actually online right now. Check instead
-      // of always claiming "offline", and try a real sync so the message
-      // reflects what happened rather than a guess.
-      final connectivityResult =
-          await Connectivity().checkConnectivity();
-      final isOnline =
-          !connectivityResult.contains(ConnectivityResult.none);
+      if (kIsWeb) {
+        // No offline mode on web — create it for real, right now.
+        await widget.repo.createSaleOnline(
+          customerName: name.text,
+          customerPhone: phone.text,
+          customerAddress: address.text,
+          customerState: state.text,
+          paymentStatus: payment,
+          notes: notes.text,
+          items: items,
+          saleType: widget.stocked ? 'stock' : 'preorder',
+        );
+        message = 'Sale created.';
+      } else {
+        await widget.repo.saveSaleOffline(
+          customerName: name.text,
+          customerPhone: phone.text,
+          customerAddress: address.text,
+          customerState: state.text,
+          paymentStatus: payment,
+          notes: notes.text,
+          items: items,
+          saleType: widget.stocked ? 'stock' : 'preorder',
+        );
 
-      var message = 'Sale saved — will sync once you\'re back online.';
-      if (isOnline) {
-        try {
-          await widget.repo.syncOnce();
-          message = 'Sale saved and synced.';
-        } catch (_) {
-          message = 'Sale saved — will sync shortly.';
+        // The sale is always written locally first (that's what makes the
+        // app work offline at all) — but whether it then syncs immediately
+        // depends on whether we're actually online right now. Check instead
+        // of always claiming "offline", and try a real sync so the message
+        // reflects what happened rather than a guess.
+        final connectivityResult =
+            await Connectivity().checkConnectivity();
+        final isOnline =
+            !connectivityResult.contains(ConnectivityResult.none);
+
+        message = 'Sale saved — will sync once you\'re back online.';
+        if (isOnline) {
+          try {
+            await widget.repo.syncOnce();
+            message = 'Sale saved and synced.';
+          } catch (_) {
+            message = 'Sale saved — will sync shortly.';
+          }
         }
       }
 
@@ -2552,11 +2579,16 @@ class MorePage extends StatelessWidget {
                   MaterialPageRoute(
                     builder: (_) => WebsiteFeaturesPage(
                       api: api,
+                      local: local,
                     ),
                   ),
                 ),
               ),
             ),
+            // The offline sync queue only exists on the mobile build now —
+            // the web build creates sales directly online, so there's
+            // nothing here to show.
+            if (!kIsWeb)
             Card(
               child: ListTile(
                 leading:
@@ -2582,16 +2614,19 @@ class MorePage extends StatelessWidget {
               child: ListTile(
                 leading:
                     const Icon(Icons.lock_reset),
-                title: const Text('Change password'),
+                title: const Text('My account'),
+                subtitle: const Text('Username and password'),
                 trailing:
                     const Icon(Icons.chevron_right),
-                onTap: () => showDialog(
-                  context: context,
-                  builder: (_) =>
-                      ChangePasswordDialog(api: api),
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => ChangePasswordPage(api: api),
+                  ),
                 ),
               ),
             ),
+            if (!kIsWeb)
             Card(
               child: ListTile(
                 leading: const Icon(Icons.sync),

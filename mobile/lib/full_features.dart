@@ -5,12 +5,15 @@ import 'package:printing/printing.dart';
 import 'package:share_plus/share_plus.dart';
 
 import 'data/api_client.dart';
+import 'data/app_session.dart';
+import 'data/local_database.dart';
 import 'data/sale_kind.dart';
 
 class WebsiteFeaturesPage extends StatefulWidget {
-  const WebsiteFeaturesPage({super.key, required this.api});
+  const WebsiteFeaturesPage({super.key, required this.api, required this.local});
 
   final ApiClient api;
+  final LocalDatabase local;
 
   @override
   State<WebsiteFeaturesPage> createState() => _WebsiteFeaturesPageState();
@@ -19,6 +22,16 @@ class WebsiteFeaturesPage extends StatefulWidget {
 class _WebsiteFeaturesPageState extends State<WebsiteFeaturesPage> {
   String? error;
 
+  @override
+  void initState() {
+    super.initState();
+    // Refresh whenever this menu opens, so a role change takes effect
+    // without needing to log out and back in.
+    AppSession.refresh(widget.api).then((_) {
+      if (mounted) setState(() {});
+    });
+  }
+
   Future<void> open(Widget page) async {
     await Navigator.push(
       context,
@@ -26,11 +39,29 @@ class _WebsiteFeaturesPageState extends State<WebsiteFeaturesPage> {
     );
   }
 
+  void _adminOnlySnack() {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('That page is restricted to admins.')),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    final isAdmin = AppSession.isAdmin;
     return Scaffold(
       appBar: AppBar(
         title: const Text('All Website Features'),
+        actions: [
+          Padding(
+            padding: const EdgeInsets.only(right: 12),
+            child: Center(
+              child: Chip(
+                label: Text(isAdmin ? 'Admin' : 'Staff'),
+                avatar: Icon(isAdmin ? Icons.shield : Icons.person, size: 18),
+              ),
+            ),
+          ),
+        ],
       ),
       body: ListView(
         padding: const EdgeInsets.all(16),
@@ -78,8 +109,8 @@ class _WebsiteFeaturesPageState extends State<WebsiteFeaturesPage> {
           _tile(
             Icons.local_shipping,
             'Shipment batches',
-            'Create, assign, arrive and settle',
-            () => open(BatchesPage(api: widget.api)),
+            'Create, assign, arrive and settle (marking a batch arrived is admin-only)',
+            () => open(BatchesPage(api: widget.api, isAdmin: isAdmin)),
           ),
 
           _tile(
@@ -92,8 +123,8 @@ class _WebsiteFeaturesPageState extends State<WebsiteFeaturesPage> {
           _tile(
             Icons.price_change,
             'Rates',
-            'Courier and monthly shipping rates',
-            () => open(RatesPage(api: widget.api)),
+            'Courier and monthly shipping rates (editing the monthly rate is admin-only)',
+            () => open(RatesPage(api: widget.api, isAdmin: isAdmin)),
           ),
 
           _tile(
@@ -106,29 +137,44 @@ class _WebsiteFeaturesPageState extends State<WebsiteFeaturesPage> {
           _tile(
             Icons.settings,
             'Settings',
-            'Business and label settings',
-            () => open(SettingsPage(api: widget.api)),
+            isAdmin
+                ? 'Business and label settings'
+                : 'Business and label settings — admins only',
+            isAdmin
+                ? () => open(SettingsPage(api: widget.api))
+                : _adminOnlySnack,
+            locked: !isAdmin,
           ),
 
           _tile(
             Icons.lock_reset,
-            'Change password',
-            'Update your password',
+            'My account',
+            'Change your username or password',
             () => open(ChangePasswordPage(api: widget.api)),
           ),
 
           _tile(
             Icons.people,
-            'Admin users',
-            'Create and remove users',
-            () => open(UsersPage(api: widget.api)),
+            'Users',
+            isAdmin
+                ? 'Add or remove users, admin or staff'
+                : 'Add or remove users — admins only',
+            isAdmin
+                ? () => open(UsersPage(api: widget.api))
+                : _adminOnlySnack,
+            locked: !isAdmin,
           ),
 
           _tile(
             Icons.delete_sweep,
             'Clear test data',
-            'Confirmation-protected test-data cleanup',
-            () => open(ClearDataPage(api: widget.api)),
+            isAdmin
+                ? 'Confirmation-protected test-data cleanup'
+                : 'Confirmation-protected test-data cleanup — admins only',
+            isAdmin
+                ? () => open(ClearDataPage(api: widget.api, local: widget.local))
+                : _adminOnlySnack,
+            locked: !isAdmin,
           ),
         ],
       ),
@@ -139,14 +185,15 @@ class _WebsiteFeaturesPageState extends State<WebsiteFeaturesPage> {
     IconData icon,
     String title,
     String subtitle,
-    VoidCallback onTap,
-  ) {
+    VoidCallback onTap, {
+    bool locked = false,
+  }) {
     return Card(
       child: ListTile(
         leading: Icon(icon),
         title: Text(title),
         subtitle: Text(subtitle),
-        trailing: const Icon(Icons.chevron_right),
+        trailing: Icon(locked ? Icons.lock_outline : Icons.chevron_right),
         onTap: onTap,
       ),
     );
@@ -726,9 +773,10 @@ class _WebSalesPageState extends State<WebSalesPage> {
 }
 
 class BatchesPage extends StatefulWidget {
-  const BatchesPage({super.key, required this.api});
+  const BatchesPage({super.key, required this.api, this.isAdmin = false});
 
   final ApiClient api;
+  final bool isAdmin;
 
   @override
   State<BatchesPage> createState() => _BatchesPageState();
@@ -1114,7 +1162,7 @@ class _BatchesPageState extends State<BatchesPage> {
                       ),
                       onTap: () => manageBatch(batch),
                       trailing:
-                          batch['status'] == 'In Transit'
+                          batch['status'] == 'In Transit' && widget.isAdmin
                               ? TextButton.icon(
                                   icon: const Icon(
                                     Icons.flight_land,
@@ -1127,7 +1175,9 @@ class _BatchesPageState extends State<BatchesPage> {
                                     batch['id'] as int,
                                   ),
                                 )
-                              : null,
+                              : batch['status'] == 'In Transit'
+                                  ? const Chip(label: Text('Admins only'))
+                                  : null,
                     ),
                   );
                 },
@@ -2059,9 +2109,10 @@ class _DeliveryDetailPageState
 }
 
 class RatesPage extends StatelessWidget {
-  const RatesPage({super.key, required this.api});
+  const RatesPage({super.key, required this.api, this.isAdmin = false});
 
   final ApiClient api;
+  final bool isAdmin;
 
   @override
   Widget build(BuildContext context) {
@@ -2082,10 +2133,14 @@ class RatesPage extends StatelessWidget {
             _RateList(
               api: api,
               courier: true,
+              // Not gated to admin — only the monthly rate is sensitive
+              // per the owner's request; courier state rates are routine.
+              isAdmin: true,
             ),
             _RateList(
               api: api,
               courier: false,
+              isAdmin: isAdmin,
             ),
           ],
         ),
@@ -2098,10 +2153,12 @@ class _RateList extends StatefulWidget {
   const _RateList({
     required this.api,
     required this.courier,
+    this.isAdmin = false,
   });
 
   final ApiClient api;
   final bool courier;
+  final bool isAdmin;
 
   @override
   State<_RateList> createState() =>
@@ -2353,10 +2410,15 @@ class _RateListState extends State<_RateList> {
                     ? 'Courier rates'
                     : 'Monthly rates',
               ),
-              trailing: IconButton(
-                onPressed: add,
-                icon: const Icon(Icons.add),
-              ),
+              subtitle: widget.isAdmin
+                  ? null
+                  : const Text('Editing this rate is admin-only'),
+              trailing: widget.isAdmin
+                  ? IconButton(
+                      onPressed: add,
+                      icon: const Icon(Icons.add),
+                    )
+                  : const Icon(Icons.lock_outline),
             ),
             ...rows.map(
               (raw) {
@@ -2374,13 +2436,15 @@ class _RateListState extends State<_RateList> {
                   subtitle: Text(
                     '${row['rate_per_cbm'] ?? 0}',
                   ),
-                  onTap: () => editRate(row),
-                  trailing: IconButton(
-                    icon: const Icon(
-                      Icons.delete_outline,
-                    ),
-                    onPressed: () => deleteRate(row),
-                  ),
+                  onTap: widget.isAdmin ? () => editRate(row) : null,
+                  trailing: widget.isAdmin
+                      ? IconButton(
+                          icon: const Icon(
+                            Icons.delete_outline,
+                          ),
+                          onPressed: () => deleteRate(row),
+                        )
+                      : null,
                 );
               },
             ),
@@ -2983,6 +3047,31 @@ class _ChangePasswordPageState
   final current = TextEditingController();
   final next = TextEditingController();
   final confirm = TextEditingController();
+  final newUsername = TextEditingController(text: AppSession.username);
+
+  Future<void> saveUsername() async {
+    final u = newUsername.text.trim();
+    if (u.isEmpty || u == AppSession.username) return;
+
+    try {
+      final result = await widget.api.changeUsername(u);
+      AppSession.username = '${result['username'] ?? u}';
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Username updated.'),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('$e')),
+        );
+      }
+    }
+  }
 
   Future<void> save() async {
     if (next.text.length < 6) {
@@ -3036,6 +3125,7 @@ class _ChangePasswordPageState
     current.dispose();
     next.dispose();
     confirm.dispose();
+    newUsername.dispose();
     super.dispose();
   }
 
@@ -3043,11 +3133,33 @@ class _ChangePasswordPageState
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Change password'),
+        title: const Text('My account'),
       ),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
+          Text(
+            'Username',
+            style: Theme.of(context).textTheme.titleMedium,
+          ),
+          const SizedBox(height: 8),
+          TextField(
+            controller: newUsername,
+            decoration: const InputDecoration(
+              labelText: 'Username',
+            ),
+          ),
+          const SizedBox(height: 12),
+          FilledButton.tonal(
+            onPressed: saveUsername,
+            child: const Text('Save username'),
+          ),
+          const Divider(height: 40),
+          Text(
+            'Password',
+            style: Theme.of(context).textTheme.titleMedium,
+          ),
+          const SizedBox(height: 8),
           PasswordField(
             controller: current,
             label: 'Current password',
@@ -3106,39 +3218,52 @@ class _UsersPageState
   Future<void> add() async {
     final username = TextEditingController();
     final password = TextEditingController();
+    String role = 'staff';
 
     final ok = await showDialog<bool>(
       context: context,
       builder: (dialogContext) {
-        return AlertDialog(
-          title: const Text('New user'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: username,
-                decoration: const InputDecoration(
-                  labelText: 'Username',
+        return StatefulBuilder(
+          builder: (dialogContext, setDialogState) => AlertDialog(
+            title: const Text('New user'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: username,
+                  decoration: const InputDecoration(
+                    labelText: 'Username',
+                  ),
                 ),
+                PasswordField(
+                  controller: password,
+                  label: 'Password',
+                ),
+                const SizedBox(height: 12),
+                SegmentedButton<String>(
+                  segments: const [
+                    ButtonSegment(value: 'staff', label: Text('Staff')),
+                    ButtonSegment(value: 'admin', label: Text('Admin')),
+                  ],
+                  selected: {role},
+                  onSelectionChanged: (s) =>
+                      setDialogState(() => role = s.first),
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () =>
+                    Navigator.pop(dialogContext, false),
+                child: const Text('Cancel'),
               ),
-              PasswordField(
-                controller: password,
-                label: 'Password',
+              FilledButton(
+                onPressed: () =>
+                    Navigator.pop(dialogContext, true),
+                child: const Text('Create'),
               ),
             ],
           ),
-          actions: [
-            TextButton(
-              onPressed: () =>
-                  Navigator.pop(dialogContext, false),
-              child: const Text('Cancel'),
-            ),
-            FilledButton(
-              onPressed: () =>
-                  Navigator.pop(dialogContext, true),
-              child: const Text('Create'),
-            ),
-          ],
         );
       },
     );
@@ -3149,6 +3274,7 @@ class _UsersPageState
       await widget.api.createUser({
         'username': username.text.trim(),
         'password': password.text,
+        'role': role,
       });
 
       await load();
@@ -3164,6 +3290,14 @@ class _UsersPageState
   Future<void> deleteUser(
     Map<String, dynamic> user,
   ) async {
+    if (user['is_primary_admin'] == true) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('The original admin account cannot be removed.'),
+        ),
+      );
+      return;
+    }
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) {
@@ -3209,7 +3343,7 @@ class _UsersPageState
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Admin users'),
+        title: const Text('Users'),
         actions: [
           IconButton(
             onPressed: add,
@@ -3236,21 +3370,32 @@ class _UsersPageState
                     rows[index] as Map,
                   );
 
+                  final isPrimary = user['is_primary_admin'] == true;
+                  final role = '${user['role'] ?? 'staff'}';
                   return ListTile(
+                    leading: Icon(
+                      role == 'admin' ? Icons.shield : Icons.person_outline,
+                    ),
                     title: Text(
                       '${user['username'] ?? ''}',
                     ),
                     subtitle: Text(
-                      'ID ${user['id'] ?? ''}'
-                      ' • ${user['role'] ?? ''}',
+                      isPrimary
+                          ? '${role == 'admin' ? 'Admin' : 'Staff'} • Original admin'
+                          : (role == 'admin' ? 'Admin' : 'Staff'),
                     ),
-                    trailing: IconButton(
-                      onPressed: () =>
-                          deleteUser(user),
-                      icon: const Icon(
-                        Icons.delete_outline,
-                      ),
-                    ),
+                    trailing: isPrimary
+                        ? const Tooltip(
+                            message: 'The original admin cannot be removed',
+                            child: Icon(Icons.lock_outline),
+                          )
+                        : IconButton(
+                            onPressed: () =>
+                                deleteUser(user),
+                            icon: const Icon(
+                              Icons.delete_outline,
+                            ),
+                          ),
                   );
                 },
               ),
@@ -3263,9 +3408,11 @@ class ClearDataPage extends StatefulWidget {
   const ClearDataPage({
     super.key,
     required this.api,
+    required this.local,
   });
 
   final ApiClient api;
+  final LocalDatabase local;
 
   @override
   State<ClearDataPage> createState() =>
@@ -3326,6 +3473,11 @@ class _ClearDataPageState
       await widget.api.clearTestData(
         confirmation: confirmation.text,
       );
+      // The server has no way to tell an already-cached phone that these
+      // rows are gone (see clearTestDataLocally's doc comment), so wipe the
+      // local copies directly — otherwise the Sales tab and the dashboard
+      // counts keep showing the deleted data until who-knows-when.
+      await widget.local.clearTestDataLocally();
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
