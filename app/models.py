@@ -12,6 +12,9 @@ from app import db
 class User(db.Model, UserMixin):
     __tablename__ = "users"
 
+    ROLE_ADMIN = "admin"
+    ROLE_STAFF = "staff"
+
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(50), unique=True, nullable=False)
     password_hash = db.Column(db.String(255), nullable=False)
@@ -19,6 +22,18 @@ class User(db.Model, UserMixin):
     # Used by the mobile app to authenticate against /api/* — a long random
     # string, not a password. See `flask api-token` CLI command.
     api_token = db.Column(db.String(64), unique=True, nullable=True)
+
+    # "admin" can edit company settings, manage users, mark shipment batches
+    # arrived, edit monthly shipping rates, and other sensitive actions.
+    # Everyone else is "staff". is_primary_admin marks the very first account
+    # ever created (the owner) — it can never be deleted, even by another
+    # admin, though the primary admin can remove admins added after it.
+    role = db.Column(db.String(20), nullable=False, default=ROLE_STAFF, server_default=ROLE_STAFF)
+    is_primary_admin = db.Column(db.Boolean, nullable=False, default=False, server_default="false")
+
+    @property
+    def is_admin(self):
+        return self.role == self.ROLE_ADMIN
 
     def __repr__(self):
         return f"<User {self.username}>"

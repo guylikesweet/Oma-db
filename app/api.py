@@ -19,6 +19,7 @@ from flask import Blueprint, request, jsonify, g
 from werkzeug.security import check_password_hash, generate_password_hash
 
 from app import db
+from app.access import require_admin_api
 from app.models import (
     User, Product, Sale, SaleItem, Shipping, Delivery, ShipmentBatch,
     CourierRate, MonthlyShippingRate, StockLog, MobileOperation, MobileChange,
@@ -72,14 +73,23 @@ def api_login():
     token = _ensure_api_token(user)
     return jsonify({
         "token": token,
-        "user": {"id": user.id, "username": user.username},
+        "user": {
+            "id": user.id, "username": user.username,
+            "role": user.role, "is_admin": user.is_admin,
+            "is_primary_admin": user.is_primary_admin,
+        },
     })
 
 
 @api_bp.route("/v1/auth/me", methods=("GET",))
 @require_api_token
 def api_me():
-    return jsonify({"id": g.api_user.id, "username": g.api_user.username})
+    u = g.api_user
+    return jsonify({
+        "id": u.id, "username": u.username,
+        "role": u.role, "is_admin": u.is_admin,
+        "is_primary_admin": u.is_primary_admin,
+    })
 
 
 # ---------------------------------------------------------------------------
@@ -107,6 +117,7 @@ def _sale_json(s):
     return {
         "id": s.id,
         "order_id": s.order_id,
+        "client_operation_id": s.client_operation_id,
         "sale_type": s.sale_type or "preorder",
         "ready_for_delivery": s.ready_for_delivery,
         "sale_date": s.sale_date.isoformat() if s.sale_date else None,
@@ -379,6 +390,7 @@ def _create_sale_api(require_operation_id):
             line_items=line_items,
             commit=False,
             sale_type=(data.get("sale_type") or "preorder").strip().lower(),
+            client_operation_id=operation_id or None,
         )
 
         payload = _sale_json(sale)
@@ -438,6 +450,20 @@ def mobile_change_password():
     g.api_user.password_hash = generate_password_hash(new)
     db.session.commit()
     return jsonify({"ok": True})
+
+
+@api_bp.route("/v1/auth/change-username", methods=("POST",))
+@require_api_token
+def mobile_change_username():
+    data = request.get_json(silent=True) or {}
+    new_username = str(data.get("new_username") or "").strip()
+    if not new_username:
+        return jsonify({"error": "Enter a new username."}), 400
+    if User.query.filter(User.username == new_username, User.id != g.api_user.id).first():
+        return jsonify({"error": "Username already exists."}), 400
+    g.api_user.username = new_username
+    db.session.commit()
+    return jsonify({"id": g.api_user.id, "username": g.api_user.username})
 
 
 @api_bp.route("/v1/auth/logout", methods=("POST",))
@@ -629,6 +655,7 @@ def mobile_batch_sale(batch_id, sale_id):
 
 @api_bp.route("/v1/batches/<int:batch_id>/arrive", methods=("POST",))
 @require_api_token
+@require_admin_api
 def mobile_batch_arrive(batch_id):
     data = request.get_json(silent=True) or {}
     try:
@@ -792,6 +819,7 @@ def mobile_courier_rates():return jsonify([_rate_json(x) for x in CourierRate.qu
 
 @api_bp.route("/v1/courier-rates", methods=("POST",))
 @require_api_token
+@require_admin_api
 def mobile_create_courier_rate():
     data=request.get_json(silent=True) or {}
     try:
@@ -802,6 +830,7 @@ def mobile_create_courier_rate():
 
 @api_bp.route("/v1/courier-rates/<int:rate_id>", methods=("PUT","PATCH","DELETE"))
 @require_api_token
+@require_admin_api
 def mobile_update_courier_rate(rate_id):
     data=request.get_json(silent=True) or {}
     try:
@@ -822,6 +851,7 @@ def mobile_monthly_rates():return jsonify([_monthly_rate_json(x) for x in Monthl
 
 @api_bp.route("/v1/monthly-shipping-rates", methods=("POST",))
 @require_api_token
+@require_admin_api
 def mobile_create_monthly_rate():
     data=request.get_json(silent=True) or {}
     try:
@@ -832,6 +862,7 @@ def mobile_create_monthly_rate():
 
 @api_bp.route("/v1/monthly-shipping-rates/<int:rate_id>", methods=("PUT","PATCH","DELETE"))
 @require_api_token
+@require_admin_api
 def mobile_update_monthly_rate(rate_id):
     data=request.get_json(silent=True) or {}
     try:
@@ -855,6 +886,7 @@ def mobile_settings_get():
 
 @api_bp.route("/v1/settings", methods=("POST","PUT","PATCH"))
 @require_api_token
+@require_admin_api
 def mobile_settings_update():
     from app.services.settings import get_settings
     data=request.get_json(silent=True) or {}
@@ -876,19 +908,28 @@ def mobile_settings_update():
 
 @api_bp.route("/v1/users", methods=("GET",))
 @require_api_token
-def mobile_users():return jsonify([{'id':u.id,'username':u.username,'created_at':u.created_at.isoformat() if u.created_at else None} for u in User.query.order_by(User.username).all()])
+def mobile_users():
+    return jsonify([{
+        'id': u.id, 'username': u.username, 'role': u.role,
+        'is_admin': u.is_admin, 'is_primary_admin': u.is_primary_admin,
+        'created_at': u.created_at.isoformat() if u.created_at else None,
+    } for u in User.query.order_by(User.username).all()])
 
 @api_bp.route("/v1/users", methods=("POST",))
 @require_api_token
+@require_admin_api
 def mobile_create_user():
     data=request.get_json(silent=True) or {}
     try:
         op,existing=_mobile_operation(data)
         if existing:return _mobile_replay(existing)
         username=str(data.get('username') or '').strip();password=str(data.get('password') or '')
+        role = str(data.get('role') or User.ROLE_STAFF).strip().lower()
+        if role not in (User.ROLE_ADMIN, User.ROLE_STAFF):raise ValueError('Role must be admin or staff.')
         if not username or len(password)<8:raise ValueError('Username and password (8+ characters) are required.')
         if User.query.filter_by(username=username).first():raise ValueError('Username already exists.')
-        u=User(username=username,password_hash=generate_password_hash(password));db.session.add(u);db.session.flush();return _mobile_finish(op,'create_user',201,{'id':u.id,'username':u.username,'created_at':u.created_at.isoformat() if u.created_at else None})
+        u=User(username=username,password_hash=generate_password_hash(password),role=role);db.session.add(u);db.session.flush()
+        return _mobile_finish(op,'create_user',201,{'id':u.id,'username':u.username,'role':u.role,'is_admin':u.is_admin,'is_primary_admin':u.is_primary_admin,'created_at':u.created_at.isoformat() if u.created_at else None})
     except ValueError as e:db.session.rollback();return jsonify({'error':str(e)}),400
 
 @api_bp.route("/v1/users/<int:user_id>", methods=("PUT","PATCH"))
@@ -899,6 +940,11 @@ def mobile_update_user(user_id):
         op,existing=_mobile_operation(data)
         if existing:return _mobile_replay(existing)
         u=User.query.get_or_404(user_id)
+        # Staff (and admins) can always edit their own username/password —
+        # that's plain self-service, same as the change-password screen.
+        # Editing someone ELSE's account is an admin-only action.
+        if u.id != g.api_user.id and not g.api_user.is_admin:
+            raise PermissionError('You can only edit your own account.')
         if data.get('username'):
             n=str(data['username']).strip()
             if User.query.filter(User.username==n,User.id!=u.id).first():raise ValueError('Username already exists.')
@@ -906,8 +952,27 @@ def mobile_update_user(user_id):
         if data.get('password'):
             if len(str(data['password']))<8:raise ValueError('Password must be at least 8 characters.')
             u.password_hash=generate_password_hash(str(data['password']))
-        return _mobile_finish(op,'update_user',200,{'id':u.id,'username':u.username,'created_at':u.created_at.isoformat() if u.created_at else None})
+        if data.get('role') and g.api_user.is_admin:
+            role = str(data['role']).strip().lower()
+            if role not in (User.ROLE_ADMIN, User.ROLE_STAFF):raise ValueError('Role must be admin or staff.')
+            if u.is_primary_admin and role != User.ROLE_ADMIN:raise ValueError('The original admin cannot be demoted.')
+            u.role=role
+        return _mobile_finish(op,'update_user',200,{'id':u.id,'username':u.username,'role':u.role,'is_admin':u.is_admin,'is_primary_admin':u.is_primary_admin,'created_at':u.created_at.isoformat() if u.created_at else None})
     except ValueError as e:db.session.rollback();return jsonify({'error':str(e)}),400
+    except PermissionError as e:db.session.rollback();return jsonify({'error':str(e)}),403
+
+@api_bp.route("/v1/users/<int:user_id>", methods=("DELETE",))
+@require_api_token
+@require_admin_api
+def mobile_delete_user(user_id):
+    u=User.query.get_or_404(user_id)
+    if u.is_primary_admin:
+        return jsonify({'error':'The original admin account cannot be removed.'}),400
+    if u.id==g.api_user.id:
+        return jsonify({'error':'You cannot remove your own account.'}),400
+    db.session.delete(u)
+    db.session.commit()
+    return jsonify({'ok':True,'id':user_id})
 
 
 @api_bp.route("/v1/reports/sales", methods=("GET",))
@@ -933,11 +998,13 @@ def mobile_inventory_report():return jsonify([_product_json(x) for x in Product.
 
 @api_bp.route("/v1/admin/clear-test-data", methods=("POST",))
 @require_api_token
+@require_admin_api
 def mobile_clear_test_data():
-    from app.services.data_tools import CONFIRMATION_PHRASE
+    from app.services.data_tools import clear_test_data, CONFIRMATION_PHRASE
     data=request.get_json(silent=True) or {}
     if data.get('confirmation')!=CONFIRMATION_PHRASE:return jsonify({'error':f'Type exactly: {CONFIRMATION_PHRASE}'}),400
-    counts={}
-    for label,model in (('Sale Items',SaleItem),('Shipping',Shipping),('Stock Log',StockLog),('Sales',Sale),('Shipment Batches',ShipmentBatch),('Deliveries',Delivery),('Courier Rates',CourierRate),('Monthly Shipping Rates',MonthlyShippingRate)):
-        counts[label]=model.query.delete()
-    db.session.commit();return jsonify({'ok':True,'counts':counts})
+    try:
+        counts=clear_test_data(data.get('confirmation'))
+    except ValueError as e:
+        return jsonify({'error':str(e)}),400
+    return jsonify({'ok':True,'counts':counts})

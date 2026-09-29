@@ -1,6 +1,7 @@
 from flask import Blueprint, render_template, request, redirect, url_for, flash
 from flask_login import login_required
 
+from app.access import admin_required
 from app.models import ShipmentBatch, Sale
 from app.services.shipment_batches import (
     add_sale_to_batch, remove_sale_from_batch, mark_arrived, settle_sale_shipping, BatchValidationError,
@@ -48,7 +49,7 @@ def remove_sale(batch_id, sale_id):
 
 
 @batches_bp.route("/<int:batch_id>/mark-arrived", methods=("POST",))
-@login_required
+@admin_required
 def mark_arrived_route(batch_id):
     try:
         batch = mark_arrived(batch_id)

@@ -101,7 +101,13 @@ def register_cli(app):
             user.password_hash = generate_password_hash(password)
             print(f"Updated password for existing admin user '{username}'.")
         else:
-            user = User(username=username, password_hash=generate_password_hash(password))
+            is_first_ever = User.query.count() == 0
+            user = User(
+                username=username,
+                password_hash=generate_password_hash(password),
+                role=User.ROLE_ADMIN,
+                is_primary_admin=is_first_ever,
+            )
             db.session.add(user)
             print(f"Created admin user '{username}'.")
 

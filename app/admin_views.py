@@ -31,6 +31,20 @@ class SecureModelView(ModelView):
         return redirect(url_for("auth.login", next=request.url))
 
 
+class AdminOnlyModelView(SecureModelView):
+    """Same as SecureModelView, but staff are blocked outright — used for
+    views the owner said only admins should even see, like Users and the
+    monthly shipping rate."""
+    def is_accessible(self):
+        return current_user.is_authenticated and current_user.is_admin
+
+    def inaccessible_callback(self, name, **kwargs):
+        if current_user.is_authenticated:
+            flash("That page is restricted to admins.", "error")
+            return redirect(url_for("classic_home"))
+        return redirect(url_for("auth.login", next=request.url))
+
+
 class SecureAdminIndexView(AdminIndexView):
     def is_accessible(self):
         return current_user.is_authenticated
@@ -42,15 +56,26 @@ class SecureAdminIndexView(AdminIndexView):
 # ---------------------------------------------------------------------------
 # USERS — never expose/edit password_hash directly; set via a plain field
 # ---------------------------------------------------------------------------
-class UserView(SecureModelView):
-    column_list = ("id", "username", "created_at")
-    form_columns = ("username",)
+class UserView(AdminOnlyModelView):
+    column_list = ("id", "username", "role", "is_primary_admin", "created_at")
+    column_labels = {"is_primary_admin": "Original admin"}
+    form_columns = ("username", "role")
+    form_choices = {"role": [("admin", "Admin"), ("staff", "Staff")]}
 
     def on_model_change(self, form, model, is_created):
         # New users are created with a default password they must change on first login.
         if is_created:
             model.password_hash = generate_password_hash("changeme123")
+        if model.is_primary_admin and model.role != "admin":
+            flash("The original admin account cannot be demoted.", "error")
+            model.role = "admin"
         super().on_model_change(form, model, is_created)
+
+    def on_model_delete(self, model):
+        if model.is_primary_admin:
+            raise Exception("The original admin account cannot be removed.")
+        if model.id == current_user.id:
+            raise Exception("You cannot remove your own account.")
 
 
 # ---------------------------------------------------------------------------
@@ -123,6 +148,12 @@ class SaleView(SecureModelView):
     column_labels = {"sale_link": "Details"}
     column_searchable_list = ("order_id", "customer_name", "customer_phone")
     column_filters = ("order_status", "payment_status", "customer_state", "sale_date")
+    # Newest sales first — otherwise a brand-new sale is buried on the last
+    # page behind everything ever created, and looks like it's missing.
+    column_default_sort = ("id", True)
+    # Quick inline edit (click the cell) instead of a full edit form, so
+    # marking a sale Paid/Pending/Refunded doesn't need its own page.
+    column_editable_list = ("payment_status",)
 
     can_create = False
     can_edit = False
@@ -153,7 +184,7 @@ class StockLogView(SecureModelView):
 # MONTHLY SHIPPING RATES — admin records the flat rate each month, looked up
 # by app/services/rates.py for the sale-time estimate and the batch-arrival cost.
 # ---------------------------------------------------------------------------
-class MonthlyShippingRateView(SecureModelView):
+class MonthlyShippingRateView(AdminOnlyModelView):
     column_list = ("id", "month", "rate_per_cbm")
     form_columns = ("month", "rate_per_cbm")
     column_sortable_list = ("month",)

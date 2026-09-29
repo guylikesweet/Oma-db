@@ -1,6 +1,7 @@
 from flask import Blueprint, render_template, request, redirect, url_for, flash, Response
 from flask_login import login_required
 
+from app.access import admin_required
 from app.services.settings import get_settings, update_settings
 from app.services.labels import STATIC_LOGO_PATH
 import os
@@ -9,7 +10,7 @@ settings_bp = Blueprint("settings", __name__, url_prefix="/settings", template_f
 
 
 @settings_bp.route("/", methods=("GET", "POST"))
-@login_required
+@admin_required
 def edit():
     settings = get_settings()
 

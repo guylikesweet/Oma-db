@@ -1,13 +1,13 @@
 from flask import Blueprint, render_template, request, redirect, url_for, flash
-from flask_login import login_required
 
+from app.access import admin_required
 from app.services.data_tools import get_row_counts, clear_test_data, CONFIRMATION_PHRASE
 
 data_tools_bp = Blueprint("data_tools", __name__, url_prefix="/data-tools", template_folder="templates/data_tools")
 
 
 @data_tools_bp.route("/clear", methods=("GET",))
-@login_required
+@admin_required
 def clear_form():
     return render_template(
         "data_tools/clear.html",
@@ -17,7 +17,7 @@ def clear_form():
 
 
 @data_tools_bp.route("/clear", methods=("POST",))
-@login_required
+@admin_required
 def clear_submit():
     typed = request.form.get("confirmation", "")
     try:

@@ -3,7 +3,7 @@ from flask import Blueprint, render_template, request, redirect, url_for, flash,
 from flask_login import login_required
 
 from app.models import Product, Sale
-from app.services.sales import create_sale, update_sale_status, SaleValidationError
+from app.services.sales import create_sale, update_sale_status, update_sale_payment_status, SaleValidationError
 from app.services.invoices import generate_invoice_pdf
 
 sales_bp = Blueprint("sales", __name__, url_prefix="/sales", template_folder="templates/sales")
@@ -85,6 +85,18 @@ def set_status(sale_id):
     try:
         update_sale_status(sale_id, new_status)
         flash(f"Sale #{sale_id} status updated to {new_status}.", "success")
+    except SaleValidationError as e:
+        flash(str(e), "error")
+    return redirect(url_for("sales.sale_detail", sale_id=sale_id))
+
+
+@sales_bp.route("/<int:sale_id>/payment-status", methods=("POST",))
+@login_required
+def set_payment_status(sale_id):
+    new_payment_status = request.form.get("payment_status", "")
+    try:
+        update_sale_payment_status(sale_id, new_payment_status)
+        flash(f"Sale #{sale_id} payment marked {new_payment_status}.", "success")
     except SaleValidationError as e:
         flash(str(e), "error")
     return redirect(url_for("sales.sale_detail", sale_id=sale_id))
