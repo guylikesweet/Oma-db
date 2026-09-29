@@ -12,7 +12,20 @@
 
   <table class="table table-borderless" style="max-width:500px;">
     <tr><th>Status</th><td><span class="label label-info">{{ sale.order_status }}</span></td></tr>
-    <tr><th>Payment</th><td>{{ sale.payment_status }}</td></tr>
+    <tr>
+      <th>Payment</th>
+      <td>
+        {{ sale.payment_status }}
+        <form method="post" action="{{ url_for('sales.set_payment_status', sale_id=sale.id) }}" style="display:inline-block; margin-left:10px;">
+          <select name="payment_status" onchange="this.form.submit()" class="input-sm">
+            <option value="" disabled selected>Change to…</option>
+            <option value="Paid" {{ 'disabled' if sale.payment_status == 'Paid' }}>Paid</option>
+            <option value="Pending" {{ 'disabled' if sale.payment_status == 'Pending' }}>Pending</option>
+            <option value="Refunded" {{ 'disabled' if sale.payment_status == 'Refunded' }}>Refunded</option>
+          </select>
+        </form>
+      </td>
+    </tr>
     <tr><th>Phone</th><td>{{ sale.customer_phone }}</td></tr>
     <tr><th>Address</th><td>{{ sale.customer_address }}</td></tr>
     <tr><th>State</th><td>{{ sale.customer_state }}</td></tr>
