@@ -38,7 +38,8 @@ class SaleValidationError(Exception):
 
 
 def create_sale(customer_name, customer_phone, customer_address, customer_state,
-                 payment_status, notes, line_items, commit=True, sale_type=SALE_TYPE_PREORDER):
+                 payment_status, notes, line_items, commit=True, sale_type=SALE_TYPE_PREORDER,
+                 client_operation_id=None):
     """
     line_items: list of dicts: {"product_id": int, "qty": int, "unit_price": Decimal, "variant_note": str (optional)}
     Returns the created Sale. Raises SaleValidationError on any problem — nothing
@@ -82,6 +83,7 @@ def create_sale(customer_name, customer_phone, customer_address, customer_state,
         notes=notes,
         order_status="New",
         sale_type=sale_type,
+        client_operation_id=client_operation_id or None,
     )
     sale.order_id = generate_order_id(sale_type)
     sale.sale_date = date.today()
@@ -161,5 +163,21 @@ def update_sale_status(sale_id, new_status):
                 ))
 
     sale.order_status = new_status
+    db.session.commit()
+    return sale
+
+
+VALID_PAYMENT_STATUSES = {"Paid", "Pending", "Refunded"}
+
+
+def update_sale_payment_status(sale_id, new_payment_status):
+    """Marks a sale Paid / Pending / Refunded. This is independent of
+    order_status (a sale can be Pending payment while already Packed, etc.)."""
+    sale = Sale.query.get(sale_id)
+    if not sale:
+        raise SaleValidationError("Sale not found.")
+    if new_payment_status not in VALID_PAYMENT_STATUSES:
+        raise SaleValidationError(f"Invalid payment status '{new_payment_status}'.")
+    sale.payment_status = new_payment_status
     db.session.commit()
     return sale
