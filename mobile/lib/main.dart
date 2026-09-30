@@ -1226,6 +1226,11 @@ class _SalesPageState extends State<SalesPage> {
   String saleKind = 'All'; // All, Preorder, Stocked
   DateTimeRange? range;
 
+  // Web-only cache of the live server fetch (see _load below). Filtering
+  // on web must not hit the network on every keystroke — only an explicit
+  // refresh (opening the page, pull-to-refresh) should do that.
+  List<Map<String, dynamic>>? _webRowsCache;
+
   @override
   void initState() {
     super.initState();
@@ -1427,6 +1432,12 @@ class _SalesPageState extends State<SalesPage> {
 
                   return RefreshIndicator(
                     onRefresh: () async {
+                      // Force the next _load() to hit the network again on
+                      // web (see _webRowsCache) instead of reusing the
+                      // cached fetch — that's the whole point of a manual
+                      // refresh.
+                      _webRowsCache = null;
+
                       await widget.repo
                           .syncOnce()
                           .catchError(
@@ -1492,14 +1503,25 @@ class _SalesPageState extends State<SalesPage> {
       // server has. Without this, a deletion (e.g. clearing test data)
       // could never be reflected here, since nothing would ever tell a
       // browser tab's local cache that a row it already has is now gone.
-      final remote = await widget.api.sales();
-      rows = remote
-          .whereType<Map>()
-          .map((m) => Map<String, dynamic>.from(m))
-          .toList();
-      rows.sort(
-        (a, b) => (b['id'] as int? ?? 0).compareTo(a['id'] as int? ?? 0),
-      );
+      //
+      // That fetch is cached for the lifetime of this page, though — the
+      // dropdowns and search box below call setState() on every change,
+      // which would otherwise re-run this whole method (network call
+      // included) on every keystroke. Filtering re-runs freely; fetching
+      // only happens once, until _webRowsCache is explicitly cleared by a
+      // refresh.
+      if (_webRowsCache == null) {
+        final remote = await widget.api.sales();
+        final fetched = remote
+            .whereType<Map>()
+            .map((m) => Map<String, dynamic>.from(m))
+            .toList();
+        fetched.sort(
+          (a, b) => (b['id'] as int? ?? 0).compareTo(a['id'] as int? ?? 0),
+        );
+        _webRowsCache = fetched;
+      }
+      rows = List<Map<String, dynamic>>.from(_webRowsCache!);
     } else {
       final db = await widget.local.db;
       rows = await db.query(

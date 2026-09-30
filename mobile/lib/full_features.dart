@@ -537,6 +537,7 @@ class WebSalesPage extends StatefulWidget {
 
 class _WebSalesPageState extends State<WebSalesPage> {
   List<dynamic> rows = [];
+  bool busy = true;
 
   @override
   void initState() {
@@ -550,7 +551,7 @@ class _WebSalesPageState extends State<WebSalesPage> {
     } catch (_) {}
 
     if (mounted) {
-      setState(() {});
+      setState(() => busy = false);
     }
   }
 
@@ -752,7 +753,14 @@ class _WebSalesPageState extends State<WebSalesPage> {
       ),
       body: RefreshIndicator(
         onRefresh: load,
-        child: rows.isEmpty
+        child: busy
+            ? ListView(
+                children: const [
+                  SizedBox(height: 160),
+                  Center(child: BrandLoader()),
+                ],
+              )
+            : rows.isEmpty
             ? ListView(
                 children: const [
                   SizedBox(height: 160),
@@ -868,6 +876,7 @@ class BatchesPage extends StatefulWidget {
 
 class _BatchesPageState extends State<BatchesPage> {
   List<dynamic> rows = [];
+  bool busy = true;
 
   @override
   void initState() {
@@ -881,7 +890,7 @@ class _BatchesPageState extends State<BatchesPage> {
     } catch (_) {}
 
     if (mounted) {
-      setState(() {});
+      setState(() => busy = false);
     }
   }
 
@@ -1213,7 +1222,14 @@ class _BatchesPageState extends State<BatchesPage> {
       ),
       body: RefreshIndicator(
         onRefresh: load,
-        child: rows.isEmpty
+        child: busy
+            ? ListView(
+                children: const [
+                  SizedBox(height: 160),
+                  Center(child: BrandLoader()),
+                ],
+              )
+            : rows.isEmpty
             ? ListView(
                 children: const [
                   SizedBox(height: 160),
@@ -1286,6 +1302,7 @@ class _DeliveriesPageState
   List<dynamic> rows = [];
   List<dynamic> readySales = [];
   String? loadError;
+  bool busy = true;
 
   @override
   void initState() {
@@ -1308,7 +1325,7 @@ class _DeliveriesPageState
     }
 
     if (mounted) {
-      setState(() {});
+      setState(() => busy = false);
     }
   }
 
@@ -1602,7 +1619,14 @@ class _DeliveriesPageState
       ),
       body: RefreshIndicator(
         onRefresh: load,
-        child: ListView(
+        child: busy
+            ? ListView(
+                children: const [
+                  SizedBox(height: 160),
+                  Center(child: BrandLoader()),
+                ],
+              )
+            : ListView(
           children: [
             if (loadError != null)
               Card(
@@ -2251,6 +2275,7 @@ class _RateList extends StatefulWidget {
 
 class _RateListState extends State<_RateList> {
   List<dynamic> rows = [];
+  bool busy = true;
 
   @override
   void initState() {
@@ -2266,7 +2291,7 @@ class _RateListState extends State<_RateList> {
     } catch (_) {}
 
     if (mounted) {
-      setState(() {});
+      setState(() => busy = false);
     }
   }
 
@@ -2504,6 +2529,12 @@ class _RateListState extends State<_RateList> {
                     )
                   : const Icon(Icons.lock_outline),
             ),
+            if (busy)
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 40),
+                child: Center(child: BrandLoader()),
+              )
+            else
             ...rows.map(
               (raw) {
                 final row =
@@ -3282,6 +3313,7 @@ class UsersPage extends StatefulWidget {
 class _UsersPageState
     extends State<UsersPage> {
   List<dynamic> rows = [];
+  bool busy = true;
 
   @override
   void initState() {
@@ -3295,7 +3327,7 @@ class _UsersPageState
     } catch (_) {}
 
     if (mounted) {
-      setState(() {});
+      setState(() => busy = false);
     }
   }
 
@@ -3437,7 +3469,14 @@ class _UsersPageState
       ),
       body: RefreshIndicator(
         onRefresh: load,
-        child: rows.isEmpty
+        child: busy
+            ? ListView(
+                children: const [
+                  SizedBox(height: 160),
+                  Center(child: BrandLoader()),
+                ],
+              )
+            : rows.isEmpty
             ? ListView(
                 children: const [
                   SizedBox(height: 160),
