@@ -566,15 +566,24 @@ def mobile_sale_status(sale_id):
         op, existing = _mobile_operation(data)
         if existing: return _mobile_replay(existing)
         sale = Sale.query.get_or_404(sale_id)
-        status = str(data.get("status") or data.get("order_status") or "")
-        if status not in {"New", "Packed", "Shipped", "Delivered", "Cancelled"}: raise ValueError("Invalid order status.")
-        if status == "Cancelled" and sale.order_status != "Cancelled" and sale.is_stock_sale:
-            for item in sale.items:
-                product = Product.query.get(item.product_id)
-                if product:
-                    product.stock += item.qty
-                    db.session.add(StockLog(product_id=product.id, change_qty=item.qty, reason=f"Sale #{sale.id} Cancelled"))
-        sale.order_status = status
+        status = data.get("status") or data.get("order_status")
+        payment_status = data.get("payment_status")
+        if status is None and payment_status is None:
+            raise ValueError("Nothing to update.")
+        if status is not None:
+            status = str(status)
+            if status not in {"New", "Packed", "Shipped", "Delivered", "Cancelled"}: raise ValueError("Invalid order status.")
+            if status == "Cancelled" and sale.order_status != "Cancelled" and sale.is_stock_sale:
+                for item in sale.items:
+                    product = Product.query.get(item.product_id)
+                    if product:
+                        product.stock += item.qty
+                        db.session.add(StockLog(product_id=product.id, change_qty=item.qty, reason=f"Sale #{sale.id} Cancelled"))
+            sale.order_status = status
+        if payment_status is not None:
+            payment_status = str(payment_status)
+            if payment_status not in {"Paid", "Pending", "Refunded"}: raise ValueError("Invalid payment status.")
+            sale.payment_status = payment_status
         return _mobile_finish(op, "sale_status", 200, _sale_json(sale))
     except ValueError as e:
         db.session.rollback(); return jsonify({"error": str(e)}), 400
