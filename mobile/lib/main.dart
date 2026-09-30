@@ -1675,6 +1675,42 @@ class _SaleDetailPageState extends State<SaleDetailPage> {
     }
   }
 
+  Future<void> payment(String value) async {
+    try {
+      if (kIsWeb) {
+        // No offline queue on web — update it for real, right now.
+        await widget.api.updateSaleStatus(
+          widget.saleId,
+          {'payment_status': value},
+        );
+      } else {
+        await widget.repo.queuePaymentStatus(
+          widget.saleId,
+          value,
+        );
+        await widget.repo.syncOnce();
+      }
+
+      await load();
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Payment marked: $value'),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(e.toString()),
+          ),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     if (sale == null) {
@@ -1804,6 +1840,30 @@ class _SaleDetailPageState extends State<SaleDetailPage> {
                                   s['order_status'] == x
                               ? null
                               : () => status(x),
+                      child: Text(x),
+                    ),
+                  )
+                  .toList(),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'Payment status',
+              style:
+                  Theme.of(context).textTheme.titleMedium,
+            ),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                'Paid',
+                'Pending',
+                'Refunded',
+              ]
+                  .map(
+                    (x) => OutlinedButton(
+                      onPressed: s['payment_status'] == x
+                          ? null
+                          : () => payment(x),
                       child: Text(x),
                     ),
                   )

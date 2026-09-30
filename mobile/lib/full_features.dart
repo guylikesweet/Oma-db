@@ -623,6 +623,75 @@ class _WebSalesPageState extends State<WebSalesPage> {
     }
   }
 
+  Future<void> changePaymentStatus(int id, String current) async {
+    String selected =
+        ['Paid', 'Pending', 'Refunded'].contains(current) ? current : 'Pending';
+
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              title: const Text('Update payment status'),
+              content: DropdownButtonFormField<String>(
+                value: selected,
+                items: const [
+                  'Paid',
+                  'Pending',
+                  'Refunded',
+                ]
+                    .map(
+                      (value) => DropdownMenuItem(
+                        value: value,
+                        child: Text(value),
+                      ),
+                    )
+                    .toList(),
+                onChanged: (value) {
+                  if (value != null) {
+                    setDialogState(
+                      () => selected = value,
+                    );
+                  }
+                },
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () =>
+                      Navigator.pop(dialogContext, false),
+                  child: const Text('Cancel'),
+                ),
+                FilledButton(
+                  onPressed: () =>
+                      Navigator.pop(dialogContext, true),
+                  child: const Text('Save'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+
+    if (ok != true) return;
+
+    try {
+      await widget.api.updateSaleStatus(
+        id,
+        {'payment_status': selected},
+      );
+
+      await load();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('$e')),
+        );
+      }
+    }
+  }
+
   Future<void> settleShipping(int id) async {
     try {
       await widget.api.settleShipping(id, {});
@@ -707,6 +776,7 @@ class _WebSalesPageState extends State<WebSalesPage> {
                       ),
                       subtitle: Text(
                         '${sale['order_status'] ?? ''}'
+                        ' • ${sale['payment_status'] ?? ''}'
                         ' • ₦${sale['total_amount'] ?? 0}',
                       ),
                       trailing:
@@ -715,6 +785,13 @@ class _WebSalesPageState extends State<WebSalesPage> {
                           if (value == 'status') {
                             await changeStatus(
                               sale['id'] as int,
+                            );
+                          }
+
+                          if (value == 'payment_status') {
+                            await changePaymentStatus(
+                              sale['id'] as int,
+                              '${sale['payment_status'] ?? ''}',
                             );
                           }
 
@@ -741,6 +818,12 @@ class _WebSalesPageState extends State<WebSalesPage> {
                             value: 'status',
                             child: Text(
                               'Update status',
+                            ),
+                          ),
+                          const PopupMenuItem(
+                            value: 'payment_status',
+                            child: Text(
+                              'Update payment status',
                             ),
                           ),
                           if (sale['batch_id'] != null &&
