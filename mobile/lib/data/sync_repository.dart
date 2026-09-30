@@ -249,6 +249,22 @@ class SyncRepository {
     );
   }
 
+  Future<String> queuePaymentStatus(
+    int saleId,
+    String paymentStatus,
+  ) {
+    // Reuses the same 'sale_status' operation type — the backend endpoint
+    // already accepts payment_status alongside (or instead of) status, and
+    // api.updateSaleStatus forwards the whole payload through as-is.
+    return enqueue(
+      'sale_status',
+      {
+        'sale_id': saleId,
+        'payment_status': paymentStatus,
+      },
+    );
+  }
+
   Future<String> queueSettleShipping(
     int saleId,
   ) {
