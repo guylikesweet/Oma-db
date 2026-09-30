@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:printing/printing.dart';
 import 'package:share_plus/share_plus.dart';
 
+import 'brand_loader.dart';
 import 'data/api_client.dart';
 import 'data/app_session.dart';
 import 'data/local_database.dart';
@@ -454,7 +455,7 @@ class _WebProductsPageState extends State<WebProductsPage> {
       ),
       body: busy
           ? const Center(
-              child: CircularProgressIndicator(),
+              child: BrandLoader(),
             )
           : RefreshIndicator(
               onRefresh: load,
@@ -2024,7 +2025,7 @@ class _DeliveryDetailPageState
     return Scaffold(
       appBar: AppBar(title: Text('Delivery #$id')),
       body: loading
-          ? const Center(child: CircularProgressIndicator())
+          ? const Center(child: BrandLoader())
           : RefreshIndicator(
               onRefresh: load,
               child: ListView(
@@ -2727,7 +2728,7 @@ class _ReportPageState extends State<ReportPage> {
                         ConnectionState.done &&
                     !snapshot.hasData) {
                   return const Center(
-                    child: CircularProgressIndicator(),
+                    child: BrandLoader(),
                   );
                 }
 
@@ -3061,7 +3062,7 @@ class _SettingsPageState
       ),
       body: loading
           ? const Center(
-              child: CircularProgressIndicator(),
+              child: BrandLoader(),
             )
           : ListView(
               padding: const EdgeInsets.all(16),

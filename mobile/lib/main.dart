@@ -7,6 +7,7 @@ import 'package:printing/printing.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:sqflite/sqflite.dart' show databaseFactory;
 import 'package:sqflite_common_ffi_web/sqflite_ffi_web.dart';
+import 'brand_loader.dart';
 import 'data/api_client.dart';
 import 'data/app_session.dart';
 import 'data/local_database.dart';
@@ -99,7 +100,7 @@ class _SessionGateState extends State<SessionGate> {
         builder: (_, snapshot) {
           if (snapshot.connectionState != ConnectionState.done) {
             return const Scaffold(
-              body: Center(child: CircularProgressIndicator()),
+              body: Center(child: BrandLoader(label: 'Loading…')),
             );
           }
 
@@ -646,7 +647,7 @@ class _DashboardPageState extends State<DashboardPage> {
                       const SizedBox(
                         height: 160,
                         child: Center(
-                          child: CircularProgressIndicator(),
+                          child: BrandLoader(size: 56),
                         ),
                       ),
                     const SizedBox(height: 16),
@@ -870,7 +871,7 @@ class _ProductsPageState extends State<ProductsPage> {
                 builder: (_, s) {
                   if (!s.hasData) {
                     return const Center(
-                      child: CircularProgressIndicator(),
+                      child: BrandLoader(),
                     );
                   }
 
@@ -1225,6 +1226,21 @@ class _SalesPageState extends State<SalesPage> {
   String saleKind = 'All'; // All, Preorder, Stocked
   DateTimeRange? range;
 
+  @override
+  void initState() {
+    super.initState();
+    if (!kIsWeb) {
+      // Opening this tab is also a good moment to pull anything that
+      // happened server-side since the last sync (a deletion via "clear
+      // test data", a status change from another device, etc.) — rather
+      // than waiting for a connectivity-change event or a manual pull-to-
+      // refresh that the person may not think to do.
+      widget.repo.syncOnce().then((_) {
+        if (mounted) setState(() {});
+      }).catchError((_) {});
+    }
+  }
+
   bool get _filtered =>
       saleKind != 'All' ||
       status != 'All' ||
@@ -1397,7 +1413,7 @@ class _SalesPageState extends State<SalesPage> {
                 builder: (_, s) {
                   if (!s.hasData) {
                     return const Center(
-                      child: CircularProgressIndicator(),
+                      child: BrandLoader(),
                     );
                   }
 
@@ -1468,12 +1484,29 @@ class _SalesPageState extends State<SalesPage> {
       );
 
   Future<List<Map<String, dynamic>>> _load() async {
-    final db = await widget.local.db;
+    List<Map<String, dynamic>> rows;
 
-    var rows = await db.query(
-      'sales',
-      orderBy: 'id DESC',
-    );
+    if (kIsWeb) {
+      // The web build has no real offline mode and keeps no durable local
+      // copy (see createSaleOnline) — so it always shows exactly what the
+      // server has. Without this, a deletion (e.g. clearing test data)
+      // could never be reflected here, since nothing would ever tell a
+      // browser tab's local cache that a row it already has is now gone.
+      final remote = await widget.api.sales();
+      rows = remote
+          .whereType<Map>()
+          .map((m) => Map<String, dynamic>.from(m))
+          .toList();
+      rows.sort(
+        (a, b) => (b['id'] as int? ?? 0).compareTo(a['id'] as int? ?? 0),
+      );
+    } else {
+      final db = await widget.local.db;
+      rows = await db.query(
+        'sales',
+        orderBy: 'id DESC',
+      );
+    }
 
     if (status != 'All') {
       rows = rows
@@ -1716,7 +1749,7 @@ class _SaleDetailPageState extends State<SaleDetailPage> {
     if (sale == null) {
       return const Scaffold(
         body: Center(
-          child: CircularProgressIndicator(),
+          child: BrandLoader(label: 'Loading…'),
         ),
       );
     }
@@ -2080,7 +2113,7 @@ class _NewSalePageState extends State<NewSalePage> {
         ),
         body: loading
             ? const Center(
-                child: CircularProgressIndicator(),
+                child: BrandLoader(),
               )
             : ListView(
                 padding: const EdgeInsets.all(16),
@@ -2410,7 +2443,7 @@ class _StockPageState extends State<StockPage> {
           builder: (_, s) {
             if (!s.hasData) {
               return const Center(
-                child: CircularProgressIndicator(),
+                child: BrandLoader(),
               );
             }
 
@@ -2879,7 +2912,7 @@ class _SyncQueuePageState
           builder: (_, s) {
             if (!s.hasData) {
               return const Center(
-                child: CircularProgressIndicator(),
+                child: BrandLoader(),
               );
             }
 
