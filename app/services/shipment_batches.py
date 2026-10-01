@@ -14,6 +14,7 @@ from decimal import Decimal
 from app import db
 from app.models import ShipmentBatch, Sale
 from app.services.rates import get_rate_for_month
+from app.services.sales import shipping_cost_for_items
 
 
 class BatchValidationError(Exception):
@@ -73,8 +74,8 @@ def mark_arrived(batch_id):
     rate = get_rate_for_month(date.today())
 
     for sale in batch.sales:
-        total_cbm = sum((item.line_cbm or Decimal("0")) for item in sale.items)
-        sale.actual_shipping_cost = total_cbm * rate
+        # Each product line's CBM x rate, added up.
+        sale.actual_shipping_cost = shipping_cost_for_items(sale.items, rate)
         sale.total_amount = (sale.subtotal_amount or Decimal("0")) + sale.actual_shipping_cost
 
     batch.arrived_at = datetime.utcnow()

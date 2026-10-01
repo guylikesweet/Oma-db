@@ -24,7 +24,8 @@ def get_settings():
 
 def update_settings(label_width_mm=None, label_height_mm=None, business_name=None,
                      business_phone=None, business_address=None,
-                     logo_data=None, logo_mimetype=None):
+                     logo_data=None, logo_mimetype=None,
+                     bank_name=None, bank_account_number=None, bank_account_name=None):
     settings = get_settings()
 
     if label_width_mm is not None:
@@ -37,6 +38,12 @@ def update_settings(label_width_mm=None, label_height_mm=None, business_name=Non
         settings.business_phone = business_phone
     if business_address is not None:
         settings.business_address = business_address
+    if bank_name is not None:
+        settings.bank_name = bank_name
+    if bank_account_number is not None:
+        settings.bank_account_number = bank_account_number
+    if bank_account_name is not None:
+        settings.bank_account_name = bank_account_name
     if logo_data is not None:
         settings.logo_data = logo_data
         settings.logo_mimetype = logo_mimetype or "image/png"

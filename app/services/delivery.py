@@ -18,8 +18,112 @@ from app import db
 from app.models import Sale, Delivery
 
 
-class DeliveryValidationError(Exception):
+class DeliveryValidationError(ValueError):
     pass
+
+
+# ---------------------------------------------------------------------------
+# Matching helpers. Consolidation is always optional — these only decide what
+# gets SUGGESTED, and what the stored consolidation_type is labelled as.
+# Precedence when several attributes match: phone > name > city > state.
+# ---------------------------------------------------------------------------
+CONSOLIDATION_ATTRS = ("phone", "name", "city", "state")
+CONSOLIDATION_LABELS = {
+    "phone": "Same phone number",
+    "name": "Same customer name",
+    "city": "Same city",
+    "state": "Same state",
+}
+
+
+def _norm_text(value):
+    return " ".join((value or "").split()).lower()
+
+
+def _norm_phone(value):
+    """Digits only, last 10 — so 0801 234 5678, +234 801 234 5678 and
+    2348012345678 all count as the same number."""
+    digits = "".join(ch for ch in (value or "") if ch.isdigit())
+    return digits[-10:] if len(digits) >= 10 else digits
+
+
+def _attr_key(sale, attr):
+    if attr == "phone":
+        return _norm_phone(sale.customer_phone)
+    if attr == "name":
+        return _norm_text(sale.customer_name)
+    if attr == "city":
+        return _norm_text(sale.customer_city)
+    if attr == "state":
+        return _norm_text(sale.customer_state)
+    return ""
+
+
+def shared_attributes(sales):
+    """Which of phone/name/city/state are identical (and non-empty) across ALL given sales."""
+    shared = []
+    for attr in CONSOLIDATION_ATTRS:
+        keys = {_attr_key(sale, attr) for sale in sales}
+        if len(keys) == 1 and "" not in keys:
+            shared.append(attr)
+    return shared
+
+
+def consolidation_type_for(sales):
+    """'phone' / 'name' / 'city' / 'state' for the strongest shared attribute; None for a single sale."""
+    if len(sales) < 2:
+        return None
+    shared = shared_attributes(sales)
+    return shared[0] if shared else None
+
+
+def find_consolidation_groups(sales=None):
+    """
+    Suggested bags: for each of phone/name/city/state, groups of 2+ ready sales sharing that value.
+    A sale can appear in several groups (e.g. same phone AND same state) — the person chooses.
+    Returns a list of {"type", "label", "value", "sale_ids"} dicts.
+    """
+    ready = sales if sales is not None else get_ready_for_delivery_sales()
+    groups = []
+    for attr in CONSOLIDATION_ATTRS:
+        buckets = defaultdict(list)
+        for sale in ready:
+            key = _attr_key(sale, attr)
+            if key:
+                buckets[key].append(sale)
+        for matched in buckets.values():
+            if len(matched) > 1:
+                display = {
+                    "phone": matched[0].customer_phone,
+                    "name": matched[0].customer_name,
+                    "city": matched[0].customer_city,
+                    "state": matched[0].customer_state,
+                }[attr]
+                groups.append({
+                    "type": attr,
+                    "label": CONSOLIDATION_LABELS[attr],
+                    "value": (display or "").strip(),
+                    "sale_ids": [sale.id for sale in matched],
+                })
+    return groups
+
+
+def check_consolidation(sales):
+    """
+    Validates that the chosen sales may share one bag and returns the
+    consolidation_type to store. A single sale is always fine. Several sales
+    must share at least one of phone / name / city / state — this only stops
+    an accidental tap grouping totally unrelated orders.
+    """
+    if len(sales) < 2:
+        return None
+    attr = consolidation_type_for(sales)
+    if attr is None:
+        raise DeliveryValidationError(
+            "These sales don't share a phone number, name, city or state, so they "
+            "can't go in the same courier bag. Create separate deliveries instead."
+        )
+    return attr
 
 
 def get_ready_for_delivery_sales():
@@ -63,7 +167,8 @@ def find_name_matches():
 def create_delivery(sale_ids, method, consolidation_type=None, delivery_address=None, notes=None):
     """
     sale_ids: list of Sale ids to include in this delivery (1 = single, 2+ = consolidated).
-    consolidation_type: 'phone', 'location', or None — for traceability only.
+    consolidation_type: ignored — it is now worked out from what the sales actually share
+    (phone / name / city / state); kept in the signature so existing callers still work.
     """
     if not sale_ids:
         raise DeliveryValidationError("Select at least one sale for this delivery.")
@@ -82,24 +187,13 @@ def create_delivery(sale_ids, method, consolidation_type=None, delivery_address=
                 f"Sale #{sale.id} isn't ready for delivery yet — its shipping payment hasn't been settled."
             )
 
-    if len(sales) > 1:
-        phones = {s.customer_phone for s in sales if s.customer_phone}
-        names = {(s.customer_name or "").strip().lower() for s in sales if s.customer_name}
-        # Consolidation only makes sense for the SAME customer (matched by phone or name) —
-        # the label shows one recipient for the whole parcel, so mixing different
-        # customers here would silently ship someone else's items under the wrong name/address.
-        if len(phones) > 1 and len(names) > 1:
-            raise DeliveryValidationError(
-                "These sales are for different customers (different name and phone) — "
-                "a consolidated parcel needs one label with one recipient. "
-                "Create separate deliveries instead."
-            )
+    detected_type = check_consolidation(sales)
 
     delivery = Delivery(
         method=method.strip(),
         status=Delivery.STATUS_PENDING,
         is_consolidated=len(sales) > 1,
-        consolidation_type=consolidation_type if len(sales) > 1 else None,
+        consolidation_type=detected_type,
         delivery_address=delivery_address or sales[0].customer_address,
         notes=notes,
     )

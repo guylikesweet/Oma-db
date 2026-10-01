@@ -111,6 +111,33 @@ def get_label_context(delivery):
         else []
     )
 
+    # A consolidated delivery is one courier bag holding several orders. The
+    # label must say so, list every order in it, and name anyone other than the
+    # primary recipient whose goods are inside.
+    is_bag = len(delivery.sales) > 1
+    primary_key = (
+        (primary_sale.customer_name or "").strip().lower(),
+        "".join(ch for ch in (primary_sale.customer_phone or "") if ch.isdigit())[-10:],
+    ) if primary_sale else None
+    other_recipients = []
+    for sale in delivery.sales[1:]:
+        key = (
+            (sale.customer_name or "").strip().lower(),
+            "".join(ch for ch in (sale.customer_phone or "") if ch.isdigit())[-10:],
+        )
+        if key != primary_key:
+            who = (sale.customer_name or NA).strip()
+            if sale.customer_phone:
+                who += f" ({sale.customer_phone.strip()})"
+            if who not in other_recipients:
+                other_recipients.append(who)
+
+    bag_remarks = ""
+    if is_bag:
+        bag_remarks = f"CONSOLIDATED BAG - {len(delivery.sales)} orders."
+        if other_recipients:
+            bag_remarks += " Also for: " + "; ".join(other_recipients) + "."
+
     line_items = []
 
     for sale in delivery.sales:
@@ -165,6 +192,12 @@ def get_label_context(delivery):
 
         "other_order_ids": other_order_ids,
 
+        "is_consolidated": is_bag,
+
+        "order_count": len(delivery.sales),
+
+        "other_recipients": other_recipients,
+
         "date_of_shipment": (
             delivery.shipped_at.strftime("%Y-%m-%d")
             if delivery.shipped_at
@@ -211,7 +244,7 @@ def get_label_context(delivery):
         ),
 
         "remarks": (
-            delivery.remarks
+            (bag_remarks + (" " if bag_remarks and delivery.remarks else "") + (delivery.remarks or "")).strip()
             or NA
         ),
 
@@ -1141,7 +1174,11 @@ def generate_label_pdf(delivery):
     )
 
     text_y = draw_section_label(
-        "Order ID",
+        (
+            f"Bag: {ctx['order_count']} orders"
+            if ctx["is_consolidated"]
+            else "Order ID"
+        ),
         text_x,
         text_y,
         text_width,
@@ -1173,7 +1210,7 @@ def generate_label_pdf(delivery):
             text_y,
             text_width,
             normal_font,
-            max_lines=4,
+            max_lines=5,
         )
 
     # ------------------------------------------------------------

@@ -33,13 +33,27 @@ def generate_order_id(sale_type=SALE_TYPE_PREORDER):
     raise RuntimeError("Could not generate a unique order ID after 50 attempts.")
 
 
+def shipping_cost_for_items(items, rate):
+    """
+    Shipping for a sale = each product line's CBM x rate, calculated separately
+    and then added up. (Same figure as total CBM x rate, but done line by line
+    so every product's own share is visible and the logic lives in one place —
+    used for the estimate at order time and the actual cost at batch arrival.)
+    """
+    total = Decimal("0")
+    for item in items:
+        line_cbm = item.line_cbm if hasattr(item, "line_cbm") else item
+        total += (line_cbm or Decimal("0")) * rate
+    return total
+
+
 class SaleValidationError(Exception):
     """Raised for any problem that should stop sale creation (bad input, insufficient stock)."""
 
 
 def create_sale(customer_name, customer_phone, customer_address, customer_state,
                  payment_status, notes, line_items, commit=True, sale_type=SALE_TYPE_PREORDER,
-                 client_operation_id=None):
+                 client_operation_id=None, customer_city=None):
     """
     line_items: list of dicts: {"product_id": int, "qty": int, "unit_price": Decimal, "variant_note": str (optional)}
     Returns the created Sale. Raises SaleValidationError on any problem — nothing
@@ -57,6 +71,7 @@ def create_sale(customer_name, customer_phone, customer_address, customer_state,
         raise SaleValidationError("A sale needs at least one product line.")
 
     products = {}
+    requested = {}  # product_id -> total qty across ALL lines (one product can be on several lines, e.g. two colours)
     for line in line_items:
         qty = line["qty"]
         if qty <= 0:
@@ -65,19 +80,25 @@ def create_sale(customer_name, customer_phone, customer_address, customer_state,
         product = Product.query.get(line["product_id"])
         if not product:
             raise SaleValidationError(f"Product id {line['product_id']} does not exist.")
-        # Preorders are for goods still to be shipped in, so stock is irrelevant:
-        # the quantity is simply what the customer asked for. Only stocked sales check it.
-        if is_stock and product.stock < qty:
-            raise SaleValidationError(
-                f"Not enough stock for '{product.name}' (have {product.stock}, need {qty})."
-            )
         products[line["product_id"]] = product
+        requested[line["product_id"]] = requested.get(line["product_id"], 0) + qty
+
+    # Preorders are for goods still to be shipped in, so stock is irrelevant:
+    # the quantity is simply what the customer asked for. Only stocked sales check it.
+    if is_stock:
+        for product_id, total_qty in requested.items():
+            product = products[product_id]
+            if product.stock < total_qty:
+                raise SaleValidationError(
+                    f"Not enough stock for '{product.name}' (have {product.stock}, need {total_qty})."
+                )
 
     # --- Everything validated. Now build the sale. ---
     sale = Sale(
         customer_name=customer_name,
         customer_phone=customer_phone,
         customer_address=customer_address,
+        customer_city=(customer_city or "").strip() or None,
         customer_state=customer_state,
         payment_status=payment_status or "Paid",
         notes=notes,
@@ -94,7 +115,8 @@ def create_sale(customer_name, customer_phone, customer_address, customer_state,
     db.session.flush()  # assigns sale.id, needed for stock_log "Sale #<id>" reason
 
     subtotal = Decimal("0")
-    total_cbm = Decimal("0")
+    estimate_rate = None if is_stock else get_rate_for_month(date.today())
+    estimated_shipping = Decimal("0")
 
     for line in line_items:
         product = products[line["product_id"]]
@@ -105,6 +127,10 @@ def create_sale(customer_name, customer_phone, customer_address, customer_state,
         line_cbm = (product.cbm or Decimal("0")) * qty
         line_volumetric_kg = (product.volumetric_kg or Decimal("0")) * qty
 
+        # Each product's own shipping estimate (its CBM x this month's rate);
+        # the sale's estimate is the sum of these.
+        line_estimate = None if is_stock else line_cbm * estimate_rate
+
         db.session.add(SaleItem(
             sale_id=sale.id,
             product_id=product.id,
@@ -113,6 +139,7 @@ def create_sale(customer_name, customer_phone, customer_address, customer_state,
             unit_price=unit_price,
             line_cbm=line_cbm,
             line_volumetric_kg=line_volumetric_kg,
+            line_shipping_estimate=line_estimate,
             variant_note=line.get("variant_note") or None,
         ))
 
@@ -122,14 +149,14 @@ def create_sale(customer_name, customer_phone, customer_address, customer_state,
             db.session.add(StockLog(product_id=product.id, change_qty=-qty, reason=f"Sale {sale.order_id}"))
 
         subtotal += unit_price * qty
-        total_cbm += line_cbm
+        if line_estimate is not None:
+            estimated_shipping += line_estimate
 
     sale.subtotal_amount = subtotal
     if is_stock:
         sale.estimated_shipping_cost = None  # no shipping on stocked sales; delivery is settled off record
     else:
-        rate = get_rate_for_month(date.today())
-        sale.estimated_shipping_cost = total_cbm * rate  # rough estimate only
+        sale.estimated_shipping_cost = estimated_shipping  # rough estimate only: sum of each line's CBM x rate
     sale.total_amount = subtotal  # goods only; actual shipping added once the batch arrives
 
     if commit:
