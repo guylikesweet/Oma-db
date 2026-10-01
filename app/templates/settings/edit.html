@@ -38,6 +38,21 @@
       <textarea name="business_address" class="form-control" rows="2">{{ settings.business_address or '' }}</textarea>
     </div>
 
+    <h4 style="margin-top:20px;">Shipping Payment Account</h4>
+    <p class="text-muted" style="font-size:13px;">Customers are sent these details on WhatsApp when their goods arrive. Change them here whenever the account changes.</p>
+    <div class="form-group">
+      <label>Bank Name</label>
+      <input type="text" name="bank_name" class="form-control" value="{{ settings.bank_name or '' }}">
+    </div>
+    <div class="form-group">
+      <label>Account Number</label>
+      <input type="text" name="bank_account_number" class="form-control" value="{{ settings.bank_account_number or '' }}">
+    </div>
+    <div class="form-group">
+      <label>Account Name</label>
+      <input type="text" name="bank_account_name" class="form-control" value="{{ settings.bank_account_name or '' }}">
+    </div>
+
     <h4 style="margin-top:20px;">Logo</h4>
     {% if has_static_logo %}
     <div class="alert alert-info" style="font-size:13px;">
