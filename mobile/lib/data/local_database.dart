@@ -151,13 +151,17 @@ class LocalDatabase {
       if (isStock) {
         // Only stocked sales are constrained by (and deduct) local stock —
         // preorders don't care what's on hand.
+        // A product can be on several lines (e.g. two colours), so check the combined quantity.
+        final needed = <int, int>{};
         for (final item in items) {
           final pid = item['product_id'] as int;
-          final qty = item['qty'] as int;
-          final rows = await txn.query('products', columns: ['stock'], where: 'id = ?', whereArgs: [pid], limit: 1);
+          needed[pid] = (needed[pid] ?? 0) + (item['qty'] as int);
+        }
+        for (final entry in needed.entries) {
+          final rows = await txn.query('products', columns: ['stock'], where: 'id = ?', whereArgs: [entry.key], limit: 1);
           if (rows.isEmpty) throw Exception('Product no longer exists locally.');
           final stock = rows.first['stock'] as int? ?? 0;
-          if (stock < qty) throw Exception('Not enough local stock for product #$pid.');
+          if (stock < entry.value) throw Exception('Not enough local stock for product #${entry.key}.');
         }
       }
       final prefix = isStock ? 'OFFSTK-' : 'OFF-';

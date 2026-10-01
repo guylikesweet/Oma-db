@@ -578,6 +578,24 @@ class ApiClient {
     );
   }
 
+  /// Groups of ready sales that could share one courier bag (same phone,
+  /// name, city or state). Suggestions only — consolidating is optional.
+  Future<List<dynamic>> deliverySuggestions() {
+    return _list(
+      'GET',
+      '/v1/deliveries/suggestions',
+    );
+  }
+
+  /// The "goods have arrived" WhatsApp message for one sale, already filled
+  /// in from the sale and Settings: {phone, message, whatsapp_url}.
+  Future<Map<String, dynamic>> arrivalNotice(int saleId) {
+    return _map(
+      'GET',
+      '/v1/sales/$saleId/arrival-notice',
+    );
+  }
+
   Future<Map<String, dynamic>> createDelivery(
     Map<String, dynamic> payload,
   ) {
