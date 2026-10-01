@@ -5,8 +5,20 @@
   <link rel="stylesheet" href="{{ url_for('static', filename='oma-theme.css') }}">
   <title>Login</title>
   <style>
-    body { font-family: -apple-system, Arial, sans-serif; background:#f4f5f7; display:flex; align-items:center; justify-content:center; height:100vh; margin:0; }
-    .box { background:#fff; padding:32px 36px; border-radius:8px; box-shadow:0 2px 10px rgba(0,0,0,0.08); width:320px; }
+    body { font-family: -apple-system, Arial, sans-serif; background:#f4f5f7; display:flex; align-items:center; justify-content:center; height:100vh; margin:0; overflow:hidden; position:relative; }
+    /* Animated backdrop: logos drift and tilt, then a pale wash fades them so the form keeps the focus. */
+    .bg { position:fixed; inset:0; z-index:0; pointer-events:none; }
+    .bg img { position:absolute; width:var(--s); height:auto; left:var(--x); top:var(--y); opacity:.9;
+              animation: drift var(--d) ease-in-out infinite alternate; animation-delay:var(--delay); }
+    .bg::after { content:""; position:absolute; inset:0; background:rgba(244,245,247,.62); }
+    @keyframes drift {
+      0%   { transform: translate(0,0) rotate(-12deg); }
+      50%  { transform: translate(5vw,-4vh) rotate(8deg); }
+      100% { transform: translate(-4vw,5vh) rotate(-6deg); }
+    }
+    @media (prefers-reduced-motion: reduce) { .bg img { animation:none; } }
+    .box { position:relative; z-index:1; background:#fff; padding:32px 36px; border-radius:12px; box-shadow:0 12px 40px rgba(0,0,0,0.18); width:320px; max-width:calc(100vw - 32px); animation: pop .45s cubic-bezier(.34,1.56,.64,1) both; }
+    @keyframes pop { from { opacity:0; transform:scale(.92); } to { opacity:1; transform:scale(1); } }
     h1 { font-size:20px; margin:0 0 20px; }
     label { display:block; font-size:13px; margin-bottom:4px; color:#333; }
     input { width:100%; padding:8px 10px; margin-bottom:14px; border:1px solid #ccc; border-radius:4px; box-sizing:border-box; }
@@ -18,6 +30,20 @@
   </style>
 </head>
 <body>
+  <div class="bg" aria-hidden="true">
+    <img src="{{ url_for('static', filename='logo.png') }}" alt="" style="--x:8vw;--y:8vh;--s:56px;--d:14s;--delay:0s">
+    <img src="{{ url_for('static', filename='logo.png') }}" alt="" style="--x:70vw;--y:6vh;--s:48px;--d:18s;--delay:-4s">
+    <img src="{{ url_for('static', filename='logo.png') }}" alt="" style="--x:40vw;--y:18vh;--s:64px;--d:16s;--delay:-8s">
+    <img src="{{ url_for('static', filename='logo.png') }}" alt="" style="--x:86vw;--y:30vh;--s:44px;--d:20s;--delay:-2s">
+    <img src="{{ url_for('static', filename='logo.png') }}" alt="" style="--x:6vw;--y:36vh;--s:46px;--d:15s;--delay:-6s">
+    <img src="{{ url_for('static', filename='logo.png') }}" alt="" style="--x:58vw;--y:44vh;--s:54px;--d:19s;--delay:-10s">
+    <img src="{{ url_for('static', filename='logo.png') }}" alt="" style="--x:22vw;--y:56vh;--s:50px;--d:17s;--delay:-3s">
+    <img src="{{ url_for('static', filename='logo.png') }}" alt="" style="--x:80vw;--y:62vh;--s:60px;--d:21s;--delay:-7s">
+    <img src="{{ url_for('static', filename='logo.png') }}" alt="" style="--x:46vw;--y:72vh;--s:46px;--d:16s;--delay:-5s">
+    <img src="{{ url_for('static', filename='logo.png') }}" alt="" style="--x:8vw;--y:78vh;--s:62px;--d:18s;--delay:-9s">
+    <img src="{{ url_for('static', filename='logo.png') }}" alt="" style="--x:68vw;--y:84vh;--s:48px;--d:15s;--delay:-1s">
+    <img src="{{ url_for('static', filename='logo.png') }}" alt="" style="--x:34vw;--y:88vh;--s:52px;--d:20s;--delay:-11s">
+  </div>
   <div class="box">
     <h1>Admin Login</h1>
     {% with messages = get_flashed_messages(with_categories=true) %}
