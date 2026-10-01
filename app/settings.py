@@ -37,6 +37,9 @@ def edit():
             business_name=request.form.get("business_name", "").strip(),
             business_phone=request.form.get("business_phone", "").strip(),
             business_address=request.form.get("business_address", "").strip(),
+            bank_name=request.form.get("bank_name", "").strip(),
+            bank_account_number=request.form.get("bank_account_number", "").strip(),
+            bank_account_name=request.form.get("bank_account_name", "").strip(),
             logo_data=logo_data,
             logo_mimetype=logo_mimetype,
         )

@@ -205,6 +205,8 @@ class Sale(db.Model):
     customer_name = db.Column(db.String(255))
     customer_phone = db.Column(db.String(50))
     customer_address = db.Column(db.Text)
+    # Optional. Only used to suggest which deliveries can share a courier bag.
+    customer_city = db.Column(db.String(100))
     customer_state = db.Column(db.String(100))
 
     order_status = db.Column(db.String(50), default="New")  # New, Packed, Shipped, Delivered, Cancelled
@@ -381,6 +383,12 @@ class AppSettings(db.Model):
     business_address = db.Column(db.Text)
     logo_data = db.Column(db.LargeBinary)
     logo_mimetype = db.Column(db.String(50))
+    # Account customers pay shipping into. Used to fill the "goods have
+    # arrived" WhatsApp message, so a change of account is a settings edit,
+    # not a code change.
+    bank_name = db.Column(db.String(100))
+    bank_account_number = db.Column(db.String(50))
+    bank_account_name = db.Column(db.String(255))
 
     def __repr__(self):
         return f"<AppSettings {self.label_width_mm}x{self.label_height_mm}mm>"

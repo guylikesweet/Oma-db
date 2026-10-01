@@ -6,7 +6,7 @@ from flask_login import login_required
 
 from app.models import Delivery
 from app.services.delivery import (
-    get_ready_for_delivery_sales, find_phone_matches, find_name_matches,
+    get_ready_for_delivery_sales, find_consolidation_groups,
     create_delivery, update_delivery_status, DeliveryValidationError,
 )
 from app.services.labels import get_label_context, generate_label_pdf, label_ready
@@ -19,13 +19,11 @@ delivery_bp = Blueprint("delivery", __name__, url_prefix="/delivery", template_f
 @login_required
 def ready():
     sales = get_ready_for_delivery_sales()
-    phone_matches = find_phone_matches()
-    name_matches = find_name_matches()
     return render_template(
         "delivery/ready.html",
         sales=sales,
-        phone_matches=phone_matches,
-        name_matches=name_matches,
+        sales_by_id={s.id: s for s in sales},
+        groups=find_consolidation_groups(sales),
     )
 
 

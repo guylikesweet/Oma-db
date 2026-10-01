@@ -24,8 +24,9 @@ from app.models import (
     User, Product, Sale, SaleItem, Shipping, Delivery, ShipmentBatch,
     CourierRate, MonthlyShippingRate, StockLog, MobileOperation, MobileChange,
 )
-from app.services.sales import create_sale, SaleValidationError
+from app.services.sales import create_sale, SaleValidationError, shipping_cost_for_items
 from app.services.rates import get_rate_for_month
+from app.services.delivery import check_consolidation, find_consolidation_groups
 
 api_bp = Blueprint("api", __name__, url_prefix="/api")
 
@@ -124,6 +125,7 @@ def _sale_json(s):
         "customer_name": s.customer_name,
         "customer_phone": s.customer_phone,
         "customer_address": s.customer_address,
+        "customer_city": s.customer_city,
         "customer_state": s.customer_state,
         "order_status": s.order_status,
         "payment_status": s.payment_status,
@@ -384,6 +386,7 @@ def _create_sale_api(require_operation_id):
             customer_name=(data.get("customer_name") or "").strip(),
             customer_phone=(data.get("customer_phone") or "").strip(),
             customer_address=(data.get("customer_address") or "").strip(),
+            customer_city=(data.get("customer_city") or "").strip(),
             customer_state=(data.get("customer_state") or "").strip(),
             payment_status=data.get("payment_status") or "Paid",
             notes=(data.get("notes") or "").strip(),
@@ -607,6 +610,18 @@ def mobile_settle_shipping(sale_id):
         db.session.rollback(); return jsonify({"error": str(e)}), 400
 
 
+@api_bp.route("/v1/sales/<int:sale_id>/arrival-notice", methods=("GET",))
+@require_api_token
+def mobile_arrival_notice(sale_id):
+    """The "your goods have arrived" WhatsApp message for one sale, plus the wa.me link that opens it."""
+    from app.services.notifications import build_arrival_notice, NotificationError
+    sale = Sale.query.get_or_404(sale_id)
+    try:
+        return jsonify(build_arrival_notice(sale))
+    except NotificationError as e:
+        return jsonify({"error": str(e)}), 400
+
+
 @api_bp.route("/v1/sales/<int:sale_id>/invoice.pdf", methods=("GET",))
 @require_api_token
 def mobile_invoice_pdf(sale_id):
@@ -675,8 +690,7 @@ def mobile_batch_arrive(batch_id):
         if not b.sales: raise ValueError("Batch has no sales assigned.")
         rate = get_rate_for_month(date.today())
         for s in b.sales:
-            total_cbm = sum((i.line_cbm or Decimal("0")) for i in s.items)
-            s.actual_shipping_cost = total_cbm * rate
+            s.actual_shipping_cost = shipping_cost_for_items(s.items, rate)
             s.total_amount = (s.subtotal_amount or Decimal("0")) + s.actual_shipping_cost
         b.arrived_at = datetime.utcnow(); b.status = ShipmentBatch.STATUS_ARRIVED
         return _mobile_finish(op, "batch_arrive", 200, _batch_json(b))
@@ -698,6 +712,14 @@ def mobile_ready_deliveries():
     return jsonify([_sale_json(x) for x in rows])
 
 
+@api_bp.route("/v1/deliveries/suggestions", methods=("GET",))
+@require_api_token
+def mobile_delivery_suggestions():
+    """Groups of ready sales that could share one courier bag (same phone, name, city or state).
+    Purely a suggestion list — consolidating is always the person's choice."""
+    return jsonify(find_consolidation_groups())
+
+
 @api_bp.route("/v1/deliveries", methods=("POST",))
 @require_api_token
 def mobile_create_delivery():
@@ -712,12 +734,10 @@ def mobile_create_delivery():
         for s in sales:
             if s.delivery_id is not None: raise ValueError(f"Sale #{s.id} is already assigned to a delivery.")
             if not s.ready_for_delivery: raise ValueError(f"Sale #{s.id} is not ready for delivery.")
-        if len(sales)>1:
-            phones={s.customer_phone for s in sales if s.customer_phone}; names={(s.customer_name or '').strip().lower() for s in sales if s.customer_name}
-            if len(phones)>1 and len(names)>1: raise ValueError("Consolidated delivery must be for the same customer.")
+        consolidation_type = check_consolidation(sales)
         method=str(data.get("method") or "").strip()
         if not method: raise ValueError("Delivery method is required.")
-        d=Delivery(method=method,status=Delivery.STATUS_PENDING,is_consolidated=len(sales)>1,consolidation_type=data.get("consolidation_type") or None,delivery_address=str(data.get("delivery_address") or "").strip() or sales[0].customer_address,notes=str(data.get("notes") or "").strip() or None)
+        d=Delivery(method=method,status=Delivery.STATUS_PENDING,is_consolidated=len(sales)>1,consolidation_type=consolidation_type,delivery_address=str(data.get("delivery_address") or "").strip() or sales[0].customer_address,notes=str(data.get("notes") or "").strip() or None)
         db.session.add(d); db.session.flush()
         for s in sales: s.delivery_id=d.id
         return _mobile_finish(op,"create_delivery",201,_delivery_json(d))
@@ -887,11 +907,22 @@ def mobile_update_monthly_rate(rate_id):
     except (ValueError,InvalidOperation) as e:db.session.rollback();return jsonify({'error':str(e)}),400
 
 
+def _settings_json(s):
+    return {
+        'id': s.id, 'label_width_mm': s.label_width_mm, 'label_height_mm': s.label_height_mm,
+        'business_name': s.business_name, 'business_phone': s.business_phone,
+        'business_address': s.business_address,
+        'bank_name': s.bank_name, 'bank_account_number': s.bank_account_number,
+        'bank_account_name': s.bank_account_name,
+        'has_logo': bool(s.logo_data), 'logo_mimetype': s.logo_mimetype,
+    }
+
+
 @api_bp.route("/v1/settings", methods=("GET",))
 @require_api_token
 def mobile_settings_get():
     from app.services.settings import get_settings
-    s=get_settings();return jsonify({'id':s.id,'label_width_mm':s.label_width_mm,'label_height_mm':s.label_height_mm,'business_name':s.business_name,'business_phone':s.business_phone,'business_address':s.business_address,'has_logo':bool(s.logo_data),'logo_mimetype':s.logo_mimetype})
+    return jsonify(_settings_json(get_settings()))
 
 @api_bp.route("/v1/settings", methods=("POST","PUT","PATCH"))
 @require_api_token
@@ -903,14 +934,14 @@ def mobile_settings_update():
         op,existing=_mobile_operation(data)
         if existing:return _mobile_replay(existing)
         s=get_settings()
-        for f in ('business_name','business_phone','business_address'):
+        for f in ('business_name','business_phone','business_address','bank_name','bank_account_number','bank_account_name'):
             if f in data:setattr(s,f,str(data[f] or '').strip() or None)
         for f in ('label_width_mm','label_height_mm'):
             if f in data:setattr(s,f,int(data[f]))
         if data.get('logo_base64'):
             import base64
             s.logo_data=base64.b64decode(data['logo_base64']);s.logo_mimetype=str(data.get('logo_mimetype') or 'image/png')
-        payload={'id':s.id,'label_width_mm':s.label_width_mm,'label_height_mm':s.label_height_mm,'business_name':s.business_name,'business_phone':s.business_phone,'business_address':s.business_address,'has_logo':bool(s.logo_data),'logo_mimetype':s.logo_mimetype}
+        payload=_settings_json(s)
         return _mobile_finish(op,'update_settings',200,payload)
     except (ValueError,TypeError) as e:db.session.rollback();return jsonify({'error':str(e)}),400
 
