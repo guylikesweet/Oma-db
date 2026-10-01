@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:printing/printing.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import 'brand_loader.dart';
 import 'data/api_client.dart';
@@ -526,6 +527,44 @@ class _WebProductsPageState extends State<WebProductsPage> {
   }
 }
 
+/// Opens a WhatsApp chat with the sale's customer (their sale phone number),
+/// pre-filled with the "your goods have arrived" message. The message is
+/// built on the server from the sale and the bank details in Settings, so
+/// an account change never needs an app update.
+Future<void> openArrivalNotice(
+  BuildContext context,
+  ApiClient api,
+  int saleId,
+) async {
+  void say(String text) {
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(text)),
+      );
+    }
+  }
+
+  try {
+    final notice = await api.arrivalNotice(saleId);
+    final url = '${notice['whatsapp_url'] ?? ''}';
+
+    if (url.isEmpty) {
+      throw Exception('No WhatsApp link was returned.');
+    }
+
+    final opened = await launchUrl(
+      Uri.parse(url),
+      mode: LaunchMode.externalApplication,
+    );
+
+    if (!opened) {
+      say('Could not open WhatsApp on this device.');
+    }
+  } catch (e) {
+    say('$e');
+  }
+}
+
 class WebSalesPage extends StatefulWidget {
   const WebSalesPage({super.key, required this.api});
 
@@ -810,6 +849,14 @@ class _WebSalesPageState extends State<WebSalesPage> {
                             );
                           }
 
+                          if (value == 'notify') {
+                            await openArrivalNotice(
+                              context,
+                              widget.api,
+                              sale['id'] as int,
+                            );
+                          }
+
                           if (value == 'share_invoice') {
                             await shareInvoice(
                               sale['id'] as int,
@@ -842,6 +889,17 @@ class _WebSalesPageState extends State<WebSalesPage> {
                               value: 'settle',
                               child: Text(
                                 'Settle shipping',
+                              ),
+                            ),
+                          // actual_shipping_cost is only filled in once the batch
+                          // has arrived — that's when customers get notified.
+                          if (sale['batch_id'] != null &&
+                              sale['actual_shipping_cost'] != null &&
+                              sale['shipping_payment_settled'] != true)
+                            const PopupMenuItem(
+                              value: 'notify',
+                              child: Text(
+                                'Notify customer on WhatsApp',
                               ),
                             ),
                           const PopupMenuDivider(),
@@ -1047,12 +1105,28 @@ class _BatchesPageState extends State<BatchesPage> {
                       },
                     );
                   } else if (arrived && !settled) {
-                    trailing = FilledButton.tonal(
-                      onPressed: () => settleFromBatch(
-                        sheetContext,
-                        sale['id'] as int,
-                      ),
-                      child: const Text('Settle'),
+                    trailing = Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        IconButton(
+                          tooltip: 'Notify customer on WhatsApp',
+                          icon: const Icon(
+                            Icons.chat,
+                            color: Color(0xFF25D366),
+                          ),
+                          onPressed: () => notifyCustomer(
+                            sheetContext,
+                            sale['id'] as int,
+                          ),
+                        ),
+                        FilledButton.tonal(
+                          onPressed: () => settleFromBatch(
+                            sheetContext,
+                            sale['id'] as int,
+                          ),
+                          child: const Text('Settle'),
+                        ),
+                      ],
                     );
                   } else if (settled) {
                     trailing = const Icon(
@@ -1180,6 +1254,12 @@ class _BatchesPageState extends State<BatchesPage> {
     }
   }
 
+  Future<void> notifyCustomer(
+    BuildContext sheetContext,
+    int saleId,
+  ) =>
+      openArrivalNotice(sheetContext, widget.api, saleId);
+
   Future<void> settleFromBatch(
     BuildContext sheetContext,
     int saleId,
@@ -1301,6 +1381,9 @@ class _DeliveriesPageState
     extends State<DeliveriesPage> {
   List<dynamic> rows = [];
   List<dynamic> readySales = [];
+  // Groups of ready sales that could share one courier bag (same phone,
+  // name, city or state). Suggestions only.
+  List<dynamic> groups = [];
   String? loadError;
   bool busy = true;
 
@@ -1322,6 +1405,14 @@ class _DeliveriesPageState
       loadError = null;
     } catch (e) {
       loadError = '$e';
+    }
+
+    // Suggestions are a bonus: if this fails (e.g. an older server), the
+    // page still works exactly as before.
+    try {
+      groups = await widget.api.deliverySuggestions();
+    } catch (_) {
+      groups = [];
     }
 
     if (mounted) {
@@ -1351,6 +1442,19 @@ class _DeliveriesPageState
     final address = TextEditingController();
     final notes = TextEditingController();
 
+    String describe(dynamic sale) {
+      final parts = <String>[
+        '${sale['customer_name'] ?? ''}',
+        if ('${sale['customer_phone'] ?? ''}'.isNotEmpty)
+          '${sale['customer_phone']}',
+        if ('${sale['customer_city'] ?? ''}'.isNotEmpty)
+          '${sale['customer_city']}',
+        if ('${sale['customer_state'] ?? ''}'.isNotEmpty)
+          '${sale['customer_state']}',
+      ];
+      return parts.where((x) => x.isNotEmpty).join(' • ');
+    }
+
     final ok = await showDialog<bool>(
       context: context,
       builder: (dialogContext) {
@@ -1358,52 +1462,105 @@ class _DeliveriesPageState
           builder: (context, setDialogState) {
             return AlertDialog(
               title: const Text('Create delivery'),
-              content: SingleChildScrollView(
-                child: Column(
-                  children: [
-                    TextField(
-                      controller: method,
-                      decoration: const InputDecoration(
-                        labelText: 'Method',
-                      ),
-                    ),
-                    TextField(
-                      controller: address,
-                      decoration: const InputDecoration(
-                        labelText: 'Delivery address',
-                      ),
-                    ),
-                    TextField(
-                      controller: notes,
-                      decoration: const InputDecoration(
-                        labelText: 'Notes',
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    ...readySales.map(
-                      (sale) => CheckboxListTile(
-                        value: selected.contains(
-                          sale['id'],
+              content: SizedBox(
+                width: double.maxFinite,
+                child: SingleChildScrollView(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      TextField(
+                        controller: method,
+                        decoration: const InputDecoration(
+                          labelText: 'Method',
                         ),
-                        title: Text(
-                          '${sale['order_id'] ?? sale['id']}'
-                          ' • ${sale['customer_name'] ?? ''}',
+                      ),
+                      TextField(
+                        controller: address,
+                        decoration: const InputDecoration(
+                          labelText: 'Delivery address',
                         ),
-                        onChanged: (value) {
-                          setDialogState(() {
-                            final id =
-                                sale['id'] as int;
+                      ),
+                      TextField(
+                        controller: notes,
+                        decoration: const InputDecoration(
+                          labelText: 'Notes',
+                        ),
+                      ),
+                      if (groups.isNotEmpty) ...[
+                        const SizedBox(height: 12),
+                        const Text(
+                          'Could share one courier bag (optional)',
+                          style: TextStyle(fontWeight: FontWeight.bold),
+                        ),
+                        const SizedBox(height: 4),
+                        Wrap(
+                          spacing: 6,
+                          children: groups.map((g) {
+                            final ids = List<int>.from(
+                              (g['sale_ids'] as List).map(
+                                (x) => x is int ? x : int.parse('$x'),
+                              ),
+                            );
+                            final value = '${g['value'] ?? ''}';
+                            return ActionChip(
+                              avatar: const Icon(
+                                Icons.shopping_bag_outlined,
+                                size: 18,
+                              ),
+                              label: Text(
+                                '${g['label']}'
+                                '${value.isEmpty ? '' : ': $value'}'
+                                ' (${ids.length})',
+                              ),
+                              onPressed: () {
+                                setDialogState(() {
+                                  selected
+                                    ..clear()
+                                    ..addAll(ids);
+                                });
+                              },
+                            );
+                          }).toList(),
+                        ),
+                      ],
+                      const SizedBox(height: 8),
+                      ...readySales.map(
+                        (sale) => CheckboxListTile(
+                          contentPadding: EdgeInsets.zero,
+                          value: selected.contains(
+                            sale['id'],
+                          ),
+                          title: Text(
+                            '${sale['order_id'] ?? sale['id']}'
+                            ' • ${sale['customer_name'] ?? ''}',
+                          ),
+                          subtitle: Text(describe(sale)),
+                          onChanged: (value) {
+                            setDialogState(() {
+                              final id = sale['id'] as int;
 
-                            if (value == true) {
-                              selected.add(id);
-                            } else {
-                              selected.remove(id);
-                            }
-                          });
-                        },
+                              if (value == true) {
+                                selected.add(id);
+                              } else {
+                                selected.remove(id);
+                              }
+                            });
+                          },
+                        ),
                       ),
-                    ),
-                  ],
+                      if (selected.length > 1)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 8),
+                          child: Text(
+                            '${selected.length} orders will go in one '
+                            'courier bag with one label.',
+                            style: TextStyle(
+                              color: Theme.of(context).colorScheme.primary,
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
                 ),
               ),
               actions: [
@@ -1419,7 +1576,9 @@ class _DeliveriesPageState
                             dialogContext,
                             true,
                           ),
-                  child: const Text('Create'),
+                  child: Text(
+                    selected.length > 1 ? 'Create bag' : 'Create',
+                  ),
                 ),
               ],
             );
@@ -1431,7 +1590,7 @@ class _DeliveriesPageState
     if (ok != true) return;
 
     try {
-      await widget.api.createDelivery({
+      final created = await widget.api.createDelivery({
         'sale_ids': selected.toList(),
         'method': method.text.trim(),
         'delivery_address': address.text.trim(),
@@ -1439,6 +1598,20 @@ class _DeliveriesPageState
       });
 
       await load();
+
+      // A consolidated bag needs its own label — go straight to it.
+      final newId = created['id'];
+      if (selected.length > 1 && newId is int && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Courier bag created for ${selected.length} orders. '
+              'Add its label details next.',
+            ),
+          ),
+        );
+        await labelData(newId);
+      }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -1676,6 +1849,14 @@ class _DeliveriesPageState
                           ),
                         ],
                       ),
+                      if (groups.isNotEmpty)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 4),
+                          child: Text(
+                            '${groups.length} group(s) of orders could share '
+                            'a courier bag — tap Create delivery to see them.',
+                          ),
+                        ),
                       const SizedBox(height: 8),
                       ...readySales.map(
                         (sale) => ListTile(
@@ -1745,8 +1926,13 @@ class _DeliveriesPageState
                       ),
                       subtitle: Text(
                         '${delivery['status'] ?? ''}'
-                        ' • $count sale(s)',
+                        ' • $count sale(s)'
+                        '${delivery['is_consolidated'] == true ? ' • Courier bag' : ''}'
+                        '${delivery['is_consolidated'] == true && delivery['consolidation_type'] != null ? ' (same ${delivery['consolidation_type']})' : ''}',
                       ),
+                      leading: delivery['is_consolidated'] == true
+                          ? const Icon(Icons.shopping_bag)
+                          : const Icon(Icons.local_shipping_outlined),
                       trailing:
                           PopupMenuButton<String>(
                         onSelected: (value) async {
@@ -3012,6 +3198,10 @@ class _SettingsPageState
   final address = TextEditingController();
   final width = TextEditingController();
   final height = TextEditingController();
+  // Shipping payment account, sent to customers when their goods arrive.
+  final bankName = TextEditingController();
+  final bankNumber = TextEditingController();
+  final bankAccountName = TextEditingController();
 
   bool loading = true;
 
@@ -3040,6 +3230,15 @@ class _SettingsPageState
 
       height.text =
           '${settings['label_height_mm'] ?? 150}';
+
+      bankName.text =
+          '${settings['bank_name'] ?? ''}';
+
+      bankNumber.text =
+          '${settings['bank_account_number'] ?? ''}';
+
+      bankAccountName.text =
+          '${settings['bank_account_name'] ?? ''}';
     } catch (_) {}
 
     if (mounted) {
@@ -3057,6 +3256,9 @@ class _SettingsPageState
             int.tryParse(width.text.trim()),
         'label_height_mm':
             int.tryParse(height.text.trim()),
+        'bank_name': bankName.text.trim(),
+        'bank_account_number': bankNumber.text.trim(),
+        'bank_account_name': bankAccountName.text.trim(),
       });
 
       if (mounted) {
@@ -3082,6 +3284,9 @@ class _SettingsPageState
     address.dispose();
     width.dispose();
     height.dispose();
+    bankName.dispose();
+    bankNumber.dispose();
+    bankAccountName.dispose();
     super.dispose();
   }
 
@@ -3129,6 +3334,36 @@ class _SettingsPageState
                   keyboardType: TextInputType.number,
                   decoration: const InputDecoration(
                     labelText: 'Label height (mm)',
+                  ),
+                ),
+                const SizedBox(height: 24),
+                Text(
+                  'Shipping payment account',
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+                const SizedBox(height: 4),
+                const Text(
+                  'Sent to customers on WhatsApp when their goods arrive, '
+                  'together with the business name above. Change it here '
+                  'whenever the account changes.',
+                ),
+                TextField(
+                  controller: bankName,
+                  decoration: const InputDecoration(
+                    labelText: 'Bank name',
+                  ),
+                ),
+                TextField(
+                  controller: bankNumber,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(
+                    labelText: 'Account number',
+                  ),
+                ),
+                TextField(
+                  controller: bankAccountName,
+                  decoration: const InputDecoration(
+                    labelText: 'Account name',
                   ),
                 ),
                 const SizedBox(height: 20),

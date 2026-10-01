@@ -8,6 +8,7 @@ import 'package:share_plus/share_plus.dart';
 import 'package:sqflite/sqflite.dart' show databaseFactory;
 import 'package:sqflite_common_ffi_web/sqflite_ffi_web.dart';
 import 'brand_loader.dart';
+import 'login_background.dart';
 import 'data/api_client.dart';
 import 'data/app_session.dart';
 import 'data/local_database.dart';
@@ -179,13 +180,17 @@ class _LoginPageState extends State<LoginPage> {
 
   @override
   Widget build(BuildContext context) => Scaffold(
-        body: SafeArea(
-          child: Center(
+        body: Stack(
+          children: [
+        const Positioned.fill(child: LoginBackground()),
+        SafeArea(
+          child: LoginPopIn(child: Center(
             child: SingleChildScrollView(
               padding: const EdgeInsets.all(24),
               child: ConstrainedBox(
                 constraints: const BoxConstraints(maxWidth: 440),
                 child: Card(
+                  elevation: 10,
                   child: Padding(
                     padding: const EdgeInsets.all(24),
                     child: Column(
@@ -265,7 +270,9 @@ class _LoginPageState extends State<LoginPage> {
                 ),
               ),
             ),
-          ),
+          )),
+        ),
+          ],
         ),
       );
 }
@@ -1949,17 +1956,38 @@ class NewSalePage extends StatefulWidget {
       _NewSalePageState();
 }
 
+/// One product line on a sale. The same product can appear on several lines
+/// (e.g. two colours of one case), each with its own quantity, price and variant.
+class _SaleLine {
+  _SaleLine(this.product);
+
+  final Map<String, dynamic> product;
+  final TextEditingController qty = TextEditingController(text: '1');
+  final TextEditingController price = TextEditingController();
+  final TextEditingController variant = TextEditingController();
+
+  int get id => product['id'] as int;
+  int get quantity => int.tryParse(qty.text.trim()) ?? 0;
+  double get unitPrice => double.tryParse(price.text.trim()) ?? 0;
+  double get lineTotal => quantity * unitPrice;
+
+  void dispose() {
+    qty.dispose();
+    price.dispose();
+    variant.dispose();
+  }
+}
+
 class _NewSalePageState extends State<NewSalePage> {
   final name = TextEditingController();
   final phone = TextEditingController();
   final address = TextEditingController();
+  final city = TextEditingController();
   final state = TextEditingController();
   final notes = TextEditingController();
 
   List<Map<String, dynamic>> products = [];
-
-  final Map<int, int> qty = {};
-  final Map<int, TextEditingController> prices = {};
+  final List<_SaleLine> lines = [];
 
   String payment = 'Paid';
   bool loading = true;
@@ -1980,11 +2008,6 @@ class _NewSalePageState extends State<NewSalePage> {
       orderBy: 'name ASC',
     );
 
-    for (final p in rows) {
-      prices[p['id'] as int] =
-          TextEditingController();
-    }
-
     if (mounted) {
       setState(() {
         products = rows;
@@ -1995,62 +2018,156 @@ class _NewSalePageState extends State<NewSalePage> {
 
   @override
   void dispose() {
-    for (final c in prices.values) {
-      c.dispose();
+    for (final line in lines) {
+      line.dispose();
     }
 
-    for (final c in [
-      name,
-      phone,
-      address,
-      state,
-      notes,
-    ]) {
+    for (final c in [name, phone, address, city, state, notes]) {
       c.dispose();
     }
 
     super.dispose();
   }
 
-  Future<void> save() async {
-    final items = <Map<String, dynamic>>[];
-
-    for (final p in products) {
-      final id = p['id'] as int;
-      final q = qty[id] ?? 0;
-
-      if (q > 0) {
-        final price =
-            double.tryParse(prices[id]!.text.trim());
-
-        if (price == null || price < 0) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text(
-                'Enter a valid price for every selected product.',
-              ),
-            ),
-          );
-          return;
-        }
-
-        items.add({
-          'product_id': id,
-          'qty': q,
-          'unit_price': price.toStringAsFixed(2),
-        });
+  /// Total quantity of one product across every line (stocked sales are
+  /// limited by stock, and two lines of the same product share that stock).
+  int usedQty(int productId, {_SaleLine? except}) {
+    var total = 0;
+    for (final line in lines) {
+      if (line.id == productId && line != except) {
+        total += line.quantity;
       }
     }
+    return total;
+  }
 
-    if (items.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Select at least one product.',
-          ),
-        ),
-      );
+  double get saleTotal => lines.fold(0.0, (sum, line) => sum + line.lineTotal);
+
+  Future<void> addProduct() async {
+    final picked = await showModalBottomSheet<Map<String, dynamic>>(
+      context: context,
+      isScrollControlled: true,
+      builder: (sheetContext) {
+        var query = '';
+
+        return StatefulBuilder(
+          builder: (context, setSheetState) {
+            final matches = products.where((p) {
+              return '${p['name']}'.toLowerCase().contains(query.toLowerCase());
+            }).toList();
+
+            return Padding(
+              padding: EdgeInsets.only(
+                bottom: MediaQuery.of(sheetContext).viewInsets.bottom,
+              ),
+              child: SizedBox(
+                height: MediaQuery.of(sheetContext).size.height * 0.7,
+                child: Column(
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.all(12),
+                      child: TextField(
+                        autofocus: true,
+                        decoration: const InputDecoration(
+                          labelText: 'Search products',
+                          prefixIcon: Icon(Icons.search),
+                          border: OutlineInputBorder(),
+                        ),
+                        onChanged: (v) => setSheetState(() => query = v.trim()),
+                      ),
+                    ),
+                    Expanded(
+                      child: matches.isEmpty
+                          ? const Center(child: Text('No matching products.'))
+                          : ListView.builder(
+                              itemCount: matches.length,
+                              itemBuilder: (_, i) {
+                                final p = matches[i];
+                                return ListTile(
+                                  title: Text('${p['name']}'),
+                                  subtitle: widget.stocked
+                                      ? Text('Stock: ${p['stock']}')
+                                      : null,
+                                  onTap: () => Navigator.pop(sheetContext, p),
+                                );
+                              },
+                            ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+
+    if (picked == null || !mounted) return;
+
+    setState(() => lines.add(_SaleLine(picked)));
+  }
+
+  void removeLine(_SaleLine line) {
+    setState(() => lines.remove(line));
+    line.dispose();
+  }
+
+  void changeQty(_SaleLine line, int delta) {
+    final next = line.quantity + delta;
+    if (next < 1) return;
+
+    if (widget.stocked) {
+      final stock = line.product['stock'] as int? ?? 0;
+      if (usedQty(line.id, except: line) + next > stock) return;
+    }
+
+    setState(() => line.qty.text = '$next');
+  }
+
+  void toast(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message)),
+    );
+  }
+
+  Future<void> save() async {
+    if (lines.isEmpty) {
+      toast('Add at least one product.');
       return;
+    }
+
+    final items = <Map<String, dynamic>>[];
+
+    for (final line in lines) {
+      final label = '${line.product['name']}';
+
+      if (line.quantity <= 0) {
+        toast('Enter a quantity of 1 or more for $label.');
+        return;
+      }
+
+      final price = double.tryParse(line.price.text.trim());
+      if (price == null || price < 0) {
+        toast('Enter a valid price for $label.');
+        return;
+      }
+
+      if (widget.stocked) {
+        final stock = line.product['stock'] as int? ?? 0;
+        if (usedQty(line.id) > stock) {
+          toast('Not enough stock for $label (have $stock).');
+          return;
+        }
+      }
+
+      final variant = line.variant.text.trim();
+
+      items.add({
+        'product_id': line.id,
+        'qty': line.quantity,
+        'unit_price': price.toStringAsFixed(2),
+        if (variant.isNotEmpty) 'variant_note': variant,
+      });
     }
 
     setState(() => saving = true);
@@ -2064,6 +2181,7 @@ class _NewSalePageState extends State<NewSalePage> {
           customerName: name.text,
           customerPhone: phone.text,
           customerAddress: address.text,
+          customerCity: city.text,
           customerState: state.text,
           paymentStatus: payment,
           notes: notes.text,
@@ -2076,6 +2194,7 @@ class _NewSalePageState extends State<NewSalePage> {
           customerName: name.text,
           customerPhone: phone.text,
           customerAddress: address.text,
+          customerCity: city.text,
           customerState: state.text,
           paymentStatus: payment,
           notes: notes.text,
@@ -2088,10 +2207,8 @@ class _NewSalePageState extends State<NewSalePage> {
         // depends on whether we're actually online right now. Check instead
         // of always claiming "offline", and try a real sync so the message
         // reflects what happened rather than a guess.
-        final connectivityResult =
-            await Connectivity().checkConnectivity();
-        final isOnline =
-            !connectivityResult.contains(ConnectivityResult.none);
+        final connectivityResult = await Connectivity().checkConnectivity();
+        final isOnline = !connectivityResult.contains(ConnectivityResult.none);
 
         message = 'Sale saved — will sync once you\'re back online.';
         if (isOnline) {
@@ -2105,25 +2222,108 @@ class _NewSalePageState extends State<NewSalePage> {
       }
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(message)),
-        );
-
+        toast(message);
         Navigator.pop(context);
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(e.toString()),
-          ),
-        );
+        toast(e.toString());
       }
     } finally {
       if (mounted) {
         setState(() => saving = false);
       }
     }
+  }
+
+  Widget buildLine(int index, _SaleLine line) {
+    final stock = line.product['stock'] as int? ?? 0;
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(10),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    '${index + 1}. ${line.product['name']}',
+                    style: const TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                ),
+                IconButton(
+                  onPressed: () => removeLine(line),
+                  icon: const Icon(Icons.close),
+                  tooltip: 'Remove from sale',
+                ),
+              ],
+            ),
+            if (widget.stocked) Text('Stock: $stock'),
+            const SizedBox(height: 8),
+            TextField(
+              controller: line.variant,
+              textCapitalization: TextCapitalization.sentences,
+              decoration: const InputDecoration(
+                labelText: 'Variant (optional)',
+                hintText: 'e.g. Red, Large',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                IconButton(
+                  onPressed: () => changeQty(line, -1),
+                  icon: const Icon(Icons.remove_circle_outline),
+                ),
+                SizedBox(
+                  width: 64,
+                  child: TextField(
+                    controller: line.qty,
+                    keyboardType: TextInputType.number,
+                    textAlign: TextAlign.center,
+                    onChanged: (_) => setState(() {}),
+                    decoration: const InputDecoration(
+                      labelText: 'Qty',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                ),
+                IconButton(
+                  onPressed: () => changeQty(line, 1),
+                  icon: const Icon(Icons.add_circle_outline),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: TextField(
+                    controller: line.price,
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                    ),
+                    onChanged: (_) => setState(() {}),
+                    decoration: const InputDecoration(
+                      labelText: 'Unit price',
+                      prefixText: '₦',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            if (line.lineTotal > 0)
+              Padding(
+                padding: const EdgeInsets.only(top: 6),
+                child: Text(
+                  'Line total: ₦${line.lineTotal.toStringAsFixed(2)}',
+                  style: const TextStyle(color: Colors.grey),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
   }
 
   @override
@@ -2134,9 +2334,7 @@ class _NewSalePageState extends State<NewSalePage> {
           ),
         ),
         body: loading
-            ? const Center(
-                child: BrandLoader(),
-              )
+            ? const Center(child: BrandLoader())
             : ListView(
                 padding: const EdgeInsets.all(16),
                 children: [
@@ -2167,8 +2365,9 @@ class _NewSalePageState extends State<NewSalePage> {
                   const SizedBox(height: 10),
                   TextField(
                     controller: phone,
+                    keyboardType: TextInputType.phone,
                     decoration: const InputDecoration(
-                      labelText: 'Phone',
+                      labelText: 'Phone (WhatsApp number)',
                       border: OutlineInputBorder(),
                     ),
                   ),
@@ -2181,12 +2380,28 @@ class _NewSalePageState extends State<NewSalePage> {
                     ),
                   ),
                   const SizedBox(height: 10),
-                  TextField(
-                    controller: state,
-                    decoration: const InputDecoration(
-                      labelText: 'State',
-                      border: OutlineInputBorder(),
-                    ),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: city,
+                          decoration: const InputDecoration(
+                            labelText: 'City (optional)',
+                            border: OutlineInputBorder(),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: TextField(
+                          controller: state,
+                          decoration: const InputDecoration(
+                            labelText: 'State',
+                            border: OutlineInputBorder(),
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                   const SizedBox(height: 10),
                   DropdownButtonFormField<String>(
@@ -2196,18 +2411,9 @@ class _NewSalePageState extends State<NewSalePage> {
                       border: OutlineInputBorder(),
                     ),
                     items: const [
-                      DropdownMenuItem(
-                        value: 'Paid',
-                        child: Text('Paid'),
-                      ),
-                      DropdownMenuItem(
-                        value: 'Pending',
-                        child: Text('Pending'),
-                      ),
-                      DropdownMenuItem(
-                        value: 'Refunded',
-                        child: Text('Refunded'),
-                      ),
+                      DropdownMenuItem(value: 'Paid', child: Text('Paid')),
+                      DropdownMenuItem(value: 'Pending', child: Text('Pending')),
+                      DropdownMenuItem(value: 'Refunded', child: Text('Refunded')),
                     ],
                     onChanged: (v) {
                       if (v != null) {
@@ -2216,192 +2422,42 @@ class _NewSalePageState extends State<NewSalePage> {
                     },
                   ),
                   const SizedBox(height: 16),
-                  Autocomplete<Map<String, dynamic>>(
-                    displayStringForOption: (p) =>
-                        '${p['name']}',
-                    optionsBuilder: (value) {
-                      if (value.text.trim().isEmpty) {
-                        return const Iterable<
-                            Map<String, dynamic>>.empty();
-                      }
-                      final q =
-                          value.text.trim().toLowerCase();
-                      return products.where((p) {
-                        final name =
-                            '${p['name']}'.toLowerCase();
-                        final added =
-                            (qty[p['id'] as int] ?? 0) > 0;
-                        return !added && name.contains(q);
-                      });
-                    },
-                    onSelected: (p) {
-                      final id = p['id'] as int;
-                      setState(() => qty[id] = 1);
-                    },
-                    optionsViewBuilder:
-                        (context, onSelected, options) =>
-                            Align(
-                      alignment: Alignment.topLeft,
-                      child: Material(
-                        elevation: 4,
-                        child: ConstrainedBox(
-                          constraints: const BoxConstraints(
-                            maxHeight: 260,
-                          ),
-                          child: ListView.builder(
-                            padding: EdgeInsets.zero,
-                            shrinkWrap: true,
-                            itemCount: options.length,
-                            itemBuilder: (_, i) {
-                              final p =
-                                  options.elementAt(i);
-                              return ListTile(
-                                title: Text('${p['name']}'),
-                                subtitle: widget.stocked
-                                    ? Text('Stock: ${p['stock']}')
-                                    : null,
-                                onTap: () => onSelected(p),
-                              );
-                            },
-                          ),
-                        ),
-                      ),
-                    ),
-                    fieldViewBuilder: (
-                      context,
-                      controller,
-                      focusNode,
-                      onFieldSubmitted,
-                    ) =>
-                        TextField(
-                      controller: controller,
-                      focusNode: focusNode,
-                      decoration: const InputDecoration(
-                        labelText: 'Search products to add',
-                        prefixIcon: Icon(Icons.search),
-                        border: OutlineInputBorder(),
-                      ),
-                    ),
+                  Text(
+                    lines.isEmpty
+                        ? 'Products'
+                        : 'Products (${lines.length})',
+                    style: Theme.of(context).textTheme.titleMedium,
                   ),
-                  const SizedBox(height: 12),
-                  ...products
-                      .where(
-                    (p) =>
-                        (qty[p['id'] as int] ?? 0) > 0,
-                  )
-                      .map(
-                    (p) {
-                      final id = p['id'] as int;
-                      final q = qty[id] ?? 0;
-
-                      return Card(
-                        child: Padding(
-                          padding:
-                              const EdgeInsets.all(10),
-                          child: Column(
-                            crossAxisAlignment:
-                                CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                mainAxisAlignment:
-                                    MainAxisAlignment
-                                        .spaceBetween,
-                                children: [
-                                  Expanded(
-                                    child: Text(
-                                      '${p['name']}',
-                                      style: const TextStyle(
-                                        fontWeight:
-                                            FontWeight.bold,
-                                      ),
-                                    ),
-                                  ),
-                                  IconButton(
-                                    onPressed: () =>
-                                        setState(
-                                      () => qty[id] = 0,
-                                    ),
-                                    icon: const Icon(
-                                      Icons.close,
-                                    ),
-                                    tooltip:
-                                        'Remove from sale',
-                                  ),
-                                ],
-                              ),
-                              if (widget.stocked)
-                                Text(
-                                  'Stock: ${p['stock']}',
-                                ),
-                              Row(
-                                children: [
-                                  IconButton(
-                                    onPressed: q > 0
-                                        ? () => setState(
-                                              () => qty[id] =
-                                                  q - 1,
-                                            )
-                                        : null,
-                                    icon: const Icon(
-                                      Icons
-                                          .remove_circle_outline,
-                                    ),
-                                  ),
-                                  Text('$q'),
-                                  IconButton(
-                                    onPressed: (!widget.stocked ||
-                                            q < (p['stock'] as int))
-                                        ? () => setState(
-                                              () => qty[id] =
-                                                  q + 1,
-                                            )
-                                        : null,
-                                    icon: const Icon(
-                                      Icons
-                                          .add_circle_outline,
-                                    ),
-                                  ),
-                                  const SizedBox(width: 8),
-                                  Expanded(
-                                    child: TextField(
-                                      controller: prices[id],
-                                      keyboardType:
-                                          const TextInputType
-                                              .numberWithOptions(
-                                        decimal: true,
-                                      ),
-                                      decoration:
-                                          const InputDecoration(
-                                        labelText:
-                                            'Unit price',
-                                        prefixText: '₦',
-                                        border:
-                                            OutlineInputBorder(),
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ],
-                          ),
-                        ),
-                      );
-                    },
-                  ),
-                  if (products
-                      .where((p) =>
-                          (qty[p['id'] as int] ?? 0) > 0)
-                      .isEmpty)
+                  const SizedBox(height: 8),
+                  for (var i = 0; i < lines.length; i++) buildLine(i, lines[i]),
+                  if (lines.isEmpty)
                     const Padding(
-                      padding: EdgeInsets.symmetric(
-                        vertical: 16,
-                      ),
+                      padding: EdgeInsets.symmetric(vertical: 8),
                       child: Text(
-                        'No products added yet — search above to add one.',
-                        style:
-                            TextStyle(color: Colors.grey),
+                        'No products added yet.',
+                        style: TextStyle(color: Colors.grey),
                       ),
                     ),
+                  OutlinedButton.icon(
+                    onPressed: addProduct,
+                    icon: const Icon(Icons.add),
+                    label: Text(
+                      lines.isEmpty ? 'Add product' : 'Add another product',
+                    ),
+                  ),
+                  if (lines.isNotEmpty) ...[
+                    const SizedBox(height: 12),
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: Text(
+                        'Total: ₦${saleTotal.toStringAsFixed(2)}',
+                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                              fontWeight: FontWeight.bold,
+                            ),
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: 16),
                   TextField(
                     controller: notes,
                     maxLines: 2,
@@ -2414,9 +2470,7 @@ class _NewSalePageState extends State<NewSalePage> {
                   FilledButton.icon(
                     onPressed: saving ? null : save,
                     icon: const Icon(Icons.save),
-                    label: Text(
-                      saving ? 'Saving...' : 'Save sale',
-                    ),
+                    label: Text(saving ? 'Saving...' : 'Save sale'),
                   ),
                 ],
               ),
@@ -2751,7 +2805,35 @@ class MorePage extends StatelessWidget {
             ),
             const SizedBox(height: 16),
             OutlinedButton.icon(
-              onPressed: onLogout,
+              onPressed: () async {
+                // Ask first, so a stray tap on this button can't sign
+                // the user out.
+                final sure = await showDialog<bool>(
+                  context: context,
+                  builder: (dialogContext) => AlertDialog(
+                    title: const Text('Log out?'),
+                    content: const Text(
+                      'Are you sure you want to log out?',
+                    ),
+                    actions: [
+                      TextButton(
+                        onPressed: () =>
+                            Navigator.pop(dialogContext, false),
+                        child: const Text('Cancel'),
+                      ),
+                      FilledButton(
+                        onPressed: () =>
+                            Navigator.pop(dialogContext, true),
+                        child: const Text('Log out'),
+                      ),
+                    ],
+                  ),
+                );
+
+                if (sure == true) {
+                  await onLogout();
+                }
+              },
               icon: const Icon(Icons.logout),
               label: const Text('Log out'),
             ),
