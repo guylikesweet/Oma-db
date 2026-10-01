@@ -60,7 +60,7 @@
     <a class="nav-link-item" href="{{ url_for('reports.index') }}">Reports</a>
     <a class="nav-link-item" href="{{ url_for('settings.edit') }}">Settings</a>
     <a class="nav-link-item" href="{{ url_for('data_tools.clear_form') }}">Clear Test Data</a>
-    <a class="nav-link-item" href="{{ url_for('auth.logout') }}">Log Out</a>
+    <a class="nav-link-item" href="{{ url_for('auth.logout') }}" onclick="return confirm('Are you sure you want to log out?');">Log Out</a>
   </nav>
 
   {% block body %}{% endblock %}
