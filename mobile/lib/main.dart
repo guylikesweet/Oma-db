@@ -1928,10 +1928,56 @@ class NewSalePage extends StatefulWidget {
 
 /// One product line on a sale. The same product can appear on several lines
 /// (e.g. two colours of one case), each with its own quantity, price and variant.
+/// Markup (as a percentage of cost) used to suggest a selling price for
+/// STOCKED goods. Cheaper products carry a bigger markup:
+///   cost 5,000 and below      -> 170%
+///   cost 5,001 to 10,000      -> 150%
+///   cost 10,001 and above     -> 100%
+/// Returns null when the product has no usable cost.
+int? stockMarkupPercent(double cost) {
+  if (cost <= 0) return null;
+  if (cost < 5001) return 170;
+  if (cost < 10001) return 150;
+  return 100;
+}
+
+/// Suggested price for ONE unit of a stocked product: cost plus its markup,
+/// rounded to the nearest naira. Only a starting point — the seller can
+/// change it per sale (e.g. to give a discount) and that edited price is
+/// recorded for that sale alone; the product itself is never changed.
+double? suggestedStockPrice(double cost) {
+  final markup = stockMarkupPercent(cost);
+  if (markup == null) return null;
+  return (cost * (100 + markup) / 100).roundToDouble();
+}
+
+String _naira(double value) {
+  final whole = value.round().toString();
+  return whole.replaceAllMapped(
+    RegExp(r'\B(?=(\d{3})+(?!\d))'),
+    (_) => ',',
+  );
+}
+
 class _SaleLine {
-  _SaleLine(this.product);
+  _SaleLine(this.product, {bool stocked = false}) {
+    if (stocked) {
+      final cost = double.tryParse('${product['cost'] ?? ''}');
+      if (cost != null) {
+        markup = stockMarkupPercent(cost);
+        suggestedPrice = suggestedStockPrice(cost);
+        if (suggestedPrice != null) {
+          price.text = suggestedPrice!.round().toString();
+        }
+      }
+    }
+  }
 
   final Map<String, dynamic> product;
+
+  /// Suggested unit price and the markup it came from (stocked sales only).
+  double? suggestedPrice;
+  int? markup;
   final TextEditingController qty = TextEditingController(text: '1');
   final TextEditingController price = TextEditingController();
   final TextEditingController variant = TextEditingController();
@@ -2025,7 +2071,7 @@ class _NewSalePageState extends State<NewSalePage> {
 
     if (picked == null || !mounted) return;
 
-    setState(() => lines.add(_SaleLine(picked)));
+    setState(() => lines.add(_SaleLine(picked, stocked: widget.stocked)));
   }
 
   void removeLine(_SaleLine line) {
@@ -2224,10 +2270,14 @@ class _NewSalePageState extends State<NewSalePage> {
                       decimal: true,
                     ),
                     onChanged: (_) => setState(() {}),
-                    decoration: const InputDecoration(
+                    decoration: InputDecoration(
                       labelText: 'Unit price',
                       prefixText: '₦',
-                      border: OutlineInputBorder(),
+                      helperText: line.suggestedPrice == null
+                          ? null
+                          : 'Suggested ₦${_naira(line.suggestedPrice!)} '
+                              '(cost + ${line.markup}%)',
+                      border: const OutlineInputBorder(),
                     ),
                   ),
                 ),
