@@ -140,6 +140,38 @@ def get_invoice_context(sale):
     }
 
 
+_SMALL_LOGO_CACHE = {}
+
+
+def _small_logo_bytes():
+    """
+    The invoice logo is printed about 40mm wide, but static/logo.png is
+    2172px wide (~500KB). Embedding it as-is made every invoice ~640KB, which
+    is slow to download on a phone. Shrink it once (still sharp when printed)
+    and reuse it.
+    """
+    if "logo" in _SMALL_LOGO_CACHE:
+        return _SMALL_LOGO_CACHE["logo"]
+
+    original, _ = get_logo_bytes()
+    result = original
+
+    if original:
+        try:
+            from PIL import Image as PILImage
+
+            img = PILImage.open(io.BytesIO(original))
+            img.thumbnail((700, 350))
+            buf = io.BytesIO()
+            img.save(buf, format="PNG", optimize=True)
+            result = buf.getvalue()
+        except Exception:
+            result = original  # fall back to the full-size logo
+
+    _SMALL_LOGO_CACHE["logo"] = result
+    return result
+
+
 def generate_invoice_pdf(sale):
     """Returns a BytesIO buffer containing a one-page (or more, if there are
     many line items) A4 PDF invoice/receipt for this sale."""
@@ -178,7 +210,7 @@ def generate_invoice_pdf(sale):
     story = []
 
     # ---- Header: logo + business info on the left, invoice meta on the right ----
-    logo_bytes, _ = get_logo_bytes()
+    logo_bytes = _small_logo_bytes()
     logo_cell = ""
     if logo_bytes:
         try:
