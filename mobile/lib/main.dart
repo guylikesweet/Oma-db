@@ -1,10 +1,7 @@
 import 'dart:async';
-import 'dart:typed_data';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
-import 'package:printing/printing.dart';
-import 'package:share_plus/share_plus.dart';
 import 'package:sqflite/sqflite.dart' show databaseFactory;
 import 'package:sqflite_common_ffi_web/sqflite_ffi_web.dart';
 import 'brand_loader.dart';
