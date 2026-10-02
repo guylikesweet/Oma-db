@@ -461,7 +461,7 @@ class ApiClient {
           headers: headers,
         )
         .timeout(
-          const Duration(seconds: 30),
+          const Duration(seconds: 90),
         );
 
     if (response.statusCode < 200 ||
