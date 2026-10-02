@@ -10,6 +10,7 @@ import 'data/api_client.dart';
 import 'data/app_session.dart';
 import 'data/local_database.dart';
 import 'data/sale_kind.dart';
+import 'invoice_actions.dart';
 
 class WebsiteFeaturesPage extends StatefulWidget {
   const WebsiteFeaturesPage({super.key, required this.api, required this.local});
@@ -746,43 +747,13 @@ class _WebSalesPageState extends State<WebSalesPage> {
     }
   }
 
-  Future<void> shareInvoice(int id) async {
-    try {
-      final Uint8List bytes = await widget.api.invoicePdf(id);
-      await Share.shareXFiles(
-        [
-          XFile.fromData(
-            bytes,
-            mimeType: 'application/pdf',
-            name: 'invoice-$id.pdf',
-          ),
-        ],
-        text: 'Invoice / receipt #$id',
-      );
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('$e')),
-        );
-      }
-    }
-  }
+  // Share and print both go through one popup so each is a fresh tap
+  // (see invoice_actions.dart for why that matters).
+  Future<void> shareInvoice(int id) =>
+      showInvoiceDialog(context, widget.api, id);
 
-  Future<void> printInvoice(int id) async {
-    try {
-      final Uint8List bytes = await widget.api.invoicePdf(id);
-      await Printing.layoutPdf(
-        name: 'invoice-$id.pdf',
-        onLayout: (_) async => bytes,
-      );
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('$e')),
-        );
-      }
-    }
-  }
+  Future<void> printInvoice(int id) =>
+      showInvoiceDialog(context, widget.api, id);
 
   @override
   Widget build(BuildContext context) {

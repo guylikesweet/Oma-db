@@ -8,6 +8,7 @@ import 'package:share_plus/share_plus.dart';
 import 'package:sqflite/sqflite.dart' show databaseFactory;
 import 'package:sqflite_common_ffi_web/sqflite_ffi_web.dart';
 import 'brand_loader.dart';
+import 'invoice_actions.dart';
 import 'login_background.dart';
 import 'data/api_client.dart';
 import 'data/app_session.dart';
@@ -1667,47 +1668,19 @@ class _SaleDetailPageState extends State<SaleDetailPage> {
   /// plain network call rather than something queued through [repo]
   /// for later sync — it will simply fail with a clear message if
   /// there's no connection right now.
-  Future<void> shareInvoice() async {
-    try {
-      final Uint8List bytes =
-          await widget.api.invoicePdf(widget.saleId);
-
-      await Share.shareXFiles(
-        [
-          XFile.fromData(
-            bytes,
-            mimeType: 'application/pdf',
-            name: 'invoice-${widget.saleId}.pdf',
-          ),
-        ],
-        text: 'Invoice / receipt for ${sale?['order_id'] ?? widget.saleId}',
+  Future<void> shareInvoice() => showInvoiceDialog(
+        context,
+        widget.api,
+        widget.saleId,
+        label: '${sale?['order_id'] ?? widget.saleId}',
       );
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('$e')),
-        );
-      }
-    }
-  }
 
-  Future<void> printInvoice() async {
-    try {
-      final Uint8List bytes =
-          await widget.api.invoicePdf(widget.saleId);
-
-      await Printing.layoutPdf(
-        name: 'invoice-${widget.saleId}.pdf',
-        onLayout: (_) async => bytes,
+  Future<void> printInvoice() => showInvoiceDialog(
+        context,
+        widget.api,
+        widget.saleId,
+        label: '${sale?['order_id'] ?? widget.saleId}',
       );
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('$e')),
-        );
-      }
-    }
-  }
 
   Future<void> status(String value) async {
     try {
@@ -2047,59 +2020,10 @@ class _NewSalePageState extends State<NewSalePage> {
     final picked = await showModalBottomSheet<Map<String, dynamic>>(
       context: context,
       isScrollControlled: true,
-      builder: (sheetContext) {
-        var query = '';
-
-        return StatefulBuilder(
-          builder: (context, setSheetState) {
-            final matches = products.where((p) {
-              return '${p['name']}'.toLowerCase().contains(query.toLowerCase());
-            }).toList();
-
-            return Padding(
-              padding: EdgeInsets.only(
-                bottom: MediaQuery.of(sheetContext).viewInsets.bottom,
-              ),
-              child: SizedBox(
-                height: MediaQuery.of(sheetContext).size.height * 0.7,
-                child: Column(
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.all(12),
-                      child: TextField(
-                        autofocus: true,
-                        decoration: const InputDecoration(
-                          labelText: 'Search products',
-                          prefixIcon: Icon(Icons.search),
-                          border: OutlineInputBorder(),
-                        ),
-                        onChanged: (v) => setSheetState(() => query = v.trim()),
-                      ),
-                    ),
-                    Expanded(
-                      child: matches.isEmpty
-                          ? const Center(child: Text('No matching products.'))
-                          : ListView.builder(
-                              itemCount: matches.length,
-                              itemBuilder: (_, i) {
-                                final p = matches[i];
-                                return ListTile(
-                                  title: Text('${p['name']}'),
-                                  subtitle: widget.stocked
-                                      ? Text('Stock: ${p['stock']}')
-                                      : null,
-                                  onTap: () => Navigator.pop(sheetContext, p),
-                                );
-                              },
-                            ),
-                    ),
-                  ],
-                ),
-              ),
-            );
-          },
-        );
-      },
+      builder: (_) => _ProductPickerSheet(
+        products: products,
+        stocked: widget.stocked,
+      ),
     );
 
     if (picked == null || !mounted) return;
@@ -2475,6 +2399,89 @@ class _NewSalePageState extends State<NewSalePage> {
                 ],
               ),
       );
+}
+
+/// Search-and-pick sheet for adding a product to a sale.
+///
+/// The search text lives in this widget's own State (not in a builder
+/// closure), so when the keyboard opens/closes or the screen resizes the
+/// list always matches what is typed. Otherwise the list can silently reset
+/// to the full catalogue and a tap lands on a different product.
+class _ProductPickerSheet extends StatefulWidget {
+  const _ProductPickerSheet({
+    required this.products,
+    required this.stocked,
+  });
+
+  final List<Map<String, dynamic>> products;
+  final bool stocked;
+
+  @override
+  State<_ProductPickerSheet> createState() => _ProductPickerSheetState();
+}
+
+class _ProductPickerSheetState extends State<_ProductPickerSheet> {
+  final search = TextEditingController();
+
+  @override
+  void dispose() {
+    search.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final query = search.text.trim().toLowerCase();
+
+    final matches = widget.products.where((p) {
+      return '${p['name']}'.toLowerCase().contains(query);
+    }).toList();
+
+    return Padding(
+      padding: EdgeInsets.only(
+        bottom: MediaQuery.of(context).viewInsets.bottom,
+      ),
+      child: SizedBox(
+        height: MediaQuery.of(context).size.height * 0.7,
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(12),
+              child: TextField(
+                controller: search,
+                autofocus: true,
+                decoration: const InputDecoration(
+                  labelText: 'Search products',
+                  prefixIcon: Icon(Icons.search),
+                  border: OutlineInputBorder(),
+                ),
+                onChanged: (_) => setState(() {}),
+              ),
+            ),
+            Expanded(
+              child: matches.isEmpty
+                  ? const Center(child: Text('No matching products.'))
+                  : ListView.builder(
+                      itemCount: matches.length,
+                      itemBuilder: (_, i) {
+                        final product = matches[i];
+
+                        return ListTile(
+                          key: ValueKey(product['id']),
+                          title: Text('${product['name']}'),
+                          subtitle: widget.stocked
+                              ? Text('Stock: ${product['stock']}')
+                              : null,
+                          onTap: () => Navigator.pop(context, product),
+                        );
+                      },
+                    ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 class StockPage extends StatefulWidget {
