@@ -275,6 +275,9 @@ class SaleItem(db.Model):
     # because they depend on courier_rates + sale.customer_state at save time
     line_cbm = db.Column(db.Numeric(12, 6))
     line_volumetric_kg = db.Column(db.Numeric(12, 3))
+    # Actual weight of this line (product weight x qty) when the sale was made;
+    # NULL on older sales, which fall back to the product's current weight.
+    line_weight_kg = db.Column(db.Numeric(12, 3))
     line_shipping_estimate = db.Column(db.Numeric(12, 2))
 
     # Stage 6: which variant/color was ordered on this line, so the right
@@ -389,6 +392,11 @@ class AppSettings(db.Model):
     bank_name = db.Column(db.String(100))
     bank_account_number = db.Column(db.String(50))
     bank_account_name = db.Column(db.String(255))
+    # NGN charged per kg of actual product weight, on top of the CBM charge.
+    # Editable in Settings so a rate change never needs a code edit.
+    shipping_rate_per_kg = db.Column(
+        db.Numeric(12, 2), nullable=False, default=1115, server_default="1115"
+    )
 
     def __repr__(self):
         return f"<AppSettings {self.label_width_mm}x{self.label_height_mm}mm>"

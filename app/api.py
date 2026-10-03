@@ -25,7 +25,7 @@ from app.models import (
     CourierRate, MonthlyShippingRate, StockLog, MobileOperation, MobileChange,
 )
 from app.services.sales import create_sale, SaleValidationError, shipping_cost_for_items
-from app.services.rates import get_rate_for_month
+from app.services.rates import get_rate_for_month, get_rate_per_kg
 from app.services.delivery import check_consolidation, find_consolidation_groups
 
 api_bp = Blueprint("api", __name__, url_prefix="/api")
@@ -151,6 +151,7 @@ def _sale_json(s):
                 "unit_cost": float(item.unit_cost) if item.unit_cost is not None else None,
                 "unit_price": float(item.unit_price) if item.unit_price is not None else None,
                 "line_cbm": float(item.line_cbm) if item.line_cbm is not None else None,
+                "line_weight_kg": float(item.line_weight_kg) if item.line_weight_kg is not None else None,
                 "line_volumetric_kg": float(item.line_volumetric_kg) if item.line_volumetric_kg is not None else None,
                 "line_shipping_estimate": float(item.line_shipping_estimate) if item.line_shipping_estimate is not None else None,
                 "variant_note": item.variant_note,
@@ -689,8 +690,9 @@ def mobile_batch_arrive(batch_id):
         if b.status != ShipmentBatch.STATUS_IN_TRANSIT: raise ValueError("Batch must be In Transit.")
         if not b.sales: raise ValueError("Batch has no sales assigned.")
         rate = get_rate_for_month(date.today())
+        kg_rate = get_rate_per_kg()
         for s in b.sales:
-            s.actual_shipping_cost = shipping_cost_for_items(s.items, rate)
+            s.actual_shipping_cost = shipping_cost_for_items(s.items, rate, kg_rate)
             s.total_amount = (s.subtotal_amount or Decimal("0")) + s.actual_shipping_cost
         b.arrived_at = datetime.utcnow(); b.status = ShipmentBatch.STATUS_ARRIVED
         return _mobile_finish(op, "batch_arrive", 200, _batch_json(b))
@@ -914,6 +916,7 @@ def _settings_json(s):
         'business_address': s.business_address,
         'bank_name': s.bank_name, 'bank_account_number': s.bank_account_number,
         'bank_account_name': s.bank_account_name,
+        'shipping_rate_per_kg': float(s.shipping_rate_per_kg) if s.shipping_rate_per_kg is not None else 1115.0,
         'has_logo': bool(s.logo_data), 'logo_mimetype': s.logo_mimetype,
     }
 
@@ -938,6 +941,11 @@ def mobile_settings_update():
             if f in data:setattr(s,f,str(data[f] or '').strip() or None)
         for f in ('label_width_mm','label_height_mm'):
             if f in data:setattr(s,f,int(data[f]))
+        if str(data.get('shipping_rate_per_kg') if data.get('shipping_rate_per_kg') is not None else '').strip():
+            try:kg=Decimal(str(data['shipping_rate_per_kg']).replace(',','').strip())
+            except InvalidOperation:raise ValueError('Per-kg shipping rate must be a number.')
+            if kg<0:raise ValueError('Per-kg shipping rate cannot be negative.')
+            s.shipping_rate_per_kg=kg
         if data.get('logo_base64'):
             import base64
             s.logo_data=base64.b64decode(data['logo_base64']);s.logo_mimetype=str(data.get('logo_mimetype') or 'image/png')

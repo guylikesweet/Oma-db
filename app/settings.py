@@ -1,3 +1,4 @@
+from decimal import Decimal, InvalidOperation
 from flask import Blueprint, render_template, request, redirect, url_for, flash, Response
 from flask_login import login_required
 
@@ -24,6 +25,17 @@ def edit():
             flash("Label width and height must be positive whole numbers (in mm).", "error")
             return redirect(url_for("settings.edit"))
 
+        kg_rate = None
+        kg_raw = request.form.get("shipping_rate_per_kg", "").replace(",", "").strip()
+        if kg_raw:
+            try:
+                kg_rate = Decimal(kg_raw)
+                if kg_rate < 0:
+                    raise ValueError
+            except (InvalidOperation, ValueError):
+                flash("The per-kg shipping rate must be a number, 0 or more.", "error")
+                return redirect(url_for("settings.edit"))
+
         logo_data = None
         logo_mimetype = None
         logo_file = request.files.get("logo")
@@ -40,6 +52,7 @@ def edit():
             bank_name=request.form.get("bank_name", "").strip(),
             bank_account_number=request.form.get("bank_account_number", "").strip(),
             bank_account_name=request.form.get("bank_account_name", "").strip(),
+            shipping_rate_per_kg=kg_rate,
             logo_data=logo_data,
             logo_mimetype=logo_mimetype,
         )
