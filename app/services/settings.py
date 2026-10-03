@@ -25,7 +25,8 @@ def get_settings():
 def update_settings(label_width_mm=None, label_height_mm=None, business_name=None,
                      business_phone=None, business_address=None,
                      logo_data=None, logo_mimetype=None,
-                     bank_name=None, bank_account_number=None, bank_account_name=None):
+                     bank_name=None, bank_account_number=None, bank_account_name=None,
+                     shipping_rate_per_kg=None):
     settings = get_settings()
 
     if label_width_mm is not None:
@@ -44,6 +45,8 @@ def update_settings(label_width_mm=None, label_height_mm=None, business_name=Non
         settings.bank_account_number = bank_account_number
     if bank_account_name is not None:
         settings.bank_account_name = bank_account_name
+    if shipping_rate_per_kg is not None:
+        settings.shipping_rate_per_kg = shipping_rate_per_kg
     if logo_data is not None:
         settings.logo_data = logo_data
         settings.logo_mimetype = logo_mimetype or "image/png"

@@ -3,7 +3,7 @@ Sales business logic (simplified — no profit/loss tracking anywhere).
 
 At creation:
   sales.subtotal_amount        = SUM(unit_price * qty)
-  sales.estimated_shipping_cost = total_cbm * MonthlyShippingRate for the CURRENT month
+  sales.estimated_shipping_cost = sum over lines of (CBM x MonthlyShippingRate for the CURRENT month + kg x per-kg rate)
                                    (a rough estimate only — recalculated for real at batch arrival)
   sales.total_amount           = subtotal_amount (goods only; shipping added once the batch arrives)
 """
@@ -14,7 +14,7 @@ import string
 
 from app import db
 from app.models import Sale, SaleItem, Product, StockLog
-from app.services.rates import get_rate_for_month
+from app.services.rates import get_rate_for_month, get_rate_per_kg
 
 ORDER_ID_ALPHABET = string.ascii_uppercase + string.digits
 
@@ -33,17 +33,37 @@ def generate_order_id(sale_type=SALE_TYPE_PREORDER):
     raise RuntimeError("Could not generate a unique order ID after 50 attempts.")
 
 
-def shipping_cost_for_items(items, rate):
+def line_shipping_cost(line_cbm, line_kg, cbm_rate, kg_rate):
     """
-    Shipping for a sale = each product line's CBM x rate, calculated separately
-    and then added up. (Same figure as total CBM x rate, but done line by line
-    so every product's own share is visible and the logic lives in one place —
-    used for the estimate at order time and the actual cost at batch arrival.)
+    One product line's shipping: its CBM x the CBM rate, PLUS its weight in kg
+    x the per-kg rate. The single formula behind every shipping figure.
     """
+    return (
+        (line_cbm or Decimal("0")) * cbm_rate
+        + (line_kg or Decimal("0")) * kg_rate
+    )
+
+
+def item_weight_kg(item):
+    """A line's weight: the snapshot taken at sale time, or (older sales
+    that predate it) the product's current weight x qty."""
+    if item.line_weight_kg is not None:
+        return item.line_weight_kg
+    product_kg = (item.product.actual_weight_kg if item.product else None) or Decimal("0")
+    return product_kg * (item.qty or 0)
+
+
+def shipping_cost_for_items(items, rate, kg_rate=None):
+    """
+    Shipping for a sale = each product line's cost calculated separately
+    (CBM x rate + kg x per-kg rate), then added up. Used for the estimate at
+    order time and the actual cost at batch arrival, so they never drift apart.
+    """
+    if kg_rate is None:
+        kg_rate = get_rate_per_kg()
     total = Decimal("0")
     for item in items:
-        line_cbm = item.line_cbm if hasattr(item, "line_cbm") else item
-        total += (line_cbm or Decimal("0")) * rate
+        total += line_shipping_cost(item.line_cbm, item_weight_kg(item), rate, kg_rate)
     return total
 
 
@@ -116,6 +136,7 @@ def create_sale(customer_name, customer_phone, customer_address, customer_state,
 
     subtotal = Decimal("0")
     estimate_rate = None if is_stock else get_rate_for_month(date.today())
+    estimate_kg_rate = None if is_stock else get_rate_per_kg()
     estimated_shipping = Decimal("0")
 
     for line in line_items:
@@ -126,10 +147,14 @@ def create_sale(customer_name, customer_phone, customer_address, customer_state,
 
         line_cbm = (product.cbm or Decimal("0")) * qty
         line_volumetric_kg = (product.volumetric_kg or Decimal("0")) * qty
+        line_weight_kg = (product.actual_weight_kg or Decimal("0")) * qty
 
-        # Each product's own shipping estimate (its CBM x this month's rate);
-        # the sale's estimate is the sum of these.
-        line_estimate = None if is_stock else line_cbm * estimate_rate
+        # Each product's own shipping estimate (its CBM x this month's rate
+        # + its weight x the per-kg rate); the sale's estimate is the sum.
+        line_estimate = (
+            None if is_stock
+            else line_shipping_cost(line_cbm, line_weight_kg, estimate_rate, estimate_kg_rate)
+        )
 
         db.session.add(SaleItem(
             sale_id=sale.id,
@@ -139,6 +164,7 @@ def create_sale(customer_name, customer_phone, customer_address, customer_state,
             unit_price=unit_price,
             line_cbm=line_cbm,
             line_volumetric_kg=line_volumetric_kg,
+            line_weight_kg=line_weight_kg,
             line_shipping_estimate=line_estimate,
             variant_note=line.get("variant_note") or None,
         ))
@@ -156,7 +182,7 @@ def create_sale(customer_name, customer_phone, customer_address, customer_state,
     if is_stock:
         sale.estimated_shipping_cost = None  # no shipping on stocked sales; delivery is settled off record
     else:
-        sale.estimated_shipping_cost = estimated_shipping  # rough estimate only: sum of each line's CBM x rate
+        sale.estimated_shipping_cost = estimated_shipping  # rough estimate only: sum of each line's (CBM x rate + kg x per-kg rate)
     sale.total_amount = subtotal  # goods only; actual shipping added once the batch arrives
 
     if commit:

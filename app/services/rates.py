@@ -11,6 +11,19 @@ from app.models import MonthlyShippingRate
 
 DEFAULT_RATE_PER_CBM = Decimal("600000.00")  # fallback if no rate has been recorded at all
 
+# Weight charge added on top of the CBM charge: NGN per kg of actual product
+# weight. Shipping cost = (CBM x that month's CBM rate) + (kg x per-kg rate).
+# The live value is set in Settings; this is only the fallback.
+DEFAULT_RATE_PER_KG = Decimal("1115")
+
+
+def get_rate_per_kg():
+    """The per-kg shipping rate currently set in Settings."""
+    from app.services.settings import get_settings
+
+    value = get_settings().shipping_rate_per_kg
+    return Decimal(str(value)) if value is not None else DEFAULT_RATE_PER_KG
+
 
 def get_rate_for_month(target_date):
     """

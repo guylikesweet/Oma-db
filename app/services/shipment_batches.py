@@ -13,7 +13,7 @@ from decimal import Decimal
 
 from app import db
 from app.models import ShipmentBatch, Sale
-from app.services.rates import get_rate_for_month
+from app.services.rates import get_rate_for_month, get_rate_per_kg
 from app.services.sales import shipping_cost_for_items
 
 
@@ -72,10 +72,11 @@ def mark_arrived(batch_id):
         raise BatchValidationError("Batch has no sales assigned.")
 
     rate = get_rate_for_month(date.today())
+    kg_rate = get_rate_per_kg()
 
     for sale in batch.sales:
-        # Each product line's CBM x rate, added up.
-        sale.actual_shipping_cost = shipping_cost_for_items(sale.items, rate)
+        # Each product line's (CBM x rate + kg x per-kg rate), added up.
+        sale.actual_shipping_cost = shipping_cost_for_items(sale.items, rate, kg_rate)
         sale.total_amount = (sale.subtotal_amount or Decimal("0")) + sale.actual_shipping_cost
 
     batch.arrived_at = datetime.utcnow()

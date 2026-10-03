@@ -308,14 +308,16 @@ def generate_invoice_pdf(sale):
     elif ctx["actual_shipping"] is not None:
         ship_lines.append(
             f"Shipping for this order has been calculated at "
-            f"<b>NGN {_money(ctx['actual_shipping'])}</b> based on the month your "
-            f"goods arrived. It is payable separately and is not included in the total above."
+            f"<b>NGN {_money(ctx['actual_shipping'])}</b> based on the size and weight of "
+            f"your goods and the shipping rate for the month they arrived. It is payable "
+            f"separately and is not included in the total above."
         )
     else:
         if ctx["estimated_shipping"] is not None:
             ship_lines.append(
                 f"Estimated shipping: <b>NGN {_money(ctx['estimated_shipping'])}</b>. "
-                f"This is only an estimate, calculated using this month's shipping rate "
+                f"This is only an estimate, calculated from the size and weight of your goods "
+                f"and this month's shipping rate "
                 f"({ctx['sale_month']}). It is not charged now and is not included in the total above."
             )
         ship_lines.append(
