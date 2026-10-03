@@ -3173,6 +3173,8 @@ class _SettingsPageState
   final bankName = TextEditingController();
   final bankNumber = TextEditingController();
   final bankAccountName = TextEditingController();
+  // NGN per kg of product weight, added to the CBM charge.
+  final kgRate = TextEditingController();
 
   bool loading = true;
 
@@ -3210,6 +3212,13 @@ class _SettingsPageState
 
       bankAccountName.text =
           '${settings['bank_account_name'] ?? ''}';
+
+      final rawKg = settings['shipping_rate_per_kg'];
+      kgRate.text = rawKg is num
+          ? (rawKg == rawKg.roundToDouble()
+              ? rawKg.round().toString()
+              : rawKg.toString())
+          : '${rawKg ?? ''}';
     } catch (_) {}
 
     if (mounted) {
@@ -3218,8 +3227,22 @@ class _SettingsPageState
   }
 
   Future<void> save() async {
+    final kg = double.tryParse(kgRate.text.trim().replaceAll(',', ''));
+
+    if (kg == null || kg < 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Enter a valid shipping rate per kg (0 or more).',
+          ),
+        ),
+      );
+      return;
+    }
+
     try {
       await widget.api.updateSettings({
+        'shipping_rate_per_kg': kg,
         'business_name': name.text.trim(),
         'business_phone': phone.text.trim(),
         'business_address': address.text.trim(),
@@ -3258,6 +3281,7 @@ class _SettingsPageState
     bankName.dispose();
     bankNumber.dispose();
     bankAccountName.dispose();
+    kgRate.dispose();
     super.dispose();
   }
 
@@ -3305,6 +3329,28 @@ class _SettingsPageState
                   keyboardType: TextInputType.number,
                   decoration: const InputDecoration(
                     labelText: 'Label height (mm)',
+                  ),
+                ),
+                const SizedBox(height: 24),
+                Text(
+                  'Shipping rate',
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+                const SizedBox(height: 4),
+                const Text(
+                  'Shipping cost = (CBM × the monthly CBM rate) + '
+                  '(weight in kg × this per-kg rate). Change it here when '
+                  'the rate changes; it applies to new estimates and to '
+                  'batches that arrive from now on.',
+                ),
+                TextField(
+                  controller: kgRate,
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
+                  decoration: const InputDecoration(
+                    labelText: 'Rate per kg (₦)',
+                    prefixText: '₦',
                   ),
                 ),
                 const SizedBox(height: 24),
