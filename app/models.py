@@ -388,6 +388,41 @@ class AuditLog(db.Model):
 
 
 # ---------------------------------------------------------------------------
+# STAGE 4 — PUSH DEVICES / NOTIFICATION OUTBOX
+# ---------------------------------------------------------------------------
+class PushDevice(db.Model):
+    __tablename__ = "push_devices"
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    token = db.Column(db.Text, nullable=False, unique=True)
+    platform = db.Column(db.String(20), nullable=False, default="android")
+    enabled = db.Column(db.Boolean, nullable=False, default=True, server_default="true")
+    last_seen_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+
+    user = db.relationship("User", backref=db.backref("push_devices", lazy=True, cascade="all, delete-orphan"))
+
+
+class NotificationOutbox(db.Model):
+    __tablename__ = "notification_outbox"
+
+    id = db.Column(db.Integer, primary_key=True)
+    event_type = db.Column(db.String(80), nullable=False)
+    target_user_id = db.Column(db.Integer, db.ForeignKey("users.id", ondelete="CASCADE"), nullable=True)
+    title = db.Column(db.String(255), nullable=False)
+    body = db.Column(db.Text, nullable=False)
+    data_json = db.Column(db.JSON, nullable=True)
+    status = db.Column(db.String(20), nullable=False, default="pending", server_default="pending")
+    attempts = db.Column(db.Integer, nullable=False, default=0, server_default="0")
+    last_error = db.Column(db.Text)
+    sent_at = db.Column(db.DateTime)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+
+    target_user = db.relationship("User", backref=db.backref("notification_outbox", lazy=True))
+
+
+# ---------------------------------------------------------------------------
 # 7. STOCK_LOG
 # ---------------------------------------------------------------------------
 class StockLog(db.Model):
