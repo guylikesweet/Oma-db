@@ -5,7 +5,8 @@ product. The database keeps an outbox so a committed business event is not
 lost just because FCM is temporarily unavailable.
 
 Server configuration:
-  FIREBASE_CREDENTIALS_JSON = service-account JSON string\n  FIREBASE_SERVICE_ACCOUNT_JSON = accepted alias for the same value
+  FIREBASE_CREDENTIALS_JSON = service-account JSON string
+  FIREBASE_SERVICE_ACCOUNT_JSON = accepted alias for the same value
 """
 
 import json
@@ -23,7 +24,10 @@ def _firebase():
     if _firebase_app is not None:
         return _firebase_app
 
-    credentials_json = (\n        os.environ.get("FIREBASE_CREDENTIALS_JSON", "").strip()\n        or os.environ.get("FIREBASE_SERVICE_ACCOUNT_JSON", "").strip()\n    )
+    credentials_json = (
+        os.environ.get("FIREBASE_CREDENTIALS_JSON", "").strip()
+        or os.environ.get("FIREBASE_SERVICE_ACCOUNT_JSON", "").strip()
+    )
     if not credentials_json:
         return None
 
