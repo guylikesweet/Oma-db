@@ -24,7 +24,7 @@ def create_app(config_object="config.Config"):
     def enforce_classic_inactivity_timeout():
         # Flask-Login sessions are separate from the mobile bearer-token API.
         # Refresh the activity timestamp on every authenticated browser request.
-        if not request.path.startswith("/api/") and login_manager._login_disabled is not True:
+        if not request.path.startswith("/api/"):
             from flask_login import current_user, logout_user
             if current_user.is_authenticated:
                 now = time.time()
