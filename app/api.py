@@ -19,6 +19,7 @@ from flask import Blueprint, request, jsonify, g
 from werkzeug.security import check_password_hash, generate_password_hash
 
 from app import db
+from app.services.journey import journey_public, set_manual_stage_bulk, JourneyError
 from app.access import require_admin_api
 from app.models import (
     User, Product, Sale, SaleItem, Shipping, Delivery, ShipmentBatch,
@@ -159,6 +160,12 @@ def _sale_json(s):
             for item in s.items
         ],
     }
+
+
+def _journey_json(s):
+    data = journey_public(s)
+    data["tracking_url"] = f"/track/{s.public_tracking_code}" if s.public_tracking_code else None
+    return data
 
 
 def _shipping_json(s):
@@ -794,7 +801,26 @@ def mobile_label_pdf(delivery_id):
     return send_file(pdf, mimetype="application/pdf", as_attachment=True, download_name=f"label-{name}.pdf")
 
 
-@api_bp.route("/v1/shipping", methods=("GET",))
+
+
+@api_bp.route("/v1/sales/journey", methods=("POST",))
+@require_api_token
+def mobile_update_journey():
+    data = request.get_json(silent=True) or {}
+    try:
+        op, existing = _mobile_operation(data)
+        if existing:
+            return _mobile_replay(existing)
+        ids = [int(x) for x in (data.get("sale_ids") or [])]
+        stage = str(data.get("stage") or "").strip()
+        sales = Sale.query.filter(Sale.id.in_(ids)).all() if ids else []
+        updated, unchanged, skipped = set_manual_stage_bulk(sales, stage, user_id=g.api_user.id)
+        payload = {"updated": updated, "unchanged": unchanged, "skipped": skipped, "sales": [_journey_json(s) for s in sales]}
+        return _mobile_finish(op, "update_journey", 200, payload)
+    except (ValueError, JourneyError) as e:
+        db.session.rollback()
+        return jsonify({"error": str(e)}), 400
+\n\n@api_bp.route("/v1/shipping", methods=("GET",))
 @require_api_token
 def mobile_shipping():
     q=Shipping.query.join(Sale,Shipping.sale_id==Sale.id);tracking=str(request.args.get('tracking_number') or '').strip();state=str(request.args.get('state') or '').strip()
@@ -1055,4 +1081,4 @@ def mobile_clear_test_data():
         counts=clear_test_data(data.get('confirmation'))
     except ValueError as e:
         return jsonify({'error':str(e)}),400
-    return jsonify({'ok':True,'counts':counts})
+    return jsonify({'ok':True,'counts':counts}),\n        "journey": _journey_json(s)
