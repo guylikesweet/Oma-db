@@ -4,7 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
 import '../data/api_client.dart';
-import '../data/local_database.dart;
+import '../data/local_database.dart';
 import 'package:location/location.dart';
 
 class OmaPushNotifications {
