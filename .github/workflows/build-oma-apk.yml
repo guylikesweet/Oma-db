@@ -1,6 +1,14 @@
 name: Build OmaSales Mobile
 
 on:
+  pull_request:
+    paths:
+      - 'app/**'
+      - 'mobile/**'
+      - 'migrations/**'
+      - 'requirements.txt'
+      - '.github/workflows/build-oma-apk.yml'
+
   push:
     paths:
       - 'app/**'
