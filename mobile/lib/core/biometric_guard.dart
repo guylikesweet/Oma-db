@@ -35,18 +35,6 @@ class BiometricGuard {
         return false;
       }
 
-      final enrolled = await _auth.getAvailableBiometrics();
-      if (enrolled.isEmpty) {
-        if (context.mounted) {
-          _show(
-            context,
-            'No biometric is enrolled on this device. '
-            'Set up fingerprint or face unlock first.',
-          );
-        }
-        return false;
-      }
-
       final authenticated = await _auth.authenticate(
         localizedReason: reason,
         options: const AuthenticationOptions(
