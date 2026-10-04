@@ -12,6 +12,8 @@ just a confirmation flag — it doesn't recalculate anything — and it's
 what individually unlocks that one sale for delivery, not the whole batch.
 """
 from datetime import date, datetime
+
+from flask import g
 from decimal import Decimal
 
 from app import db
@@ -132,7 +134,7 @@ def mark_arrived(batch_id):
         target_id=batch.id,
         details={'transport_mode': batch.transport_mode, 'sale_count': len(batch.sales)},
     )
-    queue_batch_arrival(batch)
+    queue_batch_arrival(batch, exclude_user_id=getattr(getattr(g, "api_user", None), "id", None))
     db.session.commit()
     try:
         flush_outbox()
