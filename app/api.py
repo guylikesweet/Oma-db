@@ -1050,7 +1050,7 @@ def mobile_batch_arrive(batch_id):
             details={'transport_mode': b.transport_mode, 'sale_count': len(b.sales), 'source': 'api'},
             user=g.api_user,
         )
-        queue_batch_arrival(b)
+        queue_batch_arrival(b, exclude_user_id=g.api_user.id)
         result = _mobile_finish(op, "batch_arrive", 200, _batch_json(b))
         db.session.flush()
         db.session.commit()
