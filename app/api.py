@@ -625,6 +625,7 @@ def mobile_change_password():
         return jsonify({"error": "New password must be at least 8 characters."}), 400
     g.api_user.password_hash = generate_password_hash(new)
     g.api_user.api_token = secrets.token_hex(32)
+    g.api_user.biometric_credential_hash = None
     record_audit(
         "password.change",
         target_type="user",
