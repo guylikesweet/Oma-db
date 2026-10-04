@@ -393,6 +393,23 @@ jobs:
           raw = Path("android/app/src/main/res/raw")
           raw.mkdir(parents=True, exist_ok=True)
 
+          custom = Path("assets/notifications")
+          required = {
+              "scanner_beep.wav": custom / "scanner_beep.wav",
+              "ship_horn.wav": custom / "ship_horn.wav",
+              "airport_arrival.wav": custom / "airport_arrival.wav",
+          }
+
+          def copy_custom():
+              found = all(path.exists() for path in required.values())
+              if not found:
+                  return False
+              import shutil
+              for name, source in required.items():
+                  shutil.copy2(source, raw / name)
+              print("Using custom notification sounds from assets/notifications.")
+              return True
+
           def tone(path, seconds, frequencies, amplitude=0.42, sample_rate=44100):
               frames = int(seconds * sample_rate)
               with wave.open(str(path), "wb") as out:
@@ -409,16 +426,21 @@ jobs:
                       data.extend(struct.pack("<h", int(32767 * amplitude * env * value)))
                   out.writeframes(data)
 
-          # Short, clean scanner confirmation: two quick tones.
-          tone(raw / "scanner_beep.wav", 0.18, (1850, 2400), 0.34)
+          if not copy_custom():
+              # Short, clean scanner confirmation.
+              tone(raw / "scanner_beep.wav", 0.18, (1850, 2400), 0.34)
 
-          # Brief sea-shipment horn, deliberately short enough not to be annoying.
-          tone(raw / "ship_horn.wav", 0.72, (330, 392), 0.48)
+              # Brief sea-shipment horn.
+              tone(raw / "ship_horn.wav", 0.72, (330, 392), 0.48)
 
-          # Brief airport-style arrival chime rather than a long notification.
-          tone(raw / "airport_arrival.wav", 0.62, (523, 659, 784), 0.36)
+              # Brief airport-style arrival chime.
+              tone(raw / "airport_arrival.wav", 0.62, (523, 659, 784), 0.36)
 
-          print("Notification sounds generated.")
+              print("Fallback notification sounds generated.")
+
+          for filename in required:
+              if not (raw / filename).is_file() or (raw / filename).stat().st_size == 0:
+                  raise SystemExit(f"Missing notification sound: {filename}")
           PY
 
           # --------------------------------------------------------
