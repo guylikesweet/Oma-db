@@ -798,11 +798,27 @@ def mobile_sale_status(sale_id):
                     if product:
                         product.stock += item.qty
                         db.session.add(StockLog(product_id=product.id, change_qty=item.qty, reason=f"Sale #{sale.id} Cancelled"))
+            old_status = sale.order_status
             sale.order_status = status
+            record_audit(
+                "sale.status",
+                target_type="sale",
+                target_id=sale.id,
+                details={"from": old_status, "to": status, "source": "api"},
+                user=g.api_user,
+            )
         if payment_status is not None:
             payment_status = str(payment_status)
             if payment_status not in {"Paid", "Pending", "Refunded"}: raise ValueError("Invalid payment status.")
+            old_payment = sale.payment_status
             sale.payment_status = payment_status
+            record_audit(
+                "sale.payment_status",
+                target_type="sale",
+                target_id=sale.id,
+                details={"from": old_payment, "to": payment_status, "source": "api"},
+                user=g.api_user,
+            )
         return _mobile_finish(op, "sale_status", 200, _sale_json(sale))
     except ValueError as e:
         db.session.rollback(); return jsonify({"error": str(e)}), 400
@@ -1276,6 +1292,13 @@ def mobile_settings_update():
         if data.get('logo_base64'):
             import base64
             s.logo_data=base64.b64decode(data['logo_base64']);s.logo_mimetype=str(data.get('logo_mimetype') or 'image/png')
+        record_audit(
+            "settings.update",
+            target_type="app_settings",
+            target_id=s.id,
+            details={"source": "api"},
+            user=g.api_user,
+        )
         payload=_settings_json(s)
         return _mobile_finish(op,'update_settings',200,payload)
     except (ValueError,TypeError) as e:db.session.rollback();return jsonify({'error':str(e)}),400
@@ -1304,6 +1327,13 @@ def mobile_create_user():
         if not username or len(password)<8:raise ValueError('Username and password (8+ characters) are required.')
         if User.query.filter_by(username=username).first():raise ValueError('Username already exists.')
         u=User(username=username,password_hash=generate_password_hash(password),role=role);db.session.add(u);db.session.flush()
+        record_audit(
+            "user.create",
+            target_type="user",
+            target_id=u.id,
+            details={"username": u.username, "role": u.role, "source": "api"},
+            user=g.api_user,
+        )
         return _mobile_finish(op,'create_user',201,{'id':u.id,'username':u.username,'role':u.role,'is_admin':u.is_admin,'is_primary_admin':u.is_primary_admin,'created_at':u.created_at.isoformat() if u.created_at else None})
     except ValueError as e:db.session.rollback();return jsonify({'error':str(e)}),400
 
@@ -1332,6 +1362,13 @@ def mobile_update_user(user_id):
             if role not in (User.ROLE_ADMIN, User.ROLE_STAFF):raise ValueError('Role must be admin or staff.')
             if u.is_primary_admin and role != User.ROLE_ADMIN:raise ValueError('The original admin cannot be demoted.')
             u.role=role
+        record_audit(
+            "user.update",
+            target_type="user",
+            target_id=u.id,
+            details={"source": "api"},
+            user=g.api_user,
+        )
         return _mobile_finish(op,'update_user',200,{'id':u.id,'username':u.username,'role':u.role,'is_admin':u.is_admin,'is_primary_admin':u.is_primary_admin,'created_at':u.created_at.isoformat() if u.created_at else None})
     except ValueError as e:db.session.rollback();return jsonify({'error':str(e)}),400
     except PermissionError as e:db.session.rollback();return jsonify({'error':str(e)}),403
@@ -1345,6 +1382,13 @@ def mobile_delete_user(user_id):
         return jsonify({'error':'The original admin account cannot be removed.'}),400
     if u.id==g.api_user.id:
         return jsonify({'error':'You cannot remove your own account.'}),400
+    record_audit(
+        "user.delete",
+        target_type="user",
+        target_id=u.id,
+        details={"username": u.username, "source": "api"},
+        user=g.api_user,
+    )
     db.session.delete(u)
     db.session.commit()
     return jsonify({'ok':True,'id':user_id})
