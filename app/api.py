@@ -19,7 +19,7 @@ from flask import Blueprint, request, jsonify, g
 from werkzeug.security import check_password_hash, generate_password_hash
 
 from app import db
-from app.services.journey import journey_public, set_manual_stage_bulk, JourneyError
+from app.services.journey import journey_public, manual_stages_for, stage_label, set_manual_stage_bulk, JourneyError
 from app.access import require_admin_api
 from app.models import (
     User, Product, Sale, SaleItem, Shipping, Delivery, ShipmentBatch,
@@ -142,6 +142,15 @@ def _sale_json(s):
         "batch_id": s.batch_id,
         "delivery_id": s.delivery_id,
         "notes": s.notes,
+        "estimated_shipping_sea": float(s.estimated_shipping_sea) if s.estimated_shipping_sea is not None else None,
+        "estimated_shipping_air": float(s.estimated_shipping_air) if s.estimated_shipping_air is not None else None,
+        "batch_transport_mode": s.batch.transport_mode if s.batch is not None else None,
+        "journey": journey_public(s),
+        "manual_stages": [
+            {"key": key, "label": stage_label(key)}
+            for key in manual_stages_for(s)
+        ],
+        "tracking_url": f"/track/{s.public_tracking_code}" if s.public_tracking_code else None,
         "created_at": s.created_at.isoformat() if s.created_at else None,
         "items": [
             {
