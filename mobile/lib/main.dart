@@ -12,6 +12,8 @@ import 'data/app_session.dart';
 import 'data/local_database.dart';
 import 'data/sale_kind.dart';
 import 'data/sync_repository.dart';
+import 'core/theme_controller.dart';
+import 'theme_settings_page.dart';
 import 'full_features.dart';
 import 'journey_widgets.dart';
 
@@ -25,6 +27,7 @@ void main() async {
     databaseFactory = databaseFactoryFfiWeb;
   }
   await LocalDatabase.instance.db;
+  await OmaThemeController.initialize(LocalDatabase.instance);
   runApp(const OmaMobileApp());
 }
 
@@ -35,29 +38,36 @@ class OmaMobileApp extends StatefulWidget {
 
 class _OmaMobileAppState extends State<OmaMobileApp> with WidgetsBindingObserver {
   Timer? _timer;
-  ThemeMode _theme = ThemeMode.light;
-
-  ThemeMode _themeForNow() {
-    final hour = DateTime.now().hour;
-    return hour >= 6 && hour < 18 ? ThemeMode.light : ThemeMode.dark;
-  }
-
-  void _refreshTheme() {
-    final next = _themeForNow();
-    if (mounted && next != _theme) setState(() => _theme = next);
-  }
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    _theme = _themeForNow();
-    _timer = Timer.periodic(const Duration(minutes: 1), (_) => _refreshTheme());
+    _timer = Timer.periodic(
+      const Duration(minutes: 1),
+      (_) => OmaThemeController.refresh(
+        systemBrightness:
+            WidgetsBinding.instance.platformDispatcher.platformBrightness,
+      ),
+    );
+  }
+
+  @override
+  void didChangePlatformBrightness() {
+    OmaThemeController.refresh(
+      systemBrightness:
+          WidgetsBinding.instance.platformDispatcher.platformBrightness,
+    );
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed) _refreshTheme();
+    if (state == AppLifecycleState.resumed) {
+      OmaThemeController.refresh(
+        systemBrightness:
+            WidgetsBinding.instance.platformDispatcher.platformBrightness,
+      );
+    }
   }
 
   @override
@@ -68,14 +78,19 @@ class _OmaMobileAppState extends State<OmaMobileApp> with WidgetsBindingObserver
   }
 
   @override
-  Widget build(BuildContext context) => MaterialApp(
+  Widget build(BuildContext context) {
+    return ValueListenableBuilder<ThemeMode>(
+      valueListenable: OmaThemeController.resolvedMode,
+      builder: (context, mode, _) => MaterialApp(
         title: 'Oma Mobile',
         debugShowCheckedModeBanner: false,
-        themeMode: _theme,
+        themeMode: mode,
         theme: brandTheme(Brightness.light),
         darkTheme: brandTheme(Brightness.dark),
         home: const SessionGate(),
-      );
+      ),
+    );
+  }
 }
 
 // The Omabuy brand: the orange and green are sampled straight from the logo.
@@ -3110,6 +3125,22 @@ class MorePage extends StatelessWidget {
         body: ListView(
           padding: const EdgeInsets.all(16),
           children: [
+            Card(
+              child: ListTile(
+                leading: const Icon(Icons.palette_outlined),
+                title: const Text('Appearance'),
+                subtitle: const Text(
+                  'System, sunset to sunrise, light or dark',
+                ),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => const ThemeSettingsPage(),
+                  ),
+                ),
+              ),
+            ),
             Card(
               child: ListTile(
                 leading: const Icon(Icons.apps),
