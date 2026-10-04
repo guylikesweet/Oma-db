@@ -76,8 +76,8 @@ def create_app(config_object="config.Config"):
     @app.route("/classic")
     @login_required
     def classic_home():
-        # The original server-rendered dashboard, kept as a fallback.
-        return render_template("home.html")
+        from app.services.dashboard import get_kpis
+        return render_template("home.html", kpis=get_kpis())
 
     @app.route("/healthz")
     def healthz():
