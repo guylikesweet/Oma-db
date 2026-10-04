@@ -107,6 +107,7 @@ def flush_outbox(limit=100):
 
         data = {str(k): str(v) for k, v in (row.data_json or {}).items()}
         sound = data.get("sound", "scanner_beep")
+        channel_id = "oma_arrival_air" if sound == "airport_arrival" else "oma_arrival_sea" if sound == "ship_horn" else "oma_scanner"
 
         successful = 0
         failures = 0
@@ -123,7 +124,7 @@ def flush_outbox(limit=100):
                         priority="high",
                         notification=messaging.AndroidNotification(
                             sound=f"{sound}.wav",
-                            channel_id="oma_arrivals",
+                            channel_id=channel_id,
                         ),
                     ),
                 )
