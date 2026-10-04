@@ -45,3 +45,76 @@ a:hover{color:var(--oma-green-dark)}
 .navbar,.navbar-dark{background:var(--oma-top)!important;border-bottom:3px solid var(--oma-orange)}
 .navbar .navbar-brand,.navbar .nav-link{color:var(--oma-orange)!important}
 table.table thead th{border-bottom:2px solid var(--oma-orange)!important}
+
+
+/* ===== Next-gen Omabuy surface system ===== */
+:root{
+  --oma-orange:#FC4300;
+  --oma-orange-dark:#D93A00;
+  --oma-green:#039664;
+  --oma-green-dark:#027A52;
+  --oma-white:#FFFFFF;
+  --oma-green-soft:#E8F6F0;
+  --oma-orange-soft:#FFF0E9;
+  --oma-radius:16px;
+  --oma-shadow:0 10px 30px rgba(18,35,28,.08);
+}
+html[data-oma-theme="dark"]{
+  --oma-green-soft:#102C22;
+  --oma-orange-soft:#351C12;
+  --oma-shadow:0 12px 32px rgba(0,0,0,.24);
+}
+body{
+  min-height:100vh;
+  -webkit-font-smoothing:antialiased;
+}
+.box,.card,.action-btn,.table,.modal-content{
+  border-radius:var(--oma-radius)!important;
+  box-shadow:var(--oma-shadow);
+}
+.btn-primary,.action-btn.primary{
+  border-radius:12px!important;
+  box-shadow:0 5px 14px rgba(252,67,0,.18);
+}
+.btn-success{
+  border-radius:12px!important;
+  box-shadow:0 5px 14px rgba(3,150,100,.16);
+}
+.btn-default,.btn-secondary,.btn-outline-primary{
+  border-radius:12px!important;
+}
+.badge-info,.badge-success,.label-info,.label-success{
+  background:var(--oma-green)!important;
+}
+.badge-warning,.label-warning{
+  background:var(--oma-orange)!important;
+}
+.oma-brand-accent{
+  border-left:4px solid var(--oma-green)!important;
+  box-shadow:inset 4px 0 0 var(--oma-orange);
+}
+.oma-theme-control{
+  display:flex;
+  align-items:center;
+  gap:7px;
+  margin-left:auto;
+}
+.oma-theme-control label{
+  color:var(--oma-muted,#666);
+  font-size:12px;
+  margin:0;
+}
+.oma-theme-select{
+  appearance:auto;
+  min-width:132px;
+  padding:6px 9px;
+  border:1px solid var(--oma-border,#e2e2e2);
+  border-radius:10px;
+  background:var(--oma-surface,#fff);
+  color:var(--oma-text,#212529);
+  font-size:12px;
+}
+@media(max-width:600px){
+  .oma-theme-control label{display:none}
+  .oma-theme-select{min-width:118px;max-width:132px}
+}
