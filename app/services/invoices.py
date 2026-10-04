@@ -201,6 +201,34 @@ def generate_invoice_pdf(sale):
     )
 
     buf = io.BytesIO()
+    def draw_watermark(canvas, doc):
+        logo_bytes, _ = get_logo_bytes()
+        if not logo_bytes:
+            return
+        try:
+            reader = ImageReader(io.BytesIO(logo_bytes))
+            iw, ih = reader.getSize()
+            max_w, max_h = 145 * mm, 145 * mm
+            scale = min(max_w / iw, max_h / ih)
+            w, h = iw * scale, ih * scale
+            canvas.saveState()
+            try:
+                canvas.setFillAlpha(0.25)
+            except Exception:
+                pass
+            canvas.drawImage(
+                reader,
+                (A4[0] - w) / 2,
+                (A4[1] - h) / 2,
+                width=w,
+                height=h,
+                preserveAspectRatio=True,
+                mask="auto",
+            )
+            canvas.restoreState()
+        except Exception:
+            pass
+
     doc = SimpleDocTemplate(
         buf, pagesize=A4,
         topMargin=18 * mm, bottomMargin=18 * mm,
@@ -399,6 +427,6 @@ def generate_invoice_pdf(sale):
         small_muted,
     ))
 
-    doc.build(story)
+    doc.build(story, onFirstPage=draw_watermark, onLaterPages=draw_watermark)
     buf.seek(0)
     return buf
