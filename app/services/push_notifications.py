@@ -45,17 +45,38 @@ def _firebase():
     return _firebase_app
 
 
-def queue_batch_arrival(batch):
-    """Queue one arrival notification for every active user/device."""
+def _push_recipient_user_ids(exclude_user_id=None):
+    query = PushDevice.query.filter_by(enabled=True)
+    if exclude_user_id is not None:
+        query = query.filter(PushDevice.user_id != exclude_user_id)
+    return sorted({device.user_id for device in query.all()})
+
+
+def queue_change_notification(actor_user_id, *, event_type, title, body, data=None):
+    """Queue a business-change notification for every registered mobile user except the actor."""
+    payload = dict(data or {})
+    payload.setdefault("type", "business_change")
+    payload.setdefault("sound", "scanner_beep")
+    for user_id in _push_recipient_user_ids(actor_user_id):
+        queue_user_notification(
+            user_id,
+            event_type=event_type,
+            title=title,
+            body=body,
+            data=payload,
+        )
+
+
+def queue_batch_arrival(batch, exclude_user_id=None):
+    """Queue the specialized arrival alert for every registered mobile user except the actor."""
     mode = "air" if batch.transport_mode == ShipmentBatch.MODE_AIR else "sea"
     sound = "airport_arrival" if mode == "air" else "ship_horn"
     title = "Air shipment arrived" if mode == "air" else "Sea shipment arrived"
     body = f"{batch.name} has arrived and is ready for shipping settlement."
 
-    users = User.query.all()
-    for user in users:
+    for user_id in _push_recipient_user_ids(exclude_user_id):
         queue_user_notification(
-            user.id,
+            user_id,
             event_type="batch_arrival",
             title=title,
             body=body,
@@ -160,6 +181,12 @@ def flush_outbox(limit=100):
                 failures += 1
                 row.attempts = (row.attempts or 0) + 1
                 row.last_error = str(exc)[:4000]
+                error_name = getattr(exc, "code", "")
+                if error_name in {
+                    "messaging/registration-token-not-registered",
+                    "messaging/invalid-registration-token",
+                }:
+                    device.enabled = False
 
         if successful and not failures:
             row.status = "sent"
