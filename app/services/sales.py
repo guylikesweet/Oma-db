@@ -144,6 +144,10 @@ def create_sale(customer_name, customer_phone, customer_address, customer_state,
         client_operation_id=client_operation_id or None,
     )
     sale.order_id = generate_order_id(sale_type)
+    # Public tracking key is intentionally independent of the customer-facing order ID.
+    # The database column is backfilled for legacy sales by the migration.
+    import secrets
+    sale.public_tracking_code = secrets.token_urlsafe(18)
     sale.sale_date = date.today()
     if not is_stock:
         sale.estimated_arrival_start = sale.sale_date + timedelta(days=60)
