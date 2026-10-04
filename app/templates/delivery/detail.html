@@ -33,6 +33,10 @@
       <input type="hidden" name="status" value="Delivered">
       <button type="submit" class="btn btn-primary btn-sm" {{ 'disabled' if delivery.status == 'Delivered' }}>Mark Delivered</button>
     </form>
+    <form method="post" action="{{ url_for('delivery.set_status', delivery_id=delivery.id) }}" style="display:inline-block; margin-left:8px;" onsubmit="return confirm('Mark this delivery as returned (rejected by the customer)?');">
+      <input type="hidden" name="status" value="Returned">
+      <button type="submit" class="btn btn-default btn-sm" {{ 'disabled' if delivery.status == 'Returned' }}>Mark Returned</button>
+    </form>
   </div>
 
   <div style="margin-bottom:16px; padding:10px; border:1px solid #eee; border-radius:6px;">
