@@ -1367,6 +1367,7 @@ def mobile_users():
     return jsonify([{
         'id': u.id, 'username': u.username, 'role': u.role,
         'is_admin': u.is_admin, 'is_primary_admin': u.is_primary_admin,
+        'is_active': u.is_active,
         'created_at': u.created_at.isoformat() if u.created_at else None,
     } for u in User.query.order_by(User.username).all()])
 
@@ -1391,7 +1392,7 @@ def mobile_create_user():
             details={"username": u.username, "role": u.role, "source": "api"},
             user=g.api_user,
         )
-        return _mobile_finish(op,'create_user',201,{'id':u.id,'username':u.username,'role':u.role,'is_admin':u.is_admin,'is_primary_admin':u.is_primary_admin,'created_at':u.created_at.isoformat() if u.created_at else None})
+        return _mobile_finish(op,'create_user',201,{'id':u.id,'username':u.username,'role':u.role,'is_admin':u.is_admin,'is_primary_admin':u.is_primary_admin,'is_active':u.is_active,'created_at':u.created_at.isoformat() if u.created_at else None})
     except ValueError as e:db.session.rollback();return jsonify({'error':str(e)}),400
 
 @api_bp.route("/v1/users/<int:user_id>", methods=("PUT","PATCH"))
@@ -1414,6 +1415,16 @@ def mobile_update_user(user_id):
         if data.get('password'):
             if len(str(data['password']))<8:raise ValueError('Password must be at least 8 characters.')
             u.password_hash=generate_password_hash(str(data['password']))
+            u.biometric_credential_hash = None
+            u.api_token = None
+            u.api_last_activity_at = None
+        if 'is_active' in data and g.api_user.is_admin:
+            if u.is_primary_admin and not bool(data['is_active']):
+                raise ValueError('The original admin cannot be deactivated.')
+            u.is_active = bool(data['is_active'])
+            if not u.is_active:
+                u.api_token = None
+                u.api_last_activity_at = None
         if data.get('role') and g.api_user.is_admin:
             role = str(data['role']).strip().lower()
             if role not in (User.ROLE_ADMIN, User.ROLE_STAFF):raise ValueError('Role must be admin or staff.')
