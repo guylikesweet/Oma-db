@@ -48,7 +48,7 @@ class _BrandLoaderState extends State<BrandLoader>
 
   // The green from the logo's cart/wordmark — used for the ring so it reads
   // as "the logo's own halo" rather than an unrelated theme color.
-  static const _ringColor = Color(0xFF1E9E5A);
+  static const _ringColor = Color(0xFF039664);
 
   @override
   Widget build(BuildContext context) {

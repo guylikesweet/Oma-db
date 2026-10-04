@@ -6,6 +6,7 @@ import 'package:sqflite/sqflite.dart' show databaseFactory;
 import 'package:sqflite_common_ffi_web/sqflite_ffi_web.dart';
 import 'brand_loader.dart';
 import 'invoice_actions.dart';
+import 'journey_widgets.dart';
 import 'login_background.dart';
 import 'data/api_client.dart';
 import 'data/app_session.dart';
@@ -71,18 +72,52 @@ class _OmaMobileAppState extends State<OmaMobileApp> with WidgetsBindingObserver
         title: 'Oma Mobile',
         debugShowCheckedModeBanner: false,
         themeMode: _theme,
-        theme: ThemeData(
-          useMaterial3: true,
-          colorSchemeSeed: Colors.indigo,
-          brightness: Brightness.light,
-        ),
-        darkTheme: ThemeData(
-          useMaterial3: true,
-          colorSchemeSeed: Colors.indigo,
-          brightness: Brightness.dark,
-        ),
+        theme: brandTheme(Brightness.light),
+        darkTheme: brandTheme(Brightness.dark),
         home: const SessionGate(),
       );
+}
+
+// The Omabuy brand: the orange and green are sampled straight from the logo.
+const brandOrange = Color(0xFFFC4300);
+const brandGreen = Color(0xFF039664);
+
+/// One theme for the whole app: white surfaces, orange for primary actions,
+/// green for secondary accents (the logo's own colours).
+ThemeData brandTheme(Brightness brightness) {
+  final dark = brightness == Brightness.dark;
+
+  final scheme = ColorScheme.fromSeed(
+    seedColor: brandOrange,
+    brightness: brightness,
+  ).copyWith(
+    primary: brandOrange,
+    onPrimary: Colors.white,
+    secondary: brandGreen,
+    onSecondary: Colors.white,
+    surface: dark ? const Color(0xFF121212) : Colors.white,
+    onSurface: dark ? Colors.white : const Color(0xFF1F1F1F),
+  );
+
+  return ThemeData(
+    useMaterial3: true,
+    colorScheme: scheme,
+    scaffoldBackgroundColor: scheme.surface,
+    appBarTheme: AppBarTheme(
+      backgroundColor: scheme.surface,
+      foregroundColor: brandOrange,
+      surfaceTintColor: Colors.transparent,
+      elevation: 0,
+      scrolledUnderElevation: 0,
+      shape: const Border(
+        bottom: BorderSide(color: brandOrange, width: 3),
+      ),
+    ),
+    floatingActionButtonTheme: const FloatingActionButtonThemeData(
+      backgroundColor: brandOrange,
+      foregroundColor: Colors.white,
+    ),
+  );
 }
 
 class SessionGate extends StatefulWidget {
@@ -1818,6 +1853,8 @@ class _SaleDetailPageState extends State<SaleDetailPage> {
                 ),
               ),
             ),
+            const SizedBox(height: 12),
+            JourneyCard(api: widget.api, saleId: widget.saleId),
             const SizedBox(height: 12),
             Text(
               'Items',

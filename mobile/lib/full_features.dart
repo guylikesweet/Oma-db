@@ -11,6 +11,7 @@ import 'data/app_session.dart';
 import 'data/local_database.dart';
 import 'data/sale_kind.dart';
 import 'invoice_actions.dart';
+import 'journey_widgets.dart';
 
 class WebsiteFeaturesPage extends StatefulWidget {
   const WebsiteFeaturesPage({super.key, required this.api, required this.local});
@@ -117,6 +118,13 @@ class _WebsiteFeaturesPageState extends State<WebsiteFeaturesPage> {
           ),
 
           _tile(
+            Icons.timeline,
+            'Order journey',
+            'Move orders through fulfilled, CN transit and consolidation in bulk',
+            () => open(JourneyPage(api: widget.api)),
+          ),
+
+          _tile(
             Icons.delivery_dining,
             'Deliveries',
             'Ready sales, consolidation, status and labels',
@@ -126,7 +134,7 @@ class _WebsiteFeaturesPageState extends State<WebsiteFeaturesPage> {
           _tile(
             Icons.price_change,
             'Rates',
-            'Courier and monthly shipping rates (editing the monthly rate is admin-only)',
+            'Courier rates, and the monthly Sea and Air rates (editing monthly rates is admin-only)',
             () => open(RatesPage(api: widget.api, isAdmin: isAdmin)),
           ),
 
@@ -794,7 +802,7 @@ class _WebSalesPageState extends State<WebSalesPage> {
                         ' • ${sale['customer_name'] ?? ''}',
                       ),
                       subtitle: Text(
-                        '${sale['order_status'] ?? ''}'
+                        '${sale['journey_label'] ?? sale['order_status'] ?? ''}'
                         ' • ${sale['payment_status'] ?? ''}'
                         ' • ₦${sale['total_amount'] ?? 0}',
                       ),
@@ -926,41 +934,79 @@ class _BatchesPageState extends State<BatchesPage> {
   Future<void> create() async {
     final name = TextEditingController();
     final notes = TextEditingController();
+    // How the batch travels decides how its sales are priced:
+    // sea by CBM, air by volumetric kg.
+    String mode = 'sea';
 
     final ok = await showDialog<bool>(
       context: context,
       builder: (dialogContext) {
-        return AlertDialog(
-          title: const Text('New shipment batch'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: name,
-                decoration: const InputDecoration(
-                  labelText: 'Name',
-                ),
+        return StatefulBuilder(
+          builder: (context, setDialogState) => AlertDialog(
+            title: const Text('New shipment batch'),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  TextField(
+                    controller: name,
+                    decoration: const InputDecoration(
+                      labelText: 'Name',
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  const Text('Travels by'),
+                  const SizedBox(height: 8),
+                  SegmentedButton<String>(
+                    segments: const [
+                      ButtonSegment(
+                        value: 'sea',
+                        label: Text('Sea'),
+                        icon: Icon(Icons.directions_boat),
+                      ),
+                      ButtonSegment(
+                        value: 'air',
+                        label: Text('Air'),
+                        icon: Icon(Icons.flight),
+                      ),
+                    ],
+                    selected: {mode},
+                    onSelectionChanged: (value) {
+                      setDialogState(() => mode = value.first);
+                    },
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    mode == 'air'
+                        ? 'Priced by volumetric kg × the monthly Air rate, '
+                            'plus weight × the packing rate.'
+                        : 'Priced by CBM × the monthly Sea rate, '
+                            'plus weight × the packing rate.',
+                    style: const TextStyle(color: Colors.grey, fontSize: 12),
+                  ),
+                  TextField(
+                    controller: notes,
+                    decoration: const InputDecoration(
+                      labelText: 'Notes',
+                    ),
+                  ),
+                ],
               ),
-              TextField(
-                controller: notes,
-                decoration: const InputDecoration(
-                  labelText: 'Notes',
-                ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () =>
+                    Navigator.pop(dialogContext, false),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: () =>
+                    Navigator.pop(dialogContext, true),
+                child: const Text('Create'),
               ),
             ],
           ),
-          actions: [
-            TextButton(
-              onPressed: () =>
-                  Navigator.pop(dialogContext, false),
-              child: const Text('Cancel'),
-            ),
-            FilledButton(
-              onPressed: () =>
-                  Navigator.pop(dialogContext, true),
-              child: const Text('Create'),
-            ),
-          ],
         );
       },
     );
@@ -970,6 +1016,7 @@ class _BatchesPageState extends State<BatchesPage> {
     try {
       await widget.api.createBatch({
         'name': name.text.trim(),
+        'transport_mode': mode,
         'notes': notes.text.trim(),
       });
 
@@ -1186,8 +1233,10 @@ class _BatchesPageState extends State<BatchesPage> {
         title: const Text('Mark batch as arrived?'),
         content: const Text(
           'This calculates the actual shipping cost for every sale in '
-          'this batch, using this month\'s rate × each sale\'s CBM, and '
-          'locks the batch to "Arrived — Awaiting Shipping Payment". '
+          'this batch using this month\'s rate for the way it travelled '
+          '(Sea: CBM × the Sea rate. Air: volumetric kg × the Air rate), '
+          'plus each sale\'s weight × the packing rate, and locks the '
+          'batch to "Arrived — Awaiting Shipping Payment". '
           'This cannot be undone.',
         ),
         actions: [
@@ -1304,11 +1353,20 @@ class _BatchesPageState extends State<BatchesPage> {
 
                   return Card(
                     child: ListTile(
+                      leading: Icon(
+                        batch['transport_mode'] == 'air'
+                            ? Icons.flight
+                            : Icons.directions_boat,
+                        color: batch['transport_mode'] == 'air'
+                            ? Theme.of(context).colorScheme.primary
+                            : Theme.of(context).colorScheme.secondary,
+                      ),
                       title: Text(
                         '${batch['name'] ?? ''}',
                       ),
                       subtitle: Text(
-                        '${batch['status'] ?? ''}'
+                        '${batch['transport_mode'] == 'air' ? 'Air' : 'Sea'}'
+                        ' • ${batch['status'] ?? ''}'
                         ' • $saleCount sales',
                       ),
                       onTap: () => manageBatch(batch),
@@ -2402,11 +2460,7 @@ class RatesPage extends StatelessWidget {
               // per the owner's request; courier state rates are routine.
               isAdmin: true,
             ),
-            _RateList(
-              api: api,
-              courier: false,
-              isAdmin: isAdmin,
-            ),
+            _MonthlyRates(api: api, isAdmin: isAdmin),
           ],
         ),
       ),
@@ -2414,15 +2468,81 @@ class RatesPage extends StatelessWidget {
   }
 }
 
+/// Monthly rates: Sea (NGN per CBM) and Air (NGN per volumetric kg) are
+/// both set here, one list each.
+class _MonthlyRates extends StatefulWidget {
+  const _MonthlyRates({required this.api, this.isAdmin = false});
+
+  final ApiClient api;
+  final bool isAdmin;
+
+  @override
+  State<_MonthlyRates> createState() => _MonthlyRatesState();
+}
+
+class _MonthlyRatesState extends State<_MonthlyRates> {
+  bool air = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+          child: SegmentedButton<bool>(
+            segments: const [
+              ButtonSegment(
+                value: false,
+                label: Text('Sea'),
+                icon: Icon(Icons.directions_boat),
+              ),
+              ButtonSegment(
+                value: true,
+                label: Text('Air'),
+                icon: Icon(Icons.flight),
+              ),
+            ],
+            selected: {air},
+            onSelectionChanged: (value) => setState(() => air = value.first),
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+          child: Text(
+            air
+                ? 'Air: ₦ per volumetric kg, used for batches that travel by air.'
+                : 'Sea: ₦ per CBM, used for batches that travel by sea.',
+            style: const TextStyle(color: Colors.grey, fontSize: 12),
+          ),
+        ),
+        Expanded(
+          child: _RateList(
+            key: ValueKey(air),
+            api: widget.api,
+            courier: false,
+            air: air,
+            isAdmin: widget.isAdmin,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 class _RateList extends StatefulWidget {
   const _RateList({
+    super.key,
     required this.api,
     required this.courier,
+    this.air = false,
     this.isAdmin = false,
   });
 
   final ApiClient api;
   final bool courier;
+
+  /// Monthly AIR rates (₦ per volumetric kg). false = courier or monthly SEA (₦ per CBM).
+  final bool air;
   final bool isAdmin;
 
   @override
@@ -2444,7 +2564,9 @@ class _RateListState extends State<_RateList> {
     try {
       rows = widget.courier
           ? await widget.api.courierRates()
-          : await widget.api.monthlyRates();
+          : widget.air
+              ? await widget.api.airRates()
+              : await widget.api.monthlyRates();
     } catch (_) {}
 
     if (mounted) {
@@ -2463,7 +2585,9 @@ class _RateListState extends State<_RateList> {
           title: Text(
             widget.courier
                 ? 'Courier rate'
-                : 'Monthly rate',
+                : widget.air
+                    ? 'Monthly Air rate'
+                    : 'Monthly Sea rate',
           ),
           content: Column(
             mainAxisSize: MainAxisSize.min,
@@ -2483,8 +2607,10 @@ class _RateListState extends State<_RateList> {
                   decimal: true,
                 ),
                 decoration:
-                    const InputDecoration(
-                  labelText: 'Rate per CBM',
+                    InputDecoration(
+                  labelText: widget.air
+                      ? 'Rate per volumetric kg'
+                      : 'Rate per CBM',
                 ),
               ),
             ],
@@ -2529,6 +2655,11 @@ class _RateListState extends State<_RateList> {
           'state': first.text.trim(),
           'rate_per_cbm': parsedRate,
         });
+      } else if (widget.air) {
+        await widget.api.createAirRate({
+          'month': first.text.trim(),
+          'rate_per_kg': parsedRate,
+        });
       } else {
         await widget.api.createMonthlyRate({
           'month': first.text.trim(),
@@ -2556,7 +2687,9 @@ class _RateListState extends State<_RateList> {
     );
 
     final rate = TextEditingController(
-      text: '${row['rate_per_cbm'] ?? ''}',
+      text: widget.air
+          ? '${row['rate_per_kg'] ?? ''}'
+          : '${row['rate_per_cbm'] ?? ''}',
     );
 
     final ok = await showDialog<bool>(
@@ -2581,8 +2714,10 @@ class _RateListState extends State<_RateList> {
                   decimal: true,
                 ),
                 decoration:
-                    const InputDecoration(
-                  labelText: 'Rate per CBM',
+                    InputDecoration(
+                  labelText: widget.air
+                      ? 'Rate per volumetric kg'
+                      : 'Rate per CBM',
                 ),
               ),
             ],
@@ -2621,6 +2756,14 @@ class _RateListState extends State<_RateList> {
             'rate_per_cbm': parsedRate,
           },
         );
+      } else if (widget.air) {
+        await widget.api.updateAirRate(
+          id,
+          {
+            'month': first.text.trim(),
+            'rate_per_kg': parsedRate,
+          },
+        );
       } else {
         await widget.api.updateMonthlyRate(
           id,
@@ -2649,6 +2792,8 @@ class _RateListState extends State<_RateList> {
 
       if (widget.courier) {
         await widget.api.deleteCourierRate(id);
+      } else if (widget.air) {
+        await widget.api.deleteAirRate(id);
       } else {
         await widget.api.deleteMonthlyRate(id);
       }
@@ -2674,7 +2819,9 @@ class _RateListState extends State<_RateList> {
               title: Text(
                 widget.courier
                     ? 'Courier rates'
-                    : 'Monthly rates',
+                    : widget.air
+                        ? 'Monthly Air rates'
+                        : 'Monthly Sea rates',
               ),
               subtitle: widget.isAdmin
                   ? null
@@ -2706,7 +2853,7 @@ class _RateListState extends State<_RateList> {
                         : '${row['month'] ?? ''}',
                   ),
                   subtitle: Text(
-                    '${row['rate_per_cbm'] ?? 0}',
+                    '${(widget.air ? row['rate_per_kg'] : row['rate_per_cbm']) ?? 0}',
                   ),
                   onTap: widget.isAdmin ? () => editRate(row) : null,
                   trailing: widget.isAdmin
@@ -3233,7 +3380,7 @@ class _SettingsPageState
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text(
-            'Enter a valid shipping rate per kg (0 or more).',
+            'Enter a valid packing rate per kg (0 or more).',
           ),
         ),
       );
@@ -3333,15 +3480,17 @@ class _SettingsPageState
                 ),
                 const SizedBox(height: 24),
                 Text(
-                  'Shipping rate',
+                  'Packing rate',
                   style: Theme.of(context).textTheme.titleMedium,
                 ),
                 const SizedBox(height: 4),
                 const Text(
-                  'Shipping cost = (CBM × the monthly CBM rate) + '
-                  '(weight in kg × this per-kg rate). Change it here when '
-                  'the rate changes; it applies to new estimates and to '
-                  'batches that arrive from now on.',
+                  'Added to every shipment: weight in kg × this packing rate, '
+                  'on top of the volume charge (Sea: CBM × the monthly Sea '
+                  'rate, Air: volumetric kg × the monthly Air rate — both set '
+                  'on the Rates page). Change it here when the rate changes; '
+                  'it applies to new estimates and to batches that arrive '
+                  'from now on.',
                 ),
                 TextField(
                   controller: kgRate,
@@ -3349,7 +3498,7 @@ class _SettingsPageState
                     decimal: true,
                   ),
                   decoration: const InputDecoration(
-                    labelText: 'Rate per kg (₦)',
+                    labelText: 'Packing rate per kg (₦)',
                     prefixText: '₦',
                   ),
                 ),
