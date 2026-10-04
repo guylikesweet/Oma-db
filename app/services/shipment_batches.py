@@ -19,6 +19,7 @@ from app.models import ShipmentBatch, Sale
 from app.services.rates import get_volume_rate, get_rate_per_kg, RateMissingError
 from app.services.sales import shipping_cost_for_items
 from app.services.push_notifications import queue_batch_arrival, flush_outbox
+from app.services.audit import record_audit
 
 
 class BatchValidationError(Exception):
@@ -105,6 +106,12 @@ def mark_arrived(batch_id):
 
     batch.arrived_at = datetime.utcnow()
     batch.status = ShipmentBatch.STATUS_ARRIVED
+    record_audit(
+        'batch.arrive',
+        target_type='shipment_batch',
+        target_id=batch.id,
+        details={'transport_mode': batch.transport_mode, 'sale_count': len(batch.sales)},
+    )
     queue_batch_arrival(batch)
     db.session.commit()
     try:
@@ -135,6 +142,12 @@ def settle_sale_shipping(sale_id):
 
     sale.shipping_payment_settled = True
     sale.shipping_payment_settled_at = datetime.utcnow()
+    record_audit(
+        'shipping.settle',
+        target_type='sale',
+        target_id=sale.id,
+        details={'shipping_amount': str(sale.actual_shipping_cost or 0)},
+    )
 
     db.session.commit()
     return sale
