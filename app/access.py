@@ -30,6 +30,18 @@ def admin_required(f):
     return wrapper
 
 
+def password_required(f):
+    """Require a recent password confirmation for a sensitive session action."""
+    @wraps(f)
+    def wrapper(*args, **kwargs):
+        if not current_user.is_authenticated:
+            return redirect(url_for("auth.login", next=request.url))
+        if not password_recently_confirmed():
+            return redirect(reauth_url(request.full_path))
+        return f(*args, **kwargs)
+    return wrapper
+
+
 def require_admin_api(f):
     """For /api/v1/* routes. Must be applied AFTER @require_api_token so
     g.api_user is already set."""
