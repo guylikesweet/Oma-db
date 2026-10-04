@@ -118,3 +118,60 @@ body{
   .oma-theme-control label{display:none}
   .oma-theme-select{min-width:118px;max-width:132px}
 }
+
+
+/* ===== Global responsive e-commerce workspace ===== */
+.page-shell,.page-container,.container{
+  width:min(1440px,calc(100% - 40px));
+  margin-left:auto!important;
+  margin-right:auto!important;
+}
+main,.content,.content-wrap{
+  min-width:0;
+}
+.card,.box,.panel,.sale-card,.info-card{
+  padding:20px;
+  margin-bottom:18px;
+}
+.form-group{margin-bottom:16px}
+.form-control,input,select,textarea{
+  min-height:42px;
+  border-radius:10px;
+}
+textarea{min-height:88px}
+.table-responsive,.items-wrap,.table-wrap{
+  overflow-x:auto;
+  -webkit-overflow-scrolling:touch;
+}
+table.table{margin-bottom:0}
+table.table th,table.table td{padding:11px 12px;vertical-align:middle}
+.alert{border-radius:12px;margin-bottom:16px}
+h1,h2,h3,h4{line-height:1.2}
+button,.btn{min-height:40px}
+.form-group > small.form-text,.form-group > .help-block,.form-group > .field-description{
+  display:none!important;
+}
+@media(min-width:992px){
+  .topbar{padding:12px 28px!important}
+  #sideNav{width:280px}
+  .page-shell,.page-container,.container{width:min(1440px,calc(100% - 64px))}
+  .card,.box,.panel,.sale-card,.info-card{padding:24px;margin-bottom:22px}
+  .dashboard-grid,.kpi-grid{grid-template-columns:repeat(4,minmax(0,1fr))}
+  .form-row{gap:18px}
+}
+@media(max-width:991px){
+  .page-shell,.page-container,.container{width:calc(100% - 24px)}
+}
+@media(max-width:600px){
+  .page-shell,.page-container,.container{width:calc(100% - 20px)}
+  .card,.box,.panel,.sale-card,.info-card{padding:14px;margin-bottom:14px;border-radius:12px!important}
+  .row{margin-left:-6px;margin-right:-6px}
+  .row>[class*="col-"]{padding-left:6px;padding-right:6px}
+  .table{font-size:13px}
+  table.table th,table.table td{padding:9px 8px}
+  .btn,.btn-primary,.btn-secondary,.btn-default,.action-btn{min-height:42px}
+  .topbar{padding:10px 12px!important}
+  .oma-theme-control{gap:4px}
+  .oma-theme-select{min-width:108px;max-width:116px}
+  h1{font-size:1.55rem} h2{font-size:1.35rem} h3{font-size:1.15rem}
+}
