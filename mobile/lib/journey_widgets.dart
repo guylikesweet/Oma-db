@@ -345,9 +345,6 @@ class _JourneyEditorState extends State<_JourneyEditor> {
 
       if (updated > 0) {
         Navigator.pop(context, true);
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Order journey updated.')),
-        );
         return;
       }
 
