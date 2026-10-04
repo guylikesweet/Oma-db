@@ -44,6 +44,15 @@
   <div class="topbar">
     <button id="navToggle" aria-label="Open menu">&#9776;</button>
     <a class="home-link" href="{{ url_for('classic_home') }}">Home</a>
+    <div class="oma-theme-control" title="Appearance">
+      <label for="omaThemePreference">Theme</label>
+      <select id="omaThemePreference" class="oma-theme-select" aria-label="Theme preference">
+        <option value="system">System</option>
+        <option value="sunset">Sunset to sunrise</option>
+        <option value="light">Light</option>
+        <option value="dark">Dark</option>
+      </select>
+    </div>
   </div>
 
   <div id="navBackdrop"></div>
