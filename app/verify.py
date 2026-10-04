@@ -8,12 +8,13 @@ customer's document. Only what a customer needs to check an invoice is shown
 import base64
 import re
 
-from flask import Blueprint, render_template_string
+from flask import Blueprint, render_template_string, request
 
 from app.models import Sale
 from app.services.invoices import signature_matches
 from app.services.labels import get_logo_bytes
 from app.services.settings import get_settings
+from app.services.journey import journey_for
 
 verify_bp = Blueprint("verify", __name__)
 
@@ -82,6 +83,20 @@ PAGE = """<!doctype html>
 </body></html>"""
 
 
+
+TRACKING_PAGE = """<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex"><title>Order tracking</title>
+<style>
+body{font-family:system-ui,sans-serif;background:#f4f4f4;margin:0;padding:16px;color:#222}.card{max-width:620px;margin:20px auto;background:#fff;border-radius:14px;padding:22px;box-shadow:0 2px 12px #0001}.brand{text-align:center;margin-bottom:14px}.brand img{max-height:64px;max-width:210px}h1{font-size:22px;margin:4px 0 2px}.muted{color:#777;font-size:13px}.verify{padding:10px 12px;border-radius:8px;background:#e6f6ef;color:#027a52;margin:12px 0}.steps{list-style:none;padding:0;margin:18px 0}.step{display:flex;gap:12px;padding:12px 0;border-bottom:1px solid #eee}.dot{width:12px;height:12px;border-radius:50%;background:#bbb;margin-top:5px;flex:none}.done .dot,.current .dot,.final .dot{background:#039664}.current strong,.final strong{color:#fc4300}.date{font-size:12px;color:#777;margin-top:2px}.mode{display:inline-block;margin:8px 0;padding:5px 9px;border-radius:999px;background:#fff1eb;color:#d93a00;font-weight:600}.items{border-top:1px solid #eee;margin-top:16px;padding-top:12px}.item{display:flex;justify-content:space-between;padding:5px 0}.footer{margin-top:18px;font-size:12px;color:#777;text-align:center}
+</style></head><body><div class="card"><div class="brand">{% if logo_uri %}<img src="{{ logo_uri }}">{% endif %}<div><b>{{ business_name }}</b></div></div>
+<h1>Order tracking</h1><div class="muted">Order ID: <b>{{ sale.order_id or '-' }}</b></div>
+{% if verification == "valid" %}<div class="verify"><b>Invoice verified.</b> This invoice matches our records.</div>{% elif verification == "invalid" %}<div style="padding:10px 12px;border-radius:8px;background:#fdecea;color:#b3261e;margin:12px 0"><b>Invoice verification failed.</b> The order is still shown, but the supplied invoice code did not match our records.</div>{% endif %}
+{% if journey.mode %}<div class="mode">{{ "✈ On air" if journey.mode == "air" else "🚢 On sea" }}</div>{% endif %}
+<p><b>{{ journey.current_label }}</b><br><span class="muted">{{ journey.current_description }}</span></p>
+<ol class="steps">{% for step in journey.steps %}<li class="step {{ step.state }}"><span class="dot"></span><div><strong>{{ step.label }}</strong>{% if step.at %}<div class="date">{{ step.at[:10] }}</div>{% endif %}<div class="muted">{{ step.description }}</div></div></li>{% endfor %}</ol>
+<div class="items"><b>Order items</b>{% for item in sale.items %}<div class="item"><span>{{ item.product.name if item.product else "Item" }}{% if item.variant_note %} · {{ item.variant_note }}{% endif %}</span><span>× {{ item.qty }}</span></div>{% endfor %}</div>
+<div class="footer">This public page does not display your phone number or delivery address.</div></div></body></html>"""
+
 def _logo_uri():
     data, mimetype = get_logo_bytes()
     if not data:
@@ -119,6 +134,16 @@ def _mask(name):
     if not parts:
         return "-"
     return " ".join([parts[0]] + [p[0] + "***" for p in parts[1:]])
+
+
+@verify_bp.route("/track/<tracking_code>")
+def track(tracking_code):
+    sale = Sale.query.filter_by(public_tracking_code=tracking_code).first()
+    if sale is None:
+        return render_template_string(TRACKING_PAGE, sale=Sale(order_id=None), journey={"current_label":"Order not found","current_description":"This tracking link is invalid or no longer exists.","steps":[],"mode":None}, verification=None, **_brand_context()), 404
+    sig = request.args.get("sig", "")
+    verification = "valid" if sig and signature_matches(sale, sig.replace("-", "")) else ("invalid" if sig else None)
+    return render_template_string(TRACKING_PAGE, sale=sale, journey=journey_for(sale), verification=verification, **_brand_context(sale))
 
 
 @verify_bp.route("/verify/<order_id>/<sig>")
