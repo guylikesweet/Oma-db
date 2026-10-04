@@ -87,14 +87,14 @@ class _WebsiteFeaturesPageState extends State<WebsiteFeaturesPage> {
           _tile(
             Icons.inventory_2,
             'Manage products',
-            'Full admin: create, edit, delete and stock (see the Products tab for the everyday offline view)',
+            'Admin changes require biometric verification (stock adjustments remain routine).',
             () => open(WebProductsPage(api: widget.api)),
           ),
 
           _tile(
             Icons.receipt_long,
             'Manage sales',
-            'Full admin: status and shipping settlement (see the Sales tab for the everyday offline view)',
+            'Shipping settlement requires biometric verification.',
             () => open(WebSalesPage(api: widget.api)),
           ),
 
@@ -114,7 +114,7 @@ class _WebsiteFeaturesPageState extends State<WebsiteFeaturesPage> {
           _tile(
             Icons.local_shipping,
             'Shipment batches',
-            'Create, assign, arrive and settle (marking a batch arrived is admin-only)',
+            'Create and manage batches; biometric verification is required when marking a batch arrived.',
             () => open(BatchesPage(api: widget.api, isAdmin: isAdmin)),
           ),
 
@@ -135,7 +135,7 @@ class _WebsiteFeaturesPageState extends State<WebsiteFeaturesPage> {
           _tile(
             Icons.price_change,
             'Rates',
-            'Courier rates, and the monthly Sea and Air rates (editing monthly rates is admin-only)',
+            'Courier and monthly rates — biometric verification is required for edits.',
             () => open(RatesPage(api: widget.api, isAdmin: isAdmin)),
           ),
 
@@ -150,7 +150,7 @@ class _WebsiteFeaturesPageState extends State<WebsiteFeaturesPage> {
             Icons.settings,
             'Settings',
             isAdmin
-                ? 'Business and label settings'
+                ? 'Business and label settings — biometric verification required to save'
                 : 'Business and label settings — admins only',
             isAdmin
                 ? () => open(SettingsPage(api: widget.api))
@@ -169,7 +169,7 @@ class _WebsiteFeaturesPageState extends State<WebsiteFeaturesPage> {
             Icons.people,
             'Users',
             isAdmin
-                ? 'Add or remove users, admin or staff'
+                ? 'Add or remove users — biometric verification required'
                 : 'Add or remove users — admins only',
             isAdmin
                 ? () => open(UsersPage(api: widget.api))
@@ -181,7 +181,7 @@ class _WebsiteFeaturesPageState extends State<WebsiteFeaturesPage> {
             Icons.delete_sweep,
             'Clear test data',
             isAdmin
-                ? 'Confirmation-protected test-data cleanup'
+                ? 'Confirmation + biometric verification required'
                 : 'Confirmation-protected test-data cleanup — admins only',
             isAdmin
                 ? () => open(ClearDataPage(api: widget.api, local: widget.local))
@@ -3491,6 +3491,17 @@ class _SettingsPageState
           : ListView(
               padding: const EdgeInsets.all(16),
               children: [
+                Card(
+                  color: Theme.of(context).colorScheme.secondaryContainer,
+                  child: const ListTile(
+                    leading: Icon(Icons.fingerprint),
+                    title: Text('Biometric verification required'),
+                    subtitle: Text(
+                      'Saving these settings changes business details, label settings, packing rates or bank details.',
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 8),
                 TextField(
                   controller: name,
                   decoration: const InputDecoration(
@@ -3579,11 +3590,10 @@ class _SettingsPageState
                   ),
                 ),
                 const SizedBox(height: 20),
-                FilledButton(
+                FilledButton.icon(
                   onPressed: save,
-                  child: const Text(
-                    'Save settings',
-                  ),
+                  icon: const Icon(Icons.fingerprint),
+                  label: const Text('Verify & save settings'),
                 ),
               ],
             ),
