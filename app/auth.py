@@ -40,6 +40,23 @@ def logout():
     return redirect(url_for("auth.login"))
 
 
+@auth_bp.route("/reauthenticate", methods=("GET", "POST"))
+@login_required
+def reauthenticate():
+    next_url = request.args.get("next") or request.form.get("next") or url_for("classic_home")
+    if not next_url.startswith("/"):
+        next_url = url_for("classic_home")
+
+    if request.method == "POST":
+        password = request.form.get("password", "")
+        if check_password_hash(current_user.password_hash, password):
+            session["reauth_at"] = time.time()
+            return redirect(next_url)
+        flash("Password verification failed.", "error")
+
+    return render_template("auth/reauthenticate.html", next_url=next_url)
+
+
 @auth_bp.route("/change-password", methods=("GET", "POST"))
 @login_required
 def change_password():
