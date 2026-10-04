@@ -186,6 +186,7 @@ def _product_json(p):
 
 
 def _sale_json(s):
+    journey = journey_public(s)
     return {
         "id": s.id,
         "order_id": s.order_id,
@@ -199,10 +200,10 @@ def _sale_json(s):
         "customer_city": s.customer_city,
         "customer_state": s.customer_state,
         "order_status": s.order_status,
-        "journey_key": journey_public(s)["current"],
-        "journey_label": journey_public(s)["current_label"],
-        "journey_description": journey_public(s)["current_description"],
-        "journey_mode": journey_public(s)["mode"],
+        "journey_key": journey["current"],
+        "journey_label": journey["current_label"],
+        "journey_description": journey["current_description"],
+        "journey_mode": journey["mode"],
         "payment_status": s.payment_status,
         "subtotal_amount": float(s.subtotal_amount) if s.subtotal_amount is not None else None,
         "estimated_shipping_cost": float(s.estimated_shipping_cost) if s.estimated_shipping_cost is not None else None,
