@@ -1037,7 +1037,7 @@ def mobile_batch_undo_arrival(batch_id):
         op, existing = _mobile_operation(data)
         if existing:
             return _mobile_replay(existing)
-        batch = mark_unarrived(batch_id)
+        batch = mark_unarrived(batch_id, user_id=g.api_user.id)
         payload = _batch_json(batch)
         return _mobile_finish(op, "batch_undo_arrival", 200, payload)
     except BatchValidationError as e:
@@ -1165,14 +1165,29 @@ def mobile_update_journey():
         if existing:
             return _mobile_replay(existing)
         ids = [int(x) for x in (data.get("sale_ids") or [])]
+        if not ids:
+            raise ValueError("Select at least one sale.")
         stage = str(data.get("stage") or "").strip()
-        sales = Sale.query.filter(Sale.id.in_(ids)).all() if ids else []
+        sales = Sale.query.filter(Sale.id.in_(ids)).all()
+        found_ids = {sale.id for sale in sales}
+        missing_ids = [sale_id for sale_id in ids if sale_id not in found_ids]
+        if missing_ids:
+            raise ValueError(
+                "One or more selected sales were not found: "
+                + ", ".join(str(x) for x in missing_ids)
+                + "."
+            )
         updated, unchanged, skipped = set_manual_stage_bulk(sales, stage, user_id=g.api_user.id)
         if updated:
+            changed_ids = [
+                sale.id
+                for sale in sales
+                if sale.id in found_ids
+            ]
             record_audit(
                 "journey.update",
                 target_type="sale",
-                target_id=",".join(str(x.id) for x in sales),
+                target_id=",".join(str(x) for x in changed_ids),
                 details={"stage": stage, "sale_ids": [x.id for x in sales], "updated": updated},
                 user=g.api_user,
             )
