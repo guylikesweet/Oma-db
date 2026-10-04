@@ -1019,6 +1019,13 @@ def mobile_create_delivery():
         d=Delivery(method=method,status=Delivery.STATUS_PENDING,is_consolidated=len(sales)>1,consolidation_type=consolidation_type,delivery_address=str(data.get("delivery_address") or "").strip() or sales[0].customer_address,notes=str(data.get("notes") or "").strip() or None)
         db.session.add(d); db.session.flush()
         for s in sales: s.delivery_id=d.id
+        record_audit(
+            "delivery.create",
+            target_type="delivery",
+            target_id=d.id,
+            details={"sale_ids": [s.id for s in sales], "method": method, "source": "api"},
+            user=g.api_user,
+        )
         return _mobile_finish(op,"create_delivery",201,_delivery_json(d))
     except ValueError as e:
         db.session.rollback(); return jsonify({"error":str(e)}),400
@@ -1038,6 +1045,13 @@ def mobile_delivery_status(delivery_id):
         if status==Delivery.STATUS_DELIVERED:
             d.delivered_at=datetime.utcnow()
             for s in d.sales:s.order_status="Delivered"
+        record_audit(
+            "delivery.status",
+            target_type="delivery",
+            target_id=d.id,
+            details={"from": old_status, "to": status, "sale_ids": [s.id for s in d.sales], "source": "api"},
+            user=g.api_user,
+        )
         return _mobile_finish(op,"delivery_status",200,_delivery_json(d))
     except ValueError as e:
         db.session.rollback();return jsonify({"error":str(e)}),400
