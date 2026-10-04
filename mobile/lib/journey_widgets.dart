@@ -203,7 +203,12 @@ class _JourneyCardState extends State<JourneyCard> {
           .toList();
       final url = '${d['tracking_url'] ?? ''}';
 
+      // This card lives inside the SaleDetailPage's vertical ListView.
+      // Keep the success column explicitly content-sized so Flutter web never
+      // treats the journey section as a flex child that can consume an
+      // unbounded amount of vertical space.
       body = Column(
+        mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
