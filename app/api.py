@@ -123,6 +123,34 @@ def api_login():
     })
 
 
+@api_bp.route("/v1/auth/verify-password", methods=("POST",))
+@require_api_token
+def verify_password():
+    """Verify the currently authenticated user's password without changing it."""
+    data = request.get_json(silent=True) or {}
+    password = str(data.get("password") or "")
+    if not password or not check_password_hash(g.api_user.password_hash, password):
+        record_audit(
+            "security.password_verify",
+            target_type="user",
+            target_id=g.api_user.id,
+            outcome="failure",
+            details={"source": "mobile_approval"},
+        )
+        db.session.commit()
+        return jsonify({"verified": False, "error": "Password is incorrect."}), 401
+
+    record_audit(
+        "security.password_verify",
+        target_type="user",
+        target_id=g.api_user.id,
+        outcome="success",
+        details={"source": "mobile_approval"},
+    )
+    db.session.commit()
+    return jsonify({"verified": True})
+
+
 @api_bp.route("/v1/auth/me", methods=("GET",))
 @require_api_token
 def api_me():
