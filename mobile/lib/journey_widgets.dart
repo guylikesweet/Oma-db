@@ -59,7 +59,7 @@ class _JourneyCardState extends State<JourneyCard> {
     });
 
     try {
-      final result = await widget.api.saleDetail(widget.saleId);
+      final result = await widget.api.saleJourney(widget.saleId);
       if (mounted) setState(() => detail = result);
     } catch (_) {
       if (mounted) setState(() => failed = true);
