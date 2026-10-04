@@ -18,9 +18,7 @@ class BiometricGuard {
   static Future<bool> canUseBiometrics() async {
     if (kIsWeb) return false;
     try {
-      if (!await _auth.canCheckBiometrics || !await _auth.isDeviceSupported()) {
-        return false;
-      }
+      if (!await _auth.isDeviceSupported()) return false;
       final enrolled = await _auth.getAvailableBiometrics();
       return enrolled.isNotEmpty;
     } catch (_) {
@@ -31,8 +29,11 @@ class BiometricGuard {
   static Future<bool> authenticateForLogin({
     required String reason,
   }) async {
-    if (!await canUseBiometrics()) return false;
+    if (kIsWeb) return false;
     try {
+      // Attempt the native biometric prompt directly. Some Android devices
+      // report canCheckBiometrics inconsistently even though the system can
+      // successfully present the enrolled biometric prompt.
       return await _auth.authenticate(
         localizedReason: reason,
         options: const AuthenticationOptions(
@@ -93,10 +94,9 @@ class BiometricGuard {
     if (kIsWeb) return passwordFallback();
 
     try {
-      final canCheck = await _auth.canCheckBiometrics;
       final supported = await _auth.isDeviceSupported();
 
-      if (!canCheck || !supported) return passwordFallback();
+      if (!supported) return passwordFallback();
 
       final authenticated = await _auth.authenticate(
         localizedReason: reason,
