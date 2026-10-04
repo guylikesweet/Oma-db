@@ -821,7 +821,9 @@ def mobile_update_journey():
     except (ValueError, JourneyError) as e:
         db.session.rollback()
         return jsonify({"error": str(e)}), 400
-\n\n@api_bp.route("/v1/shipping", methods=("GET",))
+
+
+@api_bp.route("/v1/shipping", methods=("GET",))
 @require_api_token
 def mobile_shipping():
     q=Shipping.query.join(Sale,Shipping.sale_id==Sale.id);tracking=str(request.args.get('tracking_number') or '').strip();state=str(request.args.get('state') or '').strip()
@@ -1119,4 +1121,5 @@ def mobile_clear_test_data():
         counts=clear_test_data(data.get('confirmation'))
     except ValueError as e:
         return jsonify({'error':str(e)}),400
-    return jsonify({'ok':True,'counts':counts}),\n        "journey": _journey_json(s)
+    return jsonify({'ok':True,'counts':counts}),
+        "journey": _journey_json(s)
