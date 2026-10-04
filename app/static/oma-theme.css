@@ -326,9 +326,22 @@ form.form-inline textarea {
   margin-bottom: 0;
 }
 
-/* Standalone controls are still separated when a template has no
-   .form-group wrapper. Hidden CSRF/metadata inputs are excluded. */
-form:not(.form-inline) > :not([type="hidden"]) + :not([type="hidden"]) {
-  margin-top: 12px;
+/* Standalone controls are separated when a template has no
+   .form-group wrapper. Use bottom spacing instead of adding top margins:
+   this keeps the Create-Sale field rhythm and avoids visual overlap in
+   settings and modal forms. Hidden CSRF/metadata inputs are excluded. */
+form:not(.form-inline) > :not(.form-group):not([type="hidden"]) {
+  margin-bottom: 12px;
+}
+
+form:not(.form-inline) > .form-group + .form-group {
+  margin-top: 0!important;
+}
+
+/* The explanation at the top of New Sale is intentionally black in both
+   themes because the pale light-theme panel can otherwise become unreadable
+   when dark-theme text variables are applied. */
+.sale-type-help {
+  color:#000!important;
 }
 
