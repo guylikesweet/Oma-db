@@ -2453,14 +2453,6 @@ double? suggestedStockPrice(double cost) {
   return (cost * (100 + markup) / 100).roundToDouble();
 }
 
-String _naira(double value) {
-  final whole = value.round().toString();
-  return whole.replaceAllMapped(
-    RegExp(r'\B(?=(\d{3})+(?!\d))'),
-    (_) => ',',
-  );
-}
-
 class _SaleLine {
   _SaleLine(this.product, {bool stocked = false}) {
     if (stocked) {
