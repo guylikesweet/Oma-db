@@ -175,3 +175,31 @@ button,.btn{min-height:40px}
   .oma-theme-select{min-width:108px;max-width:116px}
   h1{font-size:1.55rem} h2{font-size:1.35rem} h3{font-size:1.15rem}
 }
+
+@media(min-width:1100px){
+  body:has(#sideNav) #sideNav{
+    transform:translateX(0)!important;
+    width:280px;
+    box-shadow:none;
+    border-right:1px solid var(--oma-border);
+  }
+  body:has(#sideNav) #navToggle,
+  body:has(#sideNav) #navBackdrop,
+  body:has(#sideNav) #sideNav .close-btn{
+    display:none!important;
+  }
+  body:has(#sideNav) .topbar{
+    margin-left:280px;
+  }
+  body:has(#sideNav) > .container,
+  body:has(#sideNav) > main,
+  body:has(#sideNav) > .page-shell,
+  body:has(#sideNav) > .page-container{
+    margin-left:300px!important;
+    width:calc(100% - 340px)!important;
+    max-width:1440px;
+  }
+}
+@media(max-width:1099px){
+  body:has(#sideNav) #sideNav{width:min(300px,86vw)}
+}
