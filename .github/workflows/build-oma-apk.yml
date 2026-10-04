@@ -547,6 +547,157 @@ jobs:
           PY
 
       # ------------------------------------------------------------
+      # 7a. CONFIGURE FIREBASE ANDROID SDK
+      #
+      # The Android project is generated during CI, so google-services.json
+      # and the Google Services Gradle plugin must be installed here on every
+      # build. The JSON is supplied through a GitHub Actions secret and is
+      # never committed to the repository.
+      # ------------------------------------------------------------
+      - name: Configure Firebase Android SDK
+        working-directory: mobile
+        env:
+          FIREBASE_GOOGLE_SERVICES_JSON: ${{ secrets.FIREBASE_GOOGLE_SERVICES_JSON }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [ -z "${FIREBASE_GOOGLE_SERVICES_JSON:-}" ]; then
+            echo "ERROR: Missing GitHub Actions secret: FIREBASE_GOOGLE_SERVICES_JSON"
+            exit 1
+          fi
+
+          python3 - <<'PY'
+          import json
+          import os
+          import re
+          from pathlib import Path
+
+          raw = os.environ["FIREBASE_GOOGLE_SERVICES_JSON"].strip()
+          if not raw:
+              raise SystemExit("FIREBASE_GOOGLE_SERVICES_JSON is empty.")
+
+          try:
+              config = json.loads(raw)
+          except json.JSONDecodeError as exc:
+              raise SystemExit(
+                  f"FIREBASE_GOOGLE_SERVICES_JSON is not valid JSON: {exc}"
+              )
+
+          expected_package = "com.example.oma_mobile"
+          clients = config.get("client") or []
+          matching = [
+              client for client in clients
+              if (
+                  client.get("client_info", {})
+                  .get("android_client_info", {})
+                  .get("package_name")
+                  == expected_package
+              )
+          ]
+
+          if not matching:
+              raise SystemExit(
+                  "google-services.json does not contain the registered "
+                  f"Android package {expected_package}."
+              )
+
+          project_id = config.get("project_info", {}).get("project_id")
+          if project_id != "omasales-5208":
+              raise SystemExit(
+                  "google-services.json belongs to a different Firebase "
+                  f"project. Expected omasales-5208, found {project_id!r}."
+              )
+
+          google_services = Path("android/app/google-services.json")
+          google_services.write_text(
+              raw + "\n",
+              encoding="utf-8",
+          )
+
+          if google_services.stat().st_size == 0:
+              raise SystemExit("Failed to write android/app/google-services.json.")
+
+          # Flutter 3.24.5 generates Groovy Gradle files. Keep this logic
+          # compatible with Kotlin DSL too so a future Flutter template change
+          # does not silently remove Firebase support.
+          settings_candidates = (
+              Path("android/settings.gradle"),
+              Path("android/settings.gradle.kts"),
+          )
+          app_candidates = (
+              Path("android/app/build.gradle"),
+              Path("android/app/build.gradle.kts"),
+          )
+
+          settings = next((p for p in settings_candidates if p.exists()), None)
+          app_gradle = next((p for p in app_candidates if p.exists()), None)
+
+          if settings is None:
+              raise SystemExit("Could not find Android settings.gradle(.kts).")
+          if app_gradle is None:
+              raise SystemExit("Could not find Android app/build.gradle(.kts).")
+
+          settings_text = settings.read_text(encoding="utf-8")
+          app_text = app_gradle.read_text(encoding="utf-8")
+
+          plugin_id = 'id "com.google.gms.google-services" version "4.5.0" apply false'
+          if plugin_id not in settings_text:
+              plugins_match = re.search(
+                  r"(?m)^plugins\s*\{",
+                  settings_text,
+              )
+              if not plugins_match:
+                  raise SystemExit(
+                      f"Could not find plugins {{ block in {settings}."
+                  )
+              settings_text = (
+                  settings_text[:plugins_match.end()]
+                  + "\n    "
+                  + plugin_id
+                  + settings_text[plugins_match.end():]
+              )
+
+          app_plugin = 'id "com.google.gms.google-services"'
+          if app_plugin not in app_text:
+              plugins_match = re.search(
+                  r"(?m)^plugins\s*\{",
+                  app_text,
+              )
+              if not plugins_match:
+                  raise SystemExit(
+                      f"Could not find plugins {{ block in {app_gradle}."
+                  )
+              app_text = (
+                  app_text[:plugins_match.end()]
+                  + "\n    "
+                  + app_plugin
+                  + app_text[plugins_match.end():]
+              )
+
+          settings.write_text(settings_text, encoding="utf-8")
+          app_gradle.write_text(app_text, encoding="utf-8")
+
+          # Final checks prevent a partially configured Firebase build.
+          final_settings = settings.read_text(encoding="utf-8")
+          final_app = app_gradle.read_text(encoding="utf-8")
+
+          if (
+              'com.google.gms.google-services" version "4.5.0" apply false'
+              not in final_settings
+          ):
+              raise SystemExit("Google Services 4.5.0 plugin was not added to project Gradle.")
+
+          if 'id "com.google.gms.google-services"' not in final_app:
+              raise SystemExit("Google Services plugin was not applied to the Android app module.")
+
+          print("Firebase Android configuration: OK")
+          print(f"Firebase project: {project_id}")
+          print(f"Android package: {expected_package}")
+          print("google-services.json installed without committing it to the repository.")
+          PY
+
+      # ------------------------------------------------------------
       # 7b. FORCE minSdk 23
       #
       # firebase_messaging (and its Firebase Android SDK deps) require
