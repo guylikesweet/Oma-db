@@ -13,7 +13,6 @@ import 'data/local_database.dart';
 import 'data/sale_kind.dart';
 import 'data/sync_repository.dart';
 import 'core/theme_controller.dart';
-import 'core/biometric_guard.dart';
 import 'theme_settings_page.dart';
 import 'full_features.dart';
 import 'journey_widgets.dart';
