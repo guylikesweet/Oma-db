@@ -35,13 +35,24 @@ Visit `http://127.0.0.1:5000/` — it redirects to `/admin/`, which redirects to
 
 ## What's built (Stages 1–5)
 
-| Stage | Contents |
+| Stage | Current implementation |
 |---|---|
-| 1 | DB schema (7 tables, Postgres `GENERATED ALWAYS AS` columns for `cbm`/`volumetric_kg`), migrations |
-| 2 | Login/logout/change-password, Flask-Admin panel (locked behind auth), Products CRUD, audited stock adjustments |
-| 3 | Sale creation (`/sales/new`): line-item totals, shipping estimate, profit, stock deduction — all atomic; sale cancellation restocks inventory |
-| 4 | Shipping (`/shipping/new/<sale_id>`): chargeable weight = MAX(actual, volumetric), status flow auto-updates the parent sale; shipment search by tracking # or state; dashboard with 4 KPIs + 30-day sales chart |
-| 5 | Sales report with date-range filter, CSV export (sales/shipping/inventory), Render deployment config |
+| 1 | PostgreSQL schema, migrations, generated product CBM/volumetric fields, atomic sales/inventory transactions. |
+| 2 | Authentication, logout/password change, Flask-Admin, role-based access, protected CRUD, stock audit trail. |
+| 3 | Admin/staff boundaries, immutable audit log, audited sensitive operations, mobile idempotency and offline actor attribution. |
+| 4 | Android/iOS-capable local biometric gate with password fallback, Firebase Cloud Messaging device registration, notification outbox, batch-arrival push events and shipment-specific Android notification sounds. |
+| 5 | Green/white brand system, light/dark/sunrise themes, responsive desktop/mobile layouts, operational dashboard KPIs, reports/CSV, offline/sync states, PDF branding/watermarks and mobile/web parity work. |
+
+### Sensitive-action verification
+
+- Classic Flask settings changes require the user's current password on every save.
+- Flutter/webapp sensitive changes request biometric verification on supported native devices.
+- If native biometric hardware is unavailable, fails, or is cancelled, the mobile/webapp offers password verification against the authenticated server account.
+- Administrative authorization remains enforced server-side; biometric verification is an additional user-presence check, not a replacement for account authorization.
+
+### Notifications
+
+Firebase Cloud Messaging is used for push delivery. Notification intent is written to the transactional outbox with the business event, so a temporary Firebase outage does not discard the notification. Android batch-arrival notifications use a short sea-shipment horn or airport-style arrival sound; ordinary app notifications use a short scanner-style confirmation sound.
 
 ## Key calculated fields (never entered manually)
 
