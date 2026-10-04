@@ -140,6 +140,26 @@ class ProductView(SecureModelView):
 
     column_formatters = {"adjust_stock_link": _adjust_stock_formatter}
 
+    def on_model_change(self, form, model, is_created):
+        record_audit(
+            "product.create" if is_created else "product.update",
+            target_type="product",
+            target_id=model.id,
+            details={"name": model.name, "source": "admin"},
+            user=current_user,
+        )
+        super().on_model_change(form, model, is_created)
+
+    def on_model_delete(self, model):
+        record_audit(
+            "product.delete",
+            target_type="product",
+            target_id=model.id,
+            details={"name": model.name, "source": "admin"},
+            user=current_user,
+        )
+        super().on_model_delete(model)
+
     @expose("/adjust-stock/<int:product_id>", methods=("GET", "POST"))
     def adjust_stock_view(self, product_id):
         if not self.is_accessible():
@@ -285,6 +305,13 @@ class MonthlyShippingRateView(AdminOnlyModelView):
         # otherwise both pass it as "different" dates).
         if model.month:
             model.month = model.month.replace(day=1)
+        record_audit(
+            "rate.sea.create" if is_created else "rate.sea.update",
+            target_type="monthly_shipping_rate",
+            target_id=model.id,
+            details={"month": model.month, "source": "admin"},
+            user=current_user,
+        )
         super().on_model_change(form, model, is_created)
 class MonthlyAirRateView(AdminOnlyModelView):
     column_list = ("id", "month", "rate_per_kg")
@@ -295,6 +322,13 @@ class MonthlyAirRateView(AdminOnlyModelView):
     def on_model_change(self, form, model, is_created):
         if model.month:
             model.month = model.month.replace(day=1)
+        record_audit(
+            "rate.air.create" if is_created else "rate.air.update",
+            target_type="monthly_air_rate",
+            target_id=model.id,
+            details={"month": model.month, "source": "admin"},
+            user=current_user,
+        )
         super().on_model_change(form, model, is_created)
 
 
