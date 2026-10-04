@@ -32,6 +32,16 @@ class SecureModelView(ModelView):
     def inaccessible_callback(self, name, **kwargs):
         return redirect(url_for("auth.login", next=request.url))
 
+    def _handle_view(self, name, **kwargs):
+        response = super()._handle_view(name, **kwargs)
+        if response is not None:
+            return response
+
+        if name in {"create_view", "edit_view", "delete_view", "adjust_stock_view"}:
+            if not password_recently_confirmed():
+                return redirect(reauth_url(request.full_path))
+        return None
+
 
 class AdminOnlyModelView(SecureModelView):
     """Same as SecureModelView, but staff are blocked outright — used for
