@@ -145,12 +145,6 @@ def _sale_json(s):
         "estimated_shipping_sea": float(s.estimated_shipping_sea) if s.estimated_shipping_sea is not None else None,
         "estimated_shipping_air": float(s.estimated_shipping_air) if s.estimated_shipping_air is not None else None,
         "batch_transport_mode": s.batch.transport_mode if s.batch is not None else None,
-        "journey": journey_public(s),
-        "manual_stages": [
-            {"key": key, "label": stage_label(key)}
-            for key in manual_stages_for(s)
-        ],
-        "tracking_url": f"/track/{s.public_tracking_code}" if s.public_tracking_code else None,
         "created_at": s.created_at.isoformat() if s.created_at else None,
         "items": [
             {
@@ -577,6 +571,21 @@ def mobile_delete_product(product_id):
 @require_api_token
 def mobile_sale_detail(sale_id):
     return jsonify(_sale_json(Sale.query.get_or_404(sale_id)))
+
+
+@api_bp.route("/v1/sales/<int:sale_id>/journey", methods=("GET",))
+@require_api_token
+def mobile_sale_journey(sale_id):
+    sale = Sale.query.get_or_404(sale_id)
+    data = _journey_json(sale)
+    data["manual_stages"] = [
+        {"key": key, "label": stage_label(key)}
+        for key in manual_stages_for(sale)
+    ]
+    data["estimated_shipping_sea"] = float(sale.estimated_shipping_sea) if sale.estimated_shipping_sea is not None else None
+    data["estimated_shipping_air"] = float(sale.estimated_shipping_air) if sale.estimated_shipping_air is not None else None
+    data["batch_transport_mode"] = sale.batch.transport_mode if sale.batch is not None else None
+    return jsonify(data)
 
 
 @api_bp.route("/v1/sales/<int:sale_id>/status", methods=("POST",))
