@@ -29,7 +29,7 @@ from app.services.sales import create_sale, SaleValidationError, shipping_cost_f
 from app.services.rates import get_rate_for_month, get_volume_rate, get_rate_per_kg, RateMissingError
 from app.services.delivery import check_consolidation, find_consolidation_groups
 from app.services.audit import record_audit
-from app.services.push_notifications import queue_batch_arrival, flush_outbox
+from app.services.push_notifications import queue_batch_arrival, queue_user_notification, flush_outbox
 from app.services.dashboard import get_kpis, get_sales_last_30_days
 from app.services.shipment_batches import mark_unarrived, BatchValidationError
 
@@ -604,9 +604,44 @@ def _mobile_operation(data):
 
 
 def _mobile_finish(op, kind, status, payload):
-    db.session.add(MobileOperation(user_id=g.api_user.id, operation_id=op, operation_type=kind,
-                                status="completed", response_code=status, response_json=payload, completed_at=datetime.utcnow()))
+    # Offline-first writes carry this marker from the mobile queue. Once the
+    # server successfully commits the queued operation, notify that same user
+    # so they know the offline change has reached the server.
+    request_data = request.get_json(silent=True) or {}
+    offline_origin = bool(request_data.get("offline_origin"))
+
+    db.session.add(MobileOperation(
+        user_id=g.api_user.id,
+        operation_id=op,
+        operation_type=kind,
+        status="completed",
+        response_code=status,
+        response_json=payload,
+        completed_at=datetime.utcnow(),
+    ))
+
+    if offline_origin and status < 400:
+        queue_user_notification(
+            g.api_user.id,
+            event_type="offline_sync_complete",
+            title="Offline changes synced",
+            body="Your offline change has been successfully synced.",
+            data={
+                "type": "offline_sync_complete",
+                "sound": "scanner_beep",
+                "operation_id": op,
+                "operation_type": kind,
+            },
+        )
+
     db.session.commit()
+
+    try:
+        flush_outbox()
+    except Exception:
+        # Business writes must never fail because Firebase is unavailable.
+        pass
+
     return jsonify(payload), status
 
 
