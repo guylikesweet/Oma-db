@@ -298,14 +298,28 @@ table.table{background:var(--oma-surface,#fff)}
 /* Keep adjacent form controls visually separated even when a template
    does not wrap every field in its own .form-group. Inline/search forms are
    intentionally excluded so compact toolbars keep their existing layout. */
-form:not(.form-inline) input + input,
-form:not(.form-inline) input + select,
-form:not(.form-inline) input + textarea,
-form:not(.form-inline) select + input,
-form:not(.form-inline) select + select,
-form:not(.form-inline) select + textarea,
-form:not(.form-inline) textarea + input,
-form:not(.form-inline) textarea + select,
-form:not(.form-inline) textarea + textarea {
-  margin-top: 12px;
+/* Keep stacked form controls visually separated even when the
+   template does not wrap every field in .form-group. Inline/search forms
+   remain compact. */
+form:not(.form-inline) .form-control,
+form:not(.form-inline) input,
+form:not(.form-inline) select,
+form:not(.form-inline) textarea {
+  margin-bottom: 12px;
 }
+
+form:not(.form-inline) .form-control:last-child,
+form:not(.form-inline) input:last-child,
+form:not(.form-inline) select:last-child,
+form:not(.form-inline) textarea:last-child {
+  margin-bottom: 0;
+}
+
+form.form-inline .form-control,
+form.form-inline input,
+form.form-inline select,
+form.form-inline textarea {
+  margin-bottom: 0;
+}
+
+
