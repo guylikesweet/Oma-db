@@ -4,6 +4,8 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
 import '../data/api_client.dart';
+import '../data/local_database.dart;
+import 'package:location/location.dart';
 
 class OmaPushNotifications {
   OmaPushNotifications._();
@@ -18,6 +20,31 @@ class OmaPushNotifications {
 
   static const InitializationSettings _initSettings =
       InitializationSettings(android: _androidInit);
+
+  static Future<void> requestInitialPermissions(LocalDatabase local) async {
+    const key = 'initial_permissions_prompted';
+    if (await local.getMeta(key) == '1') return;
+
+    try {
+      await _local.initialize(_initSettings);
+
+      final android = _local
+          .resolvePlatformSpecificImplementation<
+              AndroidFlutterLocalNotificationsPlugin>();
+      await android?.requestNotificationsPermission();
+
+      final location = Location();
+      var permission = await location.hasPermission();
+      if (permission == PermissionStatus.denied ||
+          permission == PermissionStatus.deniedForever) {
+        await location.requestPermission();
+      }
+    } catch (_) {
+      // Permission prompts must never prevent the app from opening.
+    } finally {
+      await local.setMeta(key, '1');
+    }
+  }
 
   static Future<void> initialize(ApiClient api) async {
     if (_ready) return;
