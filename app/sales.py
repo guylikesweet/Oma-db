@@ -1,10 +1,11 @@
 from itertools import zip_longest
 from flask import Blueprint, render_template, request, redirect, url_for, flash, send_file
-from flask_login import login_required
+from flask_login import login_required, current_user
 
 from app.models import Product, Sale
 from app.services.sales import create_sale, update_sale_status, update_sale_payment_status, SaleValidationError
 from app.services.invoices import generate_invoice_pdf
+from app.services.journey import journey_for, current_stage_key, set_manual_stage_bulk, JourneyError, manual_stages_for
 
 sales_bp = Blueprint("sales", __name__, url_prefix="/sales", template_folder="templates/sales")
 
@@ -58,11 +59,44 @@ def new_sale():
     return render_template("sales/new.html", products=products, sale_type=sale_type)
 
 
+@sales_bp.route("/journey", methods=("GET", "POST"))
+@login_required
+def journey_board():
+    if request.method == "POST":
+        stage = (request.form.get("stage") or "").strip()
+        sale_ids = [int(x) for x in request.form.getlist("sale_ids") if x.isdigit()]
+        sales = Sale.query.filter(Sale.id.in_(sale_ids)).all() if sale_ids else []
+        try:
+            updated, unchanged, skipped = set_manual_stage_bulk(sales, stage, user_id=current_user.id)
+            from app import db
+            db.session.commit()
+            message = f"{updated} order(s) moved"
+            if unchanged: message += f", {unchanged} already there"
+            if skipped: message += f"; {len(skipped)} skipped"
+            flash(message + ".", "success" if not skipped else "error")
+        except JourneyError as e:
+            from app import db
+            db.session.rollback()
+            flash(str(e), "error")
+        return redirect(url_for("sales.journey_board"))
+
+    rows = []
+    sales = Sale.query.filter(Sale.order_status != "Cancelled").order_by(Sale.created_at.desc()).all()
+    for sale in sales:
+        journey = journey_for(sale)
+        rows.append({
+            "sale": sale,
+            "stage": journey["current_label"],
+            "movable": bool(manual_stages_for(sale)) and journey["current"] in ("confirmed", "fulfilled", "cn_transit", "packing"),
+        })
+    return render_template("sales/journey.html", rows=rows)
+
+
 @sales_bp.route("/<int:sale_id>")
 @login_required
 def sale_detail(sale_id):
     sale = Sale.query.get_or_404(sale_id)
-    return render_template("sales/detail.html", sale=sale)
+    return render_template("sales/detail.html", sale=sale, journey=journey_for(sale), tracking_url=url_for("verify.track", tracking_code=sale.public_tracking_code, _external=True))
 
 
 @sales_bp.route("/<int:sale_id>/invoice.pdf")
