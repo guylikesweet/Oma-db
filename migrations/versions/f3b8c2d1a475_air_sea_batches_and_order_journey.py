@@ -29,6 +29,19 @@ def upgrade():
     op.add_column("sales", sa.Column("estimated_shipping_sea", sa.Numeric(12, 2), nullable=True))
     op.add_column("sales", sa.Column("estimated_shipping_air", sa.Numeric(12, 2), nullable=True))
     op.add_column("sales", sa.Column("batch_assigned_at", sa.DateTime(), nullable=True))
+    op.add_column("sales", sa.Column("public_tracking_code", sa.String(length=32), nullable=True))
+    op.create_index("ix_sales_public_tracking_code", "sales", ["public_tracking_code"], unique=True)
+
+    # Existing orders get a random public key; it is deliberately unrelated to order_id.
+    connection = op.get_bind()
+    rows = connection.execute(sa.text("SELECT id FROM sales WHERE public_tracking_code IS NULL")).fetchall()
+    import secrets
+    for row in rows:
+        connection.execute(
+            sa.text("UPDATE sales SET public_tracking_code = :code WHERE id = :id"),
+            {"code": secrets.token_urlsafe(18), "id": row[0]},
+        )
+    op.alter_column("sales", "public_tracking_code", nullable=False, server_default=None)
 
     op.add_column("deliveries", sa.Column("returned_at", sa.DateTime(), nullable=True))
 
@@ -47,6 +60,8 @@ def downgrade():
     op.drop_index("ix_sale_journey_events_sale_id", table_name="sale_journey_events")
     op.drop_table("sale_journey_events")
     op.drop_column("deliveries", "returned_at")
+    op.drop_index("ix_sales_public_tracking_code", table_name="sales")
+    op.drop_column("sales", "public_tracking_code")
     op.drop_column("sales", "batch_assigned_at")
     op.drop_column("sales", "estimated_shipping_air")
     op.drop_column("sales", "estimated_shipping_sea")
