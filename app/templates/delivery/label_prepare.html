@@ -3,7 +3,6 @@
 {% block body %}
 <div class="container" style="max-width:600px; margin-top:20px;">
   <h2>Prepare Shipping Label</h2>
-  <p class="text-muted">Enter the actual packed weight and dimensions — not the product's original dimensions, since repacking can change them.</p>
 
   {% with messages = get_flashed_messages(with_categories=true) %}
     {% for category, message in messages %}
