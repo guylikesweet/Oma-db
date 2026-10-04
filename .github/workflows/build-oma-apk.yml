@@ -991,15 +991,21 @@ jobs:
           echo "build/app/outputs/bundle/release/app-release.aab"
 
       # ------------------------------------------------------------
-      # 12. UPLOAD BUILD ARTIFACTS
+      # 12. UPLOAD APK
       # ------------------------------------------------------------
-      - name: Upload APK and AAB
+      - name: Upload APK
         uses: actions/upload-artifact@v7
         with:
-          name: OmaSales-Mobile-${{ github.run_number }}
-
+          name: OmaSales-APK-${{ github.run_number }}
           if-no-files-found: error
+          path: mobile/build/app/outputs/flutter-apk/app-release.apk
 
-          path: |
-            mobile/build/app/outputs/flutter-apk/app-release.apk
-            mobile/build/app/outputs/bundle/release/app-release.aab
+      # ------------------------------------------------------------
+      # 13. UPLOAD AAB
+      # ------------------------------------------------------------
+      - name: Upload AAB
+        uses: actions/upload-artifact@v7
+        with:
+          name: OmaSales-AAB-${{ github.run_number }}
+          if-no-files-found: error
+          path: mobile/build/app/outputs/bundle/release/app-release.aab
