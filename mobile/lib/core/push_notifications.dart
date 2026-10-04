@@ -29,9 +29,10 @@ class OmaPushNotifications {
         return;
       }
 
-      final token = await messaging.getToken(
-        vapidKey: const String.fromEnvironment('FCM_WEB_VAPID_KEY'),
-      );
+      final vapid = const String.fromEnvironment('FCM_WEB_VAPID_KEY');
+      final token = kIsWeb
+          ? await messaging.getToken(vapidKey: vapid)
+          : await messaging.getToken();
       if (token != null && token.isNotEmpty) {
         await api.registerPushDevice(
           token,
