@@ -78,18 +78,8 @@ class _OmaMobileAppState extends State<OmaMobileApp> with WidgetsBindingObserver
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
-      OmaThemeController.refresh(
-        systemBrightness:
-            WidgetsBinding.instance.platformDispatcher.platformBrightness,
-      );
-    }
-  }
-
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed) {
-      // Opening the app counts as checking notifications and stops the
-      // repeating two-hour reminder for outstanding push messages.
+      // Opening/resuming the app counts as checking notifications and stops
+      // the repeating two-hour reminder.
       OmaPushNotifications.clearPendingReminders();
       OmaThemeController.refresh(
         systemBrightness:
