@@ -295,3 +295,17 @@ table.table{background:var(--oma-surface,#fff)}
 @media (max-width:1099px){
   body:has(#sideNav) #sideNav{width:min(320px,88vw)}
 }
+/* Keep adjacent form controls visually separated even when a template
+   does not wrap every field in its own .form-group. Inline/search forms are
+   intentionally excluded so compact toolbars keep their existing layout. */
+form:not(.form-inline) input + input,
+form:not(.form-inline) input + select,
+form:not(.form-inline) input + textarea,
+form:not(.form-inline) select + input,
+form:not(.form-inline) select + select,
+form:not(.form-inline) select + textarea,
+form:not(.form-inline) textarea + input,
+form:not(.form-inline) textarea + select,
+form:not(.form-inline) textarea + textarea {
+  margin-top: 12px;
+}
