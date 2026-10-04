@@ -140,7 +140,7 @@ def flush_outbox(limit=100):
             row.status = "sent"
             row.sent_at = datetime.utcnow()
         elif successful:
-            row.status = "partial"
+            row.status = "pending"
         else:
             row.status = "pending"
 
