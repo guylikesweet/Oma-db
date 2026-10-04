@@ -83,6 +83,9 @@ class UserView(AdminOnlyModelView):
         if model.is_primary_admin:
             model.role = "admin"
             model.is_active = True
+        if not model.is_active:
+            model.api_token = None
+            model.api_last_activity_at = None
         super().on_model_change(form, model, is_created)
 
     def on_model_delete(self, model):
