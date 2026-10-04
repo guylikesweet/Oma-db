@@ -1,0 +1,48 @@
+{% extends 'base_standalone.html' %}
+{% block title %}Order Journey{% endblock %}
+{% block body %}
+<div class="container" style="max-width:1000px; margin-top:20px;">
+  <h2>Order Journey</h2>
+  <p class="text-muted">Tick orders and move them to an early stage in one go. Preordered goods: <b>Fulfilled</b>, <b>CN domestic transit</b>, <b>Consolidation</b>. Stocked goods: <b>Packing</b>. Later stages (cross-border, awaiting clearance, packing, out for delivery, delivered, returned) update by themselves from batches, shipping settlement and deliveries.</p>
+
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% for category, message in messages %}
+      <div class="alert alert-{{ 'danger' if category == 'error' else 'success' }}">{{ message }}</div>
+    {% endfor %}
+  {% endwith %}
+
+  <form method="post">
+    <div class="form-inline" style="margin-bottom:12px;">
+      <select name="stage" class="form-control" required>
+        <option value="" disabled selected>Move ticked orders to…</option>
+        <optgroup label="Preordered goods">
+          <option value="fulfilled">Fulfilled</option>
+          <option value="cn_transit">CN domestic transit</option>
+          <option value="consolidation">Consolidation</option>
+        </optgroup>
+        <optgroup label="Stocked goods">
+          <option value="packing">Packing</option>
+        </optgroup>
+      </select>
+      <button type="submit" class="btn btn-primary">Move</button>
+    </div>
+
+    <table class="table table-striped">
+      <thead><tr><th></th><th>Order</th><th>Type</th><th>Customer</th><th>Current stage</th></tr></thead>
+      <tbody>
+        {% for row in rows %}
+        <tr>
+          <td><input type="checkbox" name="sale_ids" value="{{ row.sale.id }}" {{ '' if row.movable else 'disabled' }}></td>
+          <td><a href="{{ url_for('sales.sale_detail', sale_id=row.sale.id) }}">{{ row.sale.order_id }}</a></td>
+          <td>{{ 'Stocked' if row.sale.is_stock_sale else 'Preorder' }}</td>
+          <td>{{ row.sale.customer_name }}</td>
+          <td>{{ row.stage }}{% if not row.movable %} <small class="text-muted">(updates by itself now)</small>{% endif %}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="5">No orders in progress.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </form>
+</div>
+{% endblock %}

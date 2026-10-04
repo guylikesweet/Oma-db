@@ -10,6 +10,18 @@
     {% endfor %}
   {% endwith %}
 
+  <div style="margin-bottom:16px;">
+    <h4 style="margin-bottom:6px;">Order journey: <span class="label label-warning" style="background:#FC4300;">{{ journey.current_label }}</span></h4>
+    <ol style="padding-left:18px; margin-bottom:6px;">
+      {% for step in journey.steps %}
+      <li style="margin:2px 0; {{ 'font-weight:bold;color:#FC4300;' if step.state in ('current', 'final') else ('color:#039664;' if step.state == 'done' else 'color:#999;') }}">
+        {{ step.label }}{% if step.at_dt %} <small>({{ step.at_dt.strftime('%d %b %Y') }})</small>{% endif %}
+      </li>
+      {% endfor %}
+    </ol>
+    <small class="text-muted">Customers see this on the page the invoice QR code opens: <a href="{{ tracking_url }}" target="_blank" rel="noopener">tracking link</a>. Move orders through the early stages in bulk on the <a href="{{ url_for('sales.journey_board') }}">Order Journey</a> page.</small>
+  </div>
+
   <table class="table table-borderless" style="max-width:500px;">
     <tr><th>Status</th><td><span class="label label-info">{{ sale.order_status }}</span></td></tr>
     <tr>
@@ -54,7 +66,13 @@
   <table class="table table-borderless" style="max-width:450px;">
     <tr><th>Subtotal</th><td>{{ sale.subtotal_amount }}</td></tr>
     {% if not sale.is_stock_sale %}
-    <tr><th>Estimated Shipping</th><td>{{ sale.estimated_shipping_cost if sale.estimated_shipping_cost is not none else '—' }}</td></tr>
+    {% set sea_est = sale.estimated_shipping_sea if sale.estimated_shipping_sea is not none else sale.estimated_shipping_cost %}
+    {% set air_est = sale.estimated_shipping_air %}
+    {% if sale.batch %}
+    <tr><th>Estimated Shipping ({{ sale.batch.mode_label }} batch)</th><td>{% set est = air_est if sale.batch.is_air else sea_est %}{{ est if est is not none else '— (set the ' ~ sale.batch.mode_label ~ ' rate to estimate)' }}</td></tr>
+    {% else %}
+    <tr><th>Estimated Shipping</th><td>Sea: {{ sea_est if sea_est is not none else '—' }} &nbsp;|&nbsp; Air: {{ air_est if air_est is not none else '— (no air rate set when this was made)' }}<br><small class="text-muted">The method is decided by the shipment batch this order goes into.</small></td></tr>
+    {% endif %}
     {% endif %}
     {% if sale.actual_shipping_cost is not none %}
     <tr><th>Actual Shipping (calculated at arrival)</th><td><strong>{{ sale.actual_shipping_cost }}</strong></td></tr>
