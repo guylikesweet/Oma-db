@@ -204,7 +204,6 @@ class _WebsiteFeaturesPageState extends State<WebsiteFeaturesPage> {
       child: ListTile(
         leading: Icon(icon),
         title: Text(title),
-        subtitle: Text(subtitle),
         trailing: Icon(locked ? Icons.lock_outline : Icons.chevron_right),
         onTap: onTap,
       ),
