@@ -378,6 +378,7 @@ class _LoginPageState extends State<LoginPage> {
       }
 
       await widget.api.saveToken(token);
+      await widget.api.saveBiometricCredential(username.text.trim(), token);
       await AppSession.refresh(widget.api);
 
       if (mounted) {
@@ -447,6 +448,7 @@ class _LoginPageState extends State<LoginPage> {
                             border: OutlineInputBorder(),
                             prefixIcon: Icon(Icons.person_outline),
                           ),
+                          onChanged: (_) => setState(() {}),
                         ),
                         const SizedBox(height: 12),
                         TextField(
