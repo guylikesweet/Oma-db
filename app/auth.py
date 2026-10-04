@@ -20,21 +20,21 @@ def enforce_classic_inactivity_timeout():
 
     now = time.time()
     last = session.get("last_activity")
-    if last is not None and now - float(last) >= 30 * 60:
+    if last is not None and now - float(last) >= 6 * 60 * 60:
         user = current_user
         record_audit(
             "logout.timeout",
             target_type="user",
             target_id=user.id,
             outcome="success",
-            details={"source": "classic", "timeout_minutes": 30},
+            details={"source": "classic", "timeout_minutes": 360},
             user=user,
         )
         db.session.commit()
         logout_user()
         session.pop("last_activity", None)
         session.pop("reauth_at", None)
-        flash("Your session expired after 30 minutes of inactivity. Please sign in again.", "error")
+        flash("Your session expired after 6 hours of inactivity. Please sign in again.", "error")
         return redirect(url_for("auth.login", next=request.full_path))
 
     session["last_activity"] = now
