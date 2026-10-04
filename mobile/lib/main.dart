@@ -639,6 +639,8 @@ class _AppShellState extends State<AppShell> {
 
     // Register push notifications on every authenticated entry path,
     // including a fresh login that bypasses _AuthenticatedShell.
+    // Initialize Firebase/FCM even when the account is signed out. A device
+    // that was previously registered must remain capable of receiving pushes.
     OmaPushNotifications.initialize(widget.api);
 
     _lastActivity = DateTime.now();
@@ -722,7 +724,7 @@ class _AppShellState extends State<AppShell> {
   }
 
   Future<void> _checkInactivity() async {
-    if (DateTime.now().difference(_lastActivity) < const Duration(minutes: 30)) {
+    if (DateTime.now().difference(_lastActivity) < const Duration(hours: 6)) {
       return;
     }
 
@@ -737,7 +739,7 @@ class _AppShellState extends State<AppShell> {
     );
 
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('You were logged out after 30 minutes of inactivity.')),
+      const SnackBar(content: Text('You were logged out after 6 hours of inactivity.')),
     );
   }
 
