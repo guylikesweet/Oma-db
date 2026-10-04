@@ -1023,7 +1023,7 @@ def mobile_batch_arrive(batch_id):
         except Exception:
             pass
         return result
-    except ValueError as e:
+    except (ValueError, RateMissingError) as e:
         db.session.rollback(); return jsonify({"error": str(e)}), 400
 
 
