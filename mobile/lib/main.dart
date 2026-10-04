@@ -256,12 +256,6 @@ class _AuthenticatedShell extends StatefulWidget {
 
 class _AuthenticatedShellState extends State<_AuthenticatedShell> {
   @override
-  void initState() {
-    super.initState();
-    OmaPushNotifications.initialize(widget.api);
-  }
-
-  @override
   Widget build(BuildContext context) => AppShell(api: widget.api);
 }
 
