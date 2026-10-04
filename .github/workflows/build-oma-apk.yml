@@ -966,10 +966,10 @@ jobs:
           # Firebase/FCM is required for release notification support.
           # Fail early instead of producing an APK that silently lacks push
           # registration or Firebase initialization data.
-          for required in \\
-            FCM_API_KEY \\
-            FCM_APP_ID \\
-            FCM_MESSAGING_SENDER_ID \\
+          for required in \
+            FCM_API_KEY \
+            FCM_APP_ID \
+            FCM_MESSAGING_SENDER_ID \
             FCM_PROJECT_ID
           do
             if [ -z "${!required}" ]; then
