@@ -108,6 +108,8 @@ def flush_outbox(limit=100):
         data = {str(k): str(v) for k, v in (row.data_json or {}).items()}
         sound = data.get("sound", "scanner_beep")
 
+        successful = 0
+        failures = 0
         for device in devices:
             try:
                 message = messaging.Message(
@@ -128,12 +130,19 @@ def flush_outbox(limit=100):
                 messaging.send(message, app=app)
                 device.last_seen_at = datetime.utcnow()
                 sent += 1
+                successful += 1
             except Exception as exc:
+                failures += 1
                 row.attempts = (row.attempts or 0) + 1
                 row.last_error = str(exc)[:4000]
 
-        row.status = "sent"
-        row.sent_at = datetime.utcnow()
+        if successful and not failures:
+            row.status = "sent"
+            row.sent_at = datetime.utcnow()
+        elif successful:
+            row.status = "partial"
+        else:
+            row.status = "pending"
 
     db.session.commit()
     return sent
