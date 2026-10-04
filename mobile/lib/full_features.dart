@@ -3904,7 +3904,7 @@ class _ChangePasswordPageState
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text(
-            'New password must be at least 6 characters.',
+            'New password must be at least 8 characters.',
           ),
         ),
       );
@@ -3928,10 +3928,15 @@ class _ChangePasswordPageState
     )) return;
 
     try {
-      await widget.api.changePassword(
+      final result = await widget.api.changePassword(
         current.text,
         next.text,
       );
+      final token = result['token']?.toString();
+      if (token != null && token.isNotEmpty) {
+        await widget.api.saveToken(token);
+      }
+      await widget.api.clearBiometricCredential();
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
