@@ -167,6 +167,17 @@ ThemeData brandTheme(Brightness brightness) {
     inputDecorationTheme: InputDecorationTheme(
       filled: true,
       fillColor: scheme.surfaceContainerHighest.withOpacity(.55),
+      floatingLabelBehavior: FloatingLabelBehavior.always,
+      labelStyle: TextStyle(
+        color: scheme.onSurface.withOpacity(.78),
+        fontSize: 13,
+        fontWeight: FontWeight.w600,
+      ),
+      floatingLabelStyle: TextStyle(
+        color: scheme.onSurface.withOpacity(.82),
+        fontSize: 13,
+        fontWeight: FontWeight.w700,
+      ),
       contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
