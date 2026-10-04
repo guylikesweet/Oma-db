@@ -40,28 +40,6 @@ class User(db.Model, UserMixin):
 
 
 # ---------------------------------------------------------------------------
-# APP SETTINGS (Restored for invoice generation)
-# ---------------------------------------------------------------------------
-class AppSettings(db.Model):
-    __tablename__ = "app_settings"
-
-    id = db.Column(db.Integer, primary_key=True)
-    company_name = db.Column(db.String(255), default="OmaBuy")
-    company_address = db.Column(db.Text)
-    company_phone = db.Column(db.String(50))
-    company_email = db.Column(db.String(100))
-    invoice_footer_notes = db.Column(db.Text)
-    
-    # Store dynamic key/value pairs if your system uses them, 
-    # ensuring compatibility regardless of how settings are queried.
-    setting_key = db.Column(db.String(100), unique=True, nullable=True)
-    setting_value = db.Column(db.Text, nullable=True)
-
-    def __repr__(self):
-        return f"<AppSettings {self.id}>"
-
-
-# ---------------------------------------------------------------------------
 # 2. PRODUCTS
 # ---------------------------------------------------------------------------
 class Product(db.Model):
@@ -139,20 +117,6 @@ class MonthlyShippingRate(db.Model):
 
 
 # ---------------------------------------------------------------------------
-# MONTHLY_AIR_RATES
-# ---------------------------------------------------------------------------
-class MonthlyAirRate(db.Model):
-    __tablename__ = "monthly_air_rates"
-
-    id = db.Column(db.Integer, primary_key=True)
-    month = db.Column(db.Date, nullable=False, unique=True)  # always stored as the 1st of the month
-    rate_per_kg = db.Column(db.Numeric(12, 2), nullable=False)
-
-    def __repr__(self):
-        return f"<MonthlyAirRate {self.month.strftime('%Y-%m')}: {self.rate_per_kg}>"
-
-
-# ---------------------------------------------------------------------------
 # SHIPMENT_BATCHES — Stage 6. An inbound consignment from the supplier
 # containing many customers' sales, arriving together (60-70 day window).
 # ---------------------------------------------------------------------------
@@ -166,14 +130,8 @@ class ShipmentBatch(db.Model):
     # no new code sets a whole batch to this status.
     STATUS_SETTLED = "Payment Settled - Ready for Delivery"
 
-    MODE_SEA = "Sea"
-    MODE_AIR = "Air"
-
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(255), nullable=False)
-    
-    transport_mode = db.Column(db.String(20), default=MODE_SEA, nullable=False, server_default="Sea")
-    
     status = db.Column(db.String(50), default=STATUS_IN_TRANSIT)
     departed_at = db.Column(db.DateTime)
     arrived_at = db.Column(db.DateTime)
@@ -184,7 +142,7 @@ class ShipmentBatch(db.Model):
     sales = db.relationship("Sale", backref="batch", lazy=True)
 
     def __repr__(self):
-        return f"<ShipmentBatch {self.name} ({self.transport_mode}): {self.status}>"
+        return f"<ShipmentBatch {self.name}: {self.status}>"
 
 
 # ---------------------------------------------------------------------------
@@ -360,36 +318,96 @@ class StockLog(db.Model):
     __tablename__ = "stock_log"
 
     id = db.Column(db.Integer, primary_key=True)
-    product_id = db.Column(db.Integer, db.ForeignKey("products.id", ondelete="CASCADE"), nullable=False)
-
-    # e.g. "Restock", "Sale", "Manual Adjustment"
-    transaction_type = db.Column(db.String(50), nullable=False)
-
-    # Note: Using Integer here requires Python side handling if floats happen.
-    qty_change = db.Column(db.Integer, nullable=False)
-    balance_after = db.Column(db.Integer)
-
-    # Could link to the Sale if transaction_type == "Sale"
-    reference = db.Column(db.String(255))
-    timestamp = db.Column(db.DateTime, default=datetime.utcnow)
+    product_id = db.Column(db.Integer, db.ForeignKey("products.id"), nullable=False)
+    change_qty = db.Column(db.Integer, nullable=False)  # + stock in, - sale
+    reason = db.Column(db.String(255))  # 'New Stock', 'Sale #123', 'Damaged'
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
     def __repr__(self):
-        return f"<StockLog prod={self.product_id} change={self.qty_change} bal={self.balance_after}>"
+        return f"<StockLog product={self.product_id} change={self.change_qty}>"
 
 
 # ---------------------------------------------------------------------------
-# EVENT HOOKS FOR OFFLINE SYNC (STAGE 10)
-#
-# Listens for any INSERT, UPDATE, or DELETE on configured models.
-# Writes a simplified JSON-compatible payload into _sync_queue for background processing.
+# MOBILE SYNC
 # ---------------------------------------------------------------------------
-_sync_queue = []
+class MobileChange(db.Model):
+    """Append-only change feed consumed by the offline mobile client.
 
+    Each committed ORM mutation to a mobile-relevant model creates one row.
+    The monotonically increasing id is the mobile sync cursor.
+    """
+    __tablename__ = "mobile_changes"
+
+    sequence = db.Column(db.BigInteger, primary_key=True, autoincrement=True)
+    entity_type = db.Column(db.String(50), nullable=False)
+    entity_id = db.Column(db.String(100), nullable=False)
+    operation = db.Column(db.String(20), nullable=False)  # upsert, delete
+    payload = db.Column(db.JSON, nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+
+
+class MobileOperation(db.Model):
+    """Idempotency record for mobile write operations.
+
+    A phone may retry the same operation after a dropped connection. The
+    unique user/operation_id pair prevents the server from creating a second
+    sale when the first request actually succeeded but its response was lost.
+    """
+    __tablename__ = "mobile_operations"
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    operation_id = db.Column(db.String(100), nullable=False)
+    operation_type = db.Column(db.String(100), nullable=False)
+    status = db.Column(db.String(30), nullable=False, default="processing")
+    response_code = db.Column(db.Integer)
+    response_json = db.Column(db.JSON)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    completed_at = db.Column(db.DateTime)
+
+    __table_args__ = (
+        db.UniqueConstraint("operation_id", name="uq_mobile_operations_operation_id"),
+    )
+
+
+# ---------------------------------------------------------------------------
+# APP_SETTINGS — single row (id always 1). Shipping label size, business
+# info, and the logo image itself (stored as bytes, not a file on disk —
+# Render's filesystem is wiped on every deploy, so a disk file wouldn't survive).
+# ---------------------------------------------------------------------------
+class AppSettings(db.Model):
+    __tablename__ = "app_settings"
+
+    id = db.Column(db.Integer, primary_key=True)
+    label_width_mm = db.Column(db.Integer, default=100)
+    label_height_mm = db.Column(db.Integer, default=150)
+    business_name = db.Column(db.String(255))
+    business_phone = db.Column(db.String(50))
+    business_address = db.Column(db.Text)
+    logo_data = db.Column(db.LargeBinary)
+    logo_mimetype = db.Column(db.String(50))
+    # Account customers pay shipping into. Used to fill the "goods have
+    # arrived" WhatsApp message, so a change of account is a settings edit,
+    # not a code change.
+    bank_name = db.Column(db.String(100))
+    bank_account_number = db.Column(db.String(50))
+    bank_account_name = db.Column(db.String(255))
+    # NGN charged per kg of actual product weight, on top of the CBM charge.
+    # Editable in Settings so a rate change never needs a code edit.
+    shipping_rate_per_kg = db.Column(
+        db.Numeric(12, 2), nullable=False, default=1115, server_default="1115"
+    )
+
+    def __repr__(self):
+        return f"<AppSettings {self.label_width_mm}x{self.label_height_mm}mm>"
+
+
+# Models whose changes are useful to the offline mobile client. Sensitive
+# account/settings data deliberately stays out of the mobile sync feed.
 _SYNC_MODELS = (
     Product,
     CourierRate,
     MonthlyShippingRate,
-    MonthlyAirRate,
     ShipmentBatch,
     Delivery,
     Sale,
@@ -399,133 +417,63 @@ _SYNC_MODELS = (
 )
 
 
-def _model_payload(obj, deleted=False):
-    """
-    Converts a SQLAlchemy model instance into a simple dict mapping
-    column names to their primitive values (dates cast to ISO 8601 strings,
-    decimals to floats), for easy consumption by the mobile app's local SQLite.
-    """
-    mapper = obj.__mapper__
-    payload = {}
-    for column in mapper.columns:
-        # If the row is deleted, only pass the ID (other cols aren't safely queryable)
-        if deleted and column.name != "id":
-            continue
-        val = getattr(obj, column.key)
-        if isinstance(val, date) or isinstance(val, datetime):
-            val = val.isoformat()
-        elif isinstance(val, Decimal):
-            val = float(val)
-        payload[column.name] = val
-    return payload
+def _json_value(value):
+    if isinstance(value, (datetime, date)):
+        return value.isoformat()
+    if isinstance(value, Decimal):
+        return float(value)
+    return value
 
 
-def _record_mobile_sync_changes(session, flush_context, instances):
-    """
-    Iterate all objects modified in this flush. If they are in _SYNC_MODELS,
-    push a message onto the memory queue indicating the table, row id,
-    action (INSERT/UPDATE/DELETE), and current payload.
-    """
-    for obj in session.new:
-        if isinstance(obj, _SYNC_MODELS):
-            _sync_queue.append(
-                {
-                    "action": "INSERT",
-                    "table": obj.__tablename__,
-                    "id": obj.id,
-                    "payload": _model_payload(obj),
-                }
-            )
-
-    for obj in session.dirty:
-        if isinstance(obj, _SYNC_MODELS):
-            _sync_queue.append(
-                {
-                    "action": "UPDATE",
-                    "table": obj.__tablename__,
-                    "id": obj.id,
-                    "payload": _model_payload(obj),
-                }
-            )
-
-    for obj in session.deleted:
-        if isinstance(obj, _SYNC_MODELS):
-            _sync_queue.append(
-                {
-                    "action": "DELETE",
-                    "table": obj.__tablename__,
-                    "id": obj.id,
-                    "payload": _model_payload(obj, deleted=True),
-                }
-            )
+def _model_payload(obj):
+    return {
+        column.name: _json_value(getattr(obj, column.name))
+        for column in obj.__table__.columns
+    }
 
 
 @event.listens_for(Session, "after_flush")
-def trigger_mobile_sync_after_flush(session, flush_context):
-    """
-    Hook tied to every SQLAlchemy flush, which aggregates changes into `_sync_queue`.
-    It does *not* broadcast yet, because a flush might still be rolled back
-    if the outer transaction fails.
-    """
-    _record_mobile_sync_changes(session, flush_context, None)
-
-
-@event.listens_for(Session, "after_commit")
-def trigger_mobile_sync_after_commit(session):
-    """
-    Hook tied to the successful COMMIT of a transaction.
-    Takes everything staged in `_sync_queue` and pushes it via WebSockets
-    to all connected mobile clients.
-    """
-    global _sync_queue
-    if not _sync_queue:
+def _record_mobile_sync_changes(session, flush_context):
+    # Flask-SQLAlchemy's scoped session class is not guaranteed to be the same
+    # class across SQLAlchemy versions, so this listener is intentionally kept
+    # narrow. If the session is currently recording sync rows, do not record
+    # the SyncChange rows themselves.
+    if session.info.get("_recording_sync_changes"):
         return
 
-    # To avoid circular imports between models.py and app.py (where socketio lives),
-    # we import socketio locally here.
-    from app import socketio
+    changes = []
+    for obj in list(session.new):
+        if isinstance(obj, _SYNC_MODELS):
+            changes.append((obj, "created"))
 
-    # Group all changes in this single commit block into one event payload.
-    # We rename tablenames dynamically to match the mobile app's model conventions
-    # (plural to singular), though ideally both ends should share exact names.
-    table_map = {
-        "products": "product",
-        "courier_rates": "courier_rate",
-        "monthly_shipping_rates": "monthly_shipping_rate",
-        "monthly_air_rates": "monthly_air_rate",
-        "shipment_batches": "shipment_batch",
-        "deliveries": "delivery",
-        "sales": "sale",
-        "sale_items": "sale_item",
-        "shipping": "shipping",
-        "stock_log": "stock_log",
-    }
+    for obj in list(session.dirty):
+        if isinstance(obj, _SYNC_MODELS) and session.is_modified(obj, include_collections=False):
+            changes.append((obj, "updated"))
 
-    payload = []
-    for op in _sync_queue:
-        mobile_table = table_map.get(op["table"], op["table"])
-        payload.append(
-            {
-                "action": op["action"],
-                "model": mobile_table,
-                "id": op["id"],
-                "data": op["payload"],
-            }
-        )
+    for obj in list(session.deleted):
+        if isinstance(obj, _SYNC_MODELS):
+            changes.append((obj, "deleted"))
 
-    # Empty the queue since we've processed it
-    _sync_queue = []
+    if not changes:
+        return
 
-    # Emit standard message that the Flutter app is actively listening for.
-    # If the app is offline, this gets missed, but it will fetch all missing
-    # delta records upon reconnection anyway via a separate REST endpoint.
-    socketio.emit("sync_update", payload, namespace="/sync")
-
-
-@event.listens_for(Session, "after_rollback")
-def clear_mobile_sync_after_rollback(session):
-    """
-    If the transaction failed and rolled back, discard any staged sync events.
-    """
-    global _sync_queue
-    _sync_queue = []
+    session.info["_recording_sync_changes"] = True
+    try:
+        for obj, action in changes:
+            entity_id = getattr(obj, "id", None)
+            if entity_id is None:
+                continue
+            payload = None if action == "deleted" else _model_payload(obj)
+            session.add(MobileChange(
+                entity_type={
+                    "products": "product", "sales": "sale", "sale_items": "sale_item",
+                    "shipment_batches": "shipment_batch", "deliveries": "delivery",
+                    "shipping": "shipping", "courier_rates": "courier_rate",
+                    "monthly_shipping_rates": "monthly_shipping_rate", "stock_log": "stock_log",
+                }.get(obj.__tablename__, obj.__tablename__),
+                entity_id=str(entity_id),
+                operation="delete" if action == "deleted" else "upsert",
+                payload=payload,
+            ))
+    finally:
+        session.info["_recording_sync_changes"] = False
