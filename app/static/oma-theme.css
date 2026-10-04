@@ -203,3 +203,95 @@ button,.btn{min-height:40px}
 @media(max-width:1099px){
   body:has(#sideNav) #sideNav{width:min(300px,86vw)}
 }
+
+
+/* ===== Final responsive workspace polish ===== */
+:root{
+  --oma-space-1:6px;
+  --oma-space-2:10px;
+  --oma-space-3:14px;
+  --oma-space-4:18px;
+  --oma-space-5:24px;
+  --oma-space-6:32px;
+}
+*{box-sizing:border-box}
+body{line-height:1.45}
+.container,.container-fluid,.page-shell,.page-container{padding-top:var(--oma-space-5);padding-bottom:var(--oma-space-6)}
+.card,.box,.panel,.sale-card,.info-card{
+  padding:var(--oma-space-5)!important;
+  margin:0 0 var(--oma-space-5)!important;
+}
+.card-body{padding:0!important}
+.row{row-gap:var(--oma-space-4)}
+.form-group{margin-bottom:var(--oma-space-4)!important}
+label{margin-bottom:7px;font-weight:600}
+.btn,.action-btn{padding:10px 16px!important}
+.btn + .btn,.action-btn + .action-btn{margin-left:6px}
+.btn-group .btn + .btn{margin-left:0}
+.table-responsive{border-radius:12px}
+table.table{background:var(--oma-surface,#fff)}
+.alert{padding:12px 14px!important}
+.modal-content{padding:4px}
+.modal-header,.modal-body,.modal-footer{padding:16px 20px}
+.modal-footer{gap:8px}
+.modal-footer>*{margin:0!important}
+
+/* Keep instructional field/button copy from consuming the workspace. */
+.form-text,.help-block,.field-description,.field-help,.input-help,.button-help{
+  display:none!important;
+}
+
+/* Desktop = workspace layout; phone = stacked, touch-first layout. */
+@media (min-width:1100px){
+  body:has(#sideNav) .topbar{
+    height:64px;
+    padding:0 32px!important;
+    display:flex;
+  }
+  body:has(#sideNav) .topbar .home-link{font-size:17px}
+  body:has(#sideNav) #sideNav{
+    padding-top:64px;
+    width:272px;
+  }
+  body:has(#sideNav) > .container,
+  body:has(#sideNav) > main,
+  body:has(#sideNav) > .page-shell,
+  body:has(#sideNav) > .page-container{
+    padding-left:8px;
+    padding-right:8px;
+  }
+  .form-row{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px}
+  .form-row>*{min-width:0}
+  .dashboard-grid,.kpi-grid{gap:18px}
+}
+@media (max-width:1099px){
+  .container,.container-fluid,.page-shell,.page-container{
+    padding-top:18px;
+    padding-bottom:24px;
+  }
+}
+@media (max-width:600px){
+  .container,.container-fluid,.page-shell,.page-container{
+    width:calc(100% - 20px)!important;
+    padding-top:12px;
+    padding-bottom:20px;
+  }
+  .card,.box,.panel,.sale-card,.info-card{
+    padding:14px!important;
+    margin-bottom:12px!important;
+  }
+  .modal-header,.modal-body,.modal-footer{padding:14px}
+  .btn,.action-btn{width:auto;min-height:44px;padding:10px 14px!important}
+  .btn-block{width:100%}
+  .form-row{display:block}
+  .form-row>*{width:100%;margin-bottom:12px}
+  .table-responsive{margin-left:-2px;margin-right:-2px}
+}
+
+/* Classic website: true phone navigation vs wide desktop sidebar. */
+@media (min-width:1100px){
+  body:has(#sideNav){overflow-x:hidden}
+}
+@media (max-width:1099px){
+  body:has(#sideNav) #sideNav{width:min(320px,88vw)}
+}
