@@ -6,17 +6,17 @@ import 'package:flutter/material.dart';
 /// full-page loading state — a slow connection then shows *the logo*
 /// working on it, rather than a blank page with a generic dot.
 ///
-/// Usage: `const Center(child: BrandLoader())` — same call shape as the
-/// spinner it replaces.
+/// Usage: `const Center(child: BrandLoader())` — the standard full-page
+/// loading state, with the Oma mark and "Please wait" caption.
 class BrandLoader extends StatefulWidget {
-  const BrandLoader({super.key, this.size = 84, this.label});
+  const BrandLoader({super.key, this.size = 84, this.label = 'Please wait'});
 
   /// Overall footprint (ring + logo). The logo itself renders a bit
   /// smaller than this so the ring has room to show around it.
   final double size;
 
-  /// Optional caption shown under the mark, e.g. "Loading…" or
-  /// "Connecting…" — omit for a bare mark.
+  /// Caption shown under the branded loader. It defaults to "Please wait"
+  /// so full-page loading states always use the same wording.
   final String? label;
 
   @override

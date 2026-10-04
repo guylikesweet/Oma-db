@@ -120,6 +120,45 @@ body{
 }
 
 
+/* ===== Global form standardization =====
+   The Create New Sale layout is the reference: .form-group owns the gap.
+   Inputs never carry a second vertical margin, so fields cannot overlap. */
+form:not(.form-inline) .form-group{
+  margin-bottom:var(--oma-space-4)!important;
+}
+form:not(.form-inline) .form-group:last-child{
+  margin-bottom:0!important;
+}
+form:not(.form-inline) .form-group .form-control,
+form:not(.form-inline) .form-group input,
+form:not(.form-inline) .form-group select,
+form:not(.form-inline) .form-group textarea{
+  margin-top:0!important;
+  margin-bottom:0!important;
+}
+form.form-inline .form-control,
+form.form-inline input,
+form.form-inline select,
+form.form-inline textarea{
+  margin-top:0!important;
+  margin-bottom:0!important;
+}
+/* Standalone controls are separated when a template has no
+   .form-group wrapper. Use bottom spacing instead of adding top margins:
+   this keeps the Create-Sale field rhythm and avoids visual overlap in
+   settings and modal forms. Hidden CSRF/metadata inputs are excluded. */
+form:not(.form-inline) > :not(.form-group):not([type="hidden"]){
+  margin-bottom:12px;
+}
+form:not(.form-inline) > .form-group + .form-group{
+  margin-top:0!important;
+}
+
+/* The sale-type explanation is deliberately black in both themes. */
+.sale-type-help{
+  color:#000!important;
+}
+
 /* ===== Global responsive e-commerce workspace ===== */
 .page-shell,.page-container,.container{
   width:min(1440px,calc(100% - 40px));
