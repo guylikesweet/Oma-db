@@ -15,6 +15,7 @@ from app.models import (
     SaleItem,
     StockLog,
     MonthlyShippingRate,
+    MonthlyAirRate,
     ShipmentBatch,
     Delivery,
 )
@@ -199,6 +200,17 @@ class MonthlyShippingRateView(AdminOnlyModelView):
         if model.month:
             model.month = model.month.replace(day=1)
         super().on_model_change(form, model, is_created)
+class MonthlyAirRateView(AdminOnlyModelView):
+    column_list = ("id", "month", "rate_per_kg")
+    form_columns = ("month", "rate_per_kg")
+    column_sortable_list = ("month",)
+    column_default_sort = ("month", True)
+
+    def on_model_change(self, form, model, is_created):
+        if model.month:
+            model.month = model.month.replace(day=1)
+        super().on_model_change(form, model, is_created)
+
 
 
 # ---------------------------------------------------------------------------
@@ -206,10 +218,10 @@ class MonthlyShippingRateView(AdminOnlyModelView):
 # transitioning status happens through the dedicated /batches/<id> page.
 # ---------------------------------------------------------------------------
 class ShipmentBatchView(SecureModelView):
-    column_list = ("id", "name", "status", "arrived_at", "batch_link")
+    column_list = ("id", "name", "transport_mode", "status", "arrived_at", "batch_link")
     column_labels = {"batch_link": "Manage"}
-    form_columns = ("name", "notes")
-    can_edit = False
+    form_columns = ("name", "transport_mode", "notes")
+    form_args = {"transport_mode": {"choices": [("air", "Air"), ("sea", "Sea")]}}\n    can_edit = False
     can_delete = False
 
     def _batch_link_formatter(view, context, model, name):
@@ -250,6 +262,7 @@ def init_admin(app):
     admin.add_view(SaleView(Sale, db.session, name="Sales"))
     admin.add_view(SaleItemView(SaleItem, db.session, name="Sale Items"))
     admin.add_view(MonthlyShippingRateView(MonthlyShippingRate, db.session, name="Monthly Shipping Rates"))
+    admin.add_view(MonthlyAirRateView(MonthlyAirRate, db.session, name="Monthly Air Rates", endpoint="monthlyairrate"))
     admin.add_view(ShipmentBatchView(ShipmentBatch, db.session, name="Shipment Batches", endpoint="shipmentbatch"))
     admin.add_view(DeliveryView(Delivery, db.session, name="Deliveries", endpoint="deliveryadmin"))
     admin.add_link(MenuLink(name="Ready for Delivery", url="/delivery/ready"))

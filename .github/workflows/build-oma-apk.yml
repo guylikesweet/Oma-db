@@ -129,7 +129,7 @@ jobs:
           # --------------------------------------------------------
           # Mobile sync models
           # --------------------------------------------------------
-          for cls in ("MobileOperation", "MobileChange"):
+          for cls in ("MobileOperation", "MobileChange", "MonthlyAirRate", "SaleJourneyEvent"):
               if not re.search(
                   rf"^class {cls}\b",
                   models,

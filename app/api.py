@@ -19,10 +19,11 @@ from flask import Blueprint, request, jsonify, g
 from werkzeug.security import check_password_hash, generate_password_hash
 
 from app import db
+from app.services.journey import journey_public, set_manual_stage_bulk, JourneyError
 from app.access import require_admin_api
 from app.models import (
     User, Product, Sale, SaleItem, Shipping, Delivery, ShipmentBatch,
-    CourierRate, MonthlyShippingRate, StockLog, MobileOperation, MobileChange,
+    CourierRate, MonthlyShippingRate, MonthlyAirRate, StockLog, MobileOperation, MobileChange,
 )
 from app.services.sales import create_sale, SaleValidationError, shipping_cost_for_items
 from app.services.rates import get_rate_for_month, get_rate_per_kg
@@ -161,6 +162,12 @@ def _sale_json(s):
     }
 
 
+def _journey_json(s):
+    data = journey_public(s)
+    data["tracking_url"] = f"/track/{s.public_tracking_code}" if s.public_tracking_code else None
+    return data
+
+
 def _shipping_json(s):
     return {
         "id": s.id,
@@ -188,6 +195,7 @@ def _delivery_json(d):
         "created_at": d.created_at.isoformat() if d.created_at else None,
         "shipped_at": d.shipped_at.isoformat() if d.shipped_at else None,
         "delivered_at": d.delivered_at.isoformat() if d.delivered_at else None,
+        "returned_at": d.returned_at.isoformat() if d.returned_at else None,
         "package_weight_kg": float(d.package_weight_kg) if d.package_weight_kg is not None else None,
         "package_dimensions": d.package_dimensions,
         "remarks": d.remarks,
@@ -794,7 +802,26 @@ def mobile_label_pdf(delivery_id):
     return send_file(pdf, mimetype="application/pdf", as_attachment=True, download_name=f"label-{name}.pdf")
 
 
-@api_bp.route("/v1/shipping", methods=("GET",))
+
+
+@api_bp.route("/v1/sales/journey", methods=("POST",))
+@require_api_token
+def mobile_update_journey():
+    data = request.get_json(silent=True) or {}
+    try:
+        op, existing = _mobile_operation(data)
+        if existing:
+            return _mobile_replay(existing)
+        ids = [int(x) for x in (data.get("sale_ids") or [])]
+        stage = str(data.get("stage") or "").strip()
+        sales = Sale.query.filter(Sale.id.in_(ids)).all() if ids else []
+        updated, unchanged, skipped = set_manual_stage_bulk(sales, stage, user_id=g.api_user.id)
+        payload = {"updated": updated, "unchanged": unchanged, "skipped": skipped, "sales": [_journey_json(s) for s in sales]}
+        return _mobile_finish(op, "update_journey", 200, payload)
+    except (ValueError, JourneyError) as e:
+        db.session.rollback()
+        return jsonify({"error": str(e)}), 400
+\n\n@api_bp.route("/v1/shipping", methods=("GET",))
 @require_api_token
 def mobile_shipping():
     q=Shipping.query.join(Sale,Shipping.sale_id==Sale.id);tracking=str(request.args.get('tracking_number') or '').strip();state=str(request.args.get('state') or '').strip()
@@ -875,6 +902,43 @@ def mobile_update_courier_rate(rate_id):
             payload=_rate_json(r)
         return _mobile_finish(op,'update_courier_rate',200,payload)
     except (ValueError,InvalidOperation) as e:db.session.rollback();return jsonify({'error':str(e)}),400
+
+@api_bp.route("/v1/monthly-air-rates", methods=("GET",))
+@require_api_token
+def mobile_monthly_air_rates():
+    return jsonify([{"id": x.id, "month": x.month.isoformat() if x.month else None, "rate_per_kg": float(x.rate_per_kg)} for x in MonthlyAirRate.query.order_by(MonthlyAirRate.month.desc()).all()])
+
+@api_bp.route("/v1/monthly-air-rates", methods=("POST",))
+@require_api_token
+@require_admin_api
+def mobile_create_monthly_air_rate():
+    data=request.get_json(silent=True) or {}
+    try:
+        op,existing=_mobile_operation(data)
+        if existing:return _mobile_replay(existing)
+        month=date.fromisoformat(str(data.get("month"))[:10]).replace(day=1)
+        rate=Decimal(str(data.get("rate_per_kg")))
+        if rate < 0: raise ValueError("Air rate cannot be negative.")
+        row=MonthlyAirRate(month=month,rate_per_kg=rate);db.session.add(row);db.session.flush()
+        return _mobile_finish(op,"create_monthly_air_rate",201,{"id":row.id,"month":row.month.isoformat(),"rate_per_kg":float(row.rate_per_kg)})
+    except (ValueError,InvalidOperation) as e:db.session.rollback();return jsonify({"error":str(e)}),400
+
+@api_bp.route("/v1/monthly-air-rates/<int:rate_id>", methods=("PUT","PATCH","DELETE"))
+@require_api_token
+@require_admin_api
+def mobile_update_monthly_air_rate(rate_id):
+    data=request.get_json(silent=True) or {}
+    try:
+        op,existing=_mobile_operation(data)
+        if existing:return _mobile_replay(existing)
+        row=MonthlyAirRate.query.get_or_404(rate_id)
+        if request.method=="DELETE":db.session.delete(row);payload={"ok":True,"id":rate_id}
+        else:
+            if "month" in data:row.month=date.fromisoformat(str(data["month"])[:10]).replace(day=1)
+            if "rate_per_kg" in data:row.rate_per_kg=Decimal(str(data["rate_per_kg"]))
+            payload={"id":row.id,"month":row.month.isoformat(),"rate_per_kg":float(row.rate_per_kg)}
+        return _mobile_finish(op,"update_monthly_air_rate",200,payload)
+    except (ValueError,InvalidOperation) as e:db.session.rollback();return jsonify({"error":str(e)}),400
 
 @api_bp.route("/v1/monthly-shipping-rates", methods=("GET",))
 @require_api_token
@@ -1055,4 +1119,4 @@ def mobile_clear_test_data():
         counts=clear_test_data(data.get('confirmation'))
     except ValueError as e:
         return jsonify({'error':str(e)}),400
-    return jsonify({'ok':True,'counts':counts})
+    return jsonify({'ok':True,'counts':counts}),\n        "journey": _journey_json(s)
