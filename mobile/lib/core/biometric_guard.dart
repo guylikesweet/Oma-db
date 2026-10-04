@@ -79,10 +79,8 @@ class BiometricGuard {
       if (authenticated) return true;
       return passwordFallback();
     } catch (e) {
-      if (context.mounted) {
-        _show(context, 'Biometric verification failed. Try again.');
-      }
-      return false;
+      // Hardware/OS biometric errors must never lock the user out.
+      return passwordFallback();
     }
   }
 
