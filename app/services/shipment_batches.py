@@ -130,9 +130,10 @@ def mark_arrived(batch_id):
         'batch.arrive',
         target_type='shipment_batch',
         target_id=batch.id,
-        details={'transport_mode': batch.transport_mode, 'sale_count': len(batch.sales)},
+        details={'transport_mode': batch.transport_mode, 'sale_count': len(batch.sales), 'name': batch.name},
     )
-    queue_batch_arrival(batch)
+    from flask_login import current_user
+    queue_batch_arrival(batch, exclude_user_id=current_user.id if current_user.is_authenticated else None)
     db.session.commit()
     try:
         flush_outbox()
