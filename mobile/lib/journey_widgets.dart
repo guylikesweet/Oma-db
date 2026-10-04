@@ -144,20 +144,354 @@ class _JourneyCardState extends State<JourneyCard> {
   }
 }
 
-/// Full order-journey management page is intentionally left out of this
-/// incremental rebuild. It can be restored separately after the compact
-/// sale-detail card has been verified.
-class JourneyPage extends StatelessWidget {
+/// Full order-journey management page.
+///
+/// The server already exposes the journey engine and manual-stage endpoint;
+/// this page now uses those APIs instead of displaying the old placeholder.
+class JourneyPage extends StatefulWidget {
   const JourneyPage({super.key, required this.api});
 
   final ApiClient api;
 
   @override
+  State<JourneyPage> createState() => _JourneyPageState();
+}
+
+class _JourneyPageState extends State<JourneyPage> {
+  List<Map<String, dynamic>> sales = [];
+  bool loading = true;
+  String? error;
+
+  @override
+  void initState() {
+    super.initState();
+    load();
+  }
+
+  Future<void> load() async {
+    if (mounted) {
+      setState(() {
+        loading = true;
+        error = null;
+      });
+    }
+
+    try {
+      final raw = await widget.api.sales();
+      final loaded = raw
+          .whereType<Map>()
+          .map((row) => Map<String, dynamic>.from(row))
+          .where((row) => row['id'] != null)
+          .toList();
+
+      if (mounted) {
+        setState(() => sales = loaded);
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => error = '${e}');
+      }
+    } finally {
+      if (mounted) {
+        setState(() => loading = false);
+      }
+    }
+  }
+
+  Future<void> openSale(Map<String, dynamic> sale) async {
+    final saleId = (sale['id'] as num?)?.toInt();
+    if (saleId == null) return;
+
+    try {
+      final detail = await widget.api.saleJourney(saleId);
+      if (!mounted) return;
+
+      final updated = await showModalBottomSheet<bool>(
+        context: context,
+        isScrollControlled: true,
+        useSafeArea: true,
+        builder: (_) => _JourneyEditor(
+          api: widget.api,
+          sale: sale,
+          detail: detail,
+        ),
+      );
+
+      if (updated == true) {
+        await load();
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not load this journey: ${e}')),
+      );
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Order journey')),
-      body: const Center(
-        child: Text('Order journey management is temporarily unavailable.'),
+      appBar: AppBar(
+        title: const Text('Order journey'),
+        actions: [
+          IconButton(
+            tooltip: 'Refresh',
+            onPressed: loading ? null : load,
+            icon: const Icon(Icons.refresh),
+          ),
+        ],
+      ),
+      body: loading
+          ? const Center(child: BrandLoader(label: 'Loading journeys…'))
+          : error != null
+              ? _ErrorState(error: error!, onRetry: load)
+              : sales.isEmpty
+                  ? const Center(child: Text('No sales found.'))
+                  : RefreshIndicator(
+                      onRefresh: load,
+                      child: ListView.separated(
+                        padding: const EdgeInsets.all(16),
+                        itemCount: sales.length,
+                        separatorBuilder: (_, __) => const SizedBox(height: 8),
+                        itemBuilder: (_, index) {
+                          final sale = sales[index];
+                          final id = (sale['id'] as num?)?.toInt();
+                          final order =
+                              '${sale['order_id'] ?? '#${sale['id']}'}';
+                          final customer =
+                              '${sale['customer_name'] ?? 'Customer'}';
+                          final current =
+                              '${sale['journey_label'] ?? sale['order_status'] ?? 'Order received'}';
+
+                          return Card(
+                            child: ListTile(
+                              leading: CircleAvatar(
+                                child: Text('${id ?? ''}'),
+                              ),
+                              title: Text(
+                                order,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              subtitle: Text(
+                                '$customer\n$current',
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              isThreeLine: true,
+                              trailing: const Icon(Icons.chevron_right),
+                              onTap: () => openSale(sale),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+    );
+  }
+}
+
+class _JourneyEditor extends StatefulWidget {
+  const _JourneyEditor({
+    required this.api,
+    required this.sale,
+    required this.detail,
+  });
+
+  final ApiClient api;
+  final Map<String, dynamic> sale;
+  final Map<String, dynamic> detail;
+
+  @override
+  State<_JourneyEditor> createState() => _JourneyEditorState();
+}
+
+class _JourneyEditorState extends State<_JourneyEditor> {
+  String? selectedStage;
+  bool saving = false;
+
+  List<Map<String, dynamic>> get stages {
+    final raw = widget.detail['manual_stages'];
+    if (raw is! List) return [];
+
+    return raw
+        .whereType<Map>()
+        .map((row) => Map<String, dynamic>.from(row))
+        .where((row) => row['key'] != null)
+        .toList();
+  }
+
+  String get currentLabel {
+    final raw = widget.detail['journey'];
+    if (raw is Map) {
+      return '${raw['current_label'] ?? 'Order received'}';
+    }
+    return 'Order received';
+  }
+
+  Future<void> save() async {
+    final saleId = (widget.sale['id'] as num?)?.toInt();
+    final stage = selectedStage;
+
+    if (saleId == null || stage == null || stage.isEmpty) return;
+
+    setState(() => saving = true);
+
+    try {
+      final result = await widget.api.setJourneyStage([saleId], stage);
+      if (!mounted) return;
+
+      final updated = (result['updated'] as num?)?.toInt() ?? 0;
+      final skipped = result['skipped'];
+
+      if (updated > 0) {
+        Navigator.pop(context, true);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Order journey updated.')),
+        );
+        return;
+      }
+
+      final message = skipped is List && skipped.isNotEmpty
+          ? '${skipped.first}'
+          : 'That milestone could not be applied to this order.';
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(message)),
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not update journey: ${e}')),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => saving = false);
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final order = '${widget.sale['order_id'] ?? '#${widget.sale['id']}'}';
+    final customer = '${widget.sale['customer_name'] ?? 'Customer'}';
+
+    return Padding(
+      padding: EdgeInsets.only(
+        left: 16,
+        right: 16,
+        top: 12,
+        bottom: MediaQuery.viewInsetsOf(context).bottom + 16,
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Expanded(
+                child: Text(
+                  'Order journey',
+                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800),
+                ),
+              ),
+              IconButton(
+                onPressed: saving ? null : () => Navigator.pop(context),
+                icon: const Icon(Icons.close),
+              ),
+            ],
+          ),
+          Text(
+            '$order • $customer',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+          const SizedBox(height: 12),
+          Card(
+            child: ListTile(
+              leading: const Icon(Icons.flag_outlined),
+              title: const Text('Current milestone'),
+              subtitle: Text(currentLabel),
+            ),
+          ),
+          const SizedBox(height: 12),
+          if (stages.isEmpty)
+            const Text(
+              'There are no manual milestones available for this order yet.',
+            )
+          else
+            DropdownButtonFormField<String>(
+              value: selectedStage,
+              decoration: const InputDecoration(labelText: 'Move to milestone'),
+              items: stages
+                  .map(
+                    (stage) => DropdownMenuItem<String>(
+                      value: '${stage['key']}',
+                      child: Text('${stage['label'] ?? stage['key']}'),
+                    ),
+                  )
+                  .toList(),
+              onChanged: saving
+                  ? null
+                  : (value) => setState(() => selectedStage = value),
+            ),
+          const SizedBox(height: 16),
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton.icon(
+              onPressed: saving || selectedStage == null ? null : save,
+              icon: saving
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.update),
+              label: Text(saving ? 'Updating…' : 'Update milestone'),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ErrorState extends StatelessWidget {
+  const _ErrorState({
+    required this.error,
+    required this.onRetry,
+  });
+
+  final String error;
+  final Future<void> Function() onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.cloud_off, size: 42),
+            const SizedBox(height: 12),
+            const Text(
+              'Could not load order journeys.',
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 6),
+            Text(
+              error,
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+            const SizedBox(height: 12),
+            FilledButton.tonal(
+              onPressed: onRetry,
+              child: const Text('Retry'),
+            ),
+          ],
+        ),
       ),
     );
   }
