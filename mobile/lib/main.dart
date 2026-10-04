@@ -13,6 +13,7 @@ import 'data/local_database.dart';
 import 'data/sale_kind.dart';
 import 'data/sync_repository.dart';
 import 'full_features.dart';
+import 'journey_widgets.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -2189,6 +2190,11 @@ class _SaleDetailPageState extends State<SaleDetailPage> {
             ),
             const SizedBox(height: 12),
             _customerCard(context, s),
+            const SizedBox(height: 12),
+            JourneyCard(
+              api: widget.api,
+              saleId: widget.saleId,
+            ),
             const SizedBox(height: 16),
             _sectionTitle(context, 'Items', action: '${items.length} line${items.length == 1 ? '' : 's'}'),
             if (items.isEmpty)
