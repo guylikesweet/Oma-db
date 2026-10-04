@@ -6,6 +6,7 @@ import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import 'brand_loader.dart';
+import 'core/biometric_guard.dart';
 import 'data/api_client.dart';
 import 'data/app_session.dart';
 import 'data/local_database.dart';
@@ -312,6 +313,13 @@ class _WebProductsPageState extends State<WebProductsPage> {
 
     if (ok != true) return;
 
+    if (!await BiometricGuard.require(
+      context,
+      reason: old == null
+          ? 'Verify your identity before creating a product.'
+          : 'Verify your identity before changing product details.',
+    )) return;
+
     try {
       final data = <String, dynamic>{
         'name': name.text.trim(),
@@ -436,6 +444,11 @@ class _WebProductsPageState extends State<WebProductsPage> {
     );
 
     if (confirmed != true) return;
+
+    if (!await BiometricGuard.require(
+      context,
+      reason: 'Verify your identity before deleting this product.',
+    )) return;
 
     try {
       await widget.api.deleteProduct(
@@ -743,6 +756,11 @@ class _WebSalesPageState extends State<WebSalesPage> {
   }
 
   Future<void> settleShipping(int id) async {
+    if (!await BiometricGuard.require(
+      context,
+      reason: 'Verify your identity before settling shipping for this sale.',
+    )) return;
+
     try {
       await widget.api.settleShipping(id, {});
       await load();
@@ -1253,6 +1271,11 @@ class _BatchesPageState extends State<BatchesPage> {
     );
     if (confirmed != true) return;
 
+    if (!await BiometricGuard.require(
+      context,
+      reason: 'Verify your identity before marking this shipment batch as arrived.',
+    )) return;
+
     try {
       await widget.api.arriveBatch(id, {});
       await load();
@@ -1284,6 +1307,11 @@ class _BatchesPageState extends State<BatchesPage> {
     BuildContext sheetContext,
     int saleId,
   ) async {
+    if (!await BiometricGuard.require(
+      sheetContext,
+      reason: 'Verify your identity before settling this shipping payment.',
+    )) return;
+
     try {
       await widget.api.settleShipping(saleId, {});
       if (sheetContext.mounted) {
@@ -2456,9 +2484,7 @@ class RatesPage extends StatelessWidget {
             _RateList(
               api: api,
               courier: true,
-              // Not gated to admin — only the monthly rate is sensitive
-              // per the owner's request; courier state rates are routine.
-              isAdmin: true,
+              isAdmin: isAdmin,
             ),
             _MonthlyRates(api: api, isAdmin: isAdmin),
           ],
@@ -2649,6 +2675,11 @@ class _RateListState extends State<_RateList> {
       return;
     }
 
+    if (!await BiometricGuard.require(
+      context,
+      reason: 'Verify your identity before changing shipping rates.',
+    )) return;
+
     try {
       if (widget.courier) {
         await widget.api.createCourierRate({
@@ -2745,6 +2776,11 @@ class _RateListState extends State<_RateList> {
 
     if (parsedRate == null) return;
 
+    if (!await BiometricGuard.require(
+      context,
+      reason: 'Verify your identity before changing shipping rates.',
+    )) return;
+
     try {
       final id = row['id'] as int;
 
@@ -2787,6 +2823,11 @@ class _RateListState extends State<_RateList> {
   Future<void> deleteRate(
     Map<String, dynamic> row,
   ) async {
+    if (!await BiometricGuard.require(
+      context,
+      reason: 'Verify your identity before deleting this shipping rate.',
+    )) return;
+
     try {
       final id = row['id'] as int;
 
@@ -3387,6 +3428,11 @@ class _SettingsPageState
       return;
     }
 
+    if (!await BiometricGuard.require(
+      context,
+      reason: 'Verify your identity before changing business, label, rate or bank settings.',
+    )) return;
+
     try {
       await widget.api.updateSettings({
         'shipping_rate_per_kg': kg,
@@ -3569,6 +3615,11 @@ class _ChangePasswordPageState
     final u = newUsername.text.trim();
     if (u.isEmpty || u == AppSession.username) return;
 
+    if (!await BiometricGuard.require(
+      context,
+      reason: 'Verify your identity before changing your username.',
+    )) return;
+
     try {
       final result = await widget.api.changeUsername(u);
       AppSession.username = '${result['username'] ?? u}';
@@ -3611,6 +3662,11 @@ class _ChangePasswordPageState
       );
       return;
     }
+
+    if (!await BiometricGuard.require(
+      context,
+      reason: 'Verify your identity before changing your password.',
+    )) return;
 
     try {
       await widget.api.changePassword(
@@ -3787,6 +3843,11 @@ class _UsersPageState
 
     if (ok != true) return;
 
+    if (!await BiometricGuard.require(
+      context,
+      reason: 'Verify your identity before creating a user account.',
+    )) return;
+
     try {
       await widget.api.createUser({
         'username': username.text.trim(),
@@ -3840,6 +3901,11 @@ class _UsersPageState
     );
 
     if (confirmed != true) return;
+
+    if (!await BiometricGuard.require(
+      context,
+      reason: 'Verify your identity before deleting a user account.',
+    )) return;
 
     try {
       await widget.api.deleteUser(
@@ -3992,6 +4058,11 @@ class _ClearDataPageState
     );
 
     if (ok != true) return;
+
+    if (!await BiometricGuard.require(
+      context,
+      reason: 'Verify your identity before permanently clearing test data.',
+    )) return;
 
     try {
       await widget.api.clearTestData(
