@@ -2,6 +2,8 @@ import json
 
 from flask import has_request_context, request
 from flask_login import current_user
+from sqlalchemy import event
+from sqlalchemy.orm import Session
 
 from app import db
 from app.models import AuditLog
@@ -69,6 +71,10 @@ def record_audit(
             actor_user_id=notification.pop("actor_user_id"),
             **notification,
         )
+        # The outbox row is part of the same transaction. Flush it only after
+        # the transaction successfully commits, so a failed business write
+        # cannot produce a push notification.
+        db.session.info["_push_outbox_after_commit"] = True
 
     return row
 
@@ -144,3 +150,21 @@ def _change_notification_for_audit(
         "body": body,
         "data": data,
     }
+
+
+@event.listens_for(Session, "after_commit")
+def _flush_push_outbox_after_commit(session):
+    if not session.info.pop("_push_outbox_after_commit", False):
+        return
+    if session.info.get("_flushing_push_outbox"):
+        return
+    session.info["_flushing_push_outbox"] = True
+    try:
+        from app.services.push_notifications import flush_outbox
+        flush_outbox()
+    except Exception:
+        # Push delivery is best effort. The committed outbox row remains
+        # pending and can be retried by a later registration or business event.
+        pass
+    finally:
+        session.info["_flushing_push_outbox"] = False
