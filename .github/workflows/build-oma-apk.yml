@@ -233,6 +233,11 @@ jobs:
           # --------------------------------------------------------
           # Flutter package checks
           # --------------------------------------------------------
+          if "local_auth: ^2.3.0" not in pubspec:
+              raise SystemExit(
+                  "Biometric dependency local_auth ^2.3.0 is missing."
+              )
+
           if "name: oma_mobile" not in pubspec:
               raise SystemExit(
                   "mobile/pubspec.yaml does not define oma_mobile."
@@ -329,9 +334,9 @@ jobs:
           cat > android/app/src/main/kotlin/com/example/oma_mobile/MainActivity.kt <<'EOF'
           package com.example.oma_mobile
 
-          import io.flutter.embedding.android.FlutterActivity
+          import io.flutter.embedding.android.FlutterFragmentActivity
 
-          class MainActivity : FlutterActivity()
+          class MainActivity : FlutterFragmentActivity()
           EOF
 
           # --------------------------------------------------------
@@ -366,6 +371,8 @@ jobs:
                       '    <uses-permission '
                       'android:name='
                       '"android.permission.ACCESS_FINE_LOCATION" />\n'
+                      '    <uses-permission android:name="android.permission.USE_BIOMETRIC" />
+'
                       "    <application"
                   ),
                   1,
