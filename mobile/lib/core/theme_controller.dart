@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:geolocator/geolocator.dart';
+import 'package:location/location.dart';
 import 'package:solar_calculator/solar_calculator.dart';
 
 import '../data/local_database.dart';
@@ -95,27 +95,29 @@ class OmaThemeController {
 
   static Future<bool> _isDarkBySun() async {
     try {
-      var permission = await Geolocator.checkPermission();
+      final location = Location();
 
-      if (permission == LocationPermission.denied) {
-        permission = await Geolocator.requestPermission();
+      var serviceEnabled = await location.serviceEnabled();
+      if (!serviceEnabled) {
+        serviceEnabled = await location.requestService();
       }
+      if (!serviceEnabled) return _fallbackDarkness();
 
-      if (permission == LocationPermission.denied ||
-          permission == LocationPermission.deniedForever) {
+      var permission = await location.hasPermission();
+      if (permission == PermissionStatus.denied) {
+        permission = await location.requestPermission();
+      }
+      if (permission != PermissionStatus.granted) {
         return _fallbackDarkness();
       }
 
-      if (!await Geolocator.isLocationServiceEnabled()) {
+      final position = await location.getLocation();
+
+      final latitude = position.latitude;
+      final longitude = position.longitude;
+      if (latitude == null || longitude == null) {
         return _fallbackDarkness();
       }
-
-      final position = await Geolocator.getCurrentPosition(
-        locationSettings: const LocationSettings(
-          accuracy: LocationAccuracy.low,
-          timeLimit: Duration(seconds: 8),
-        ),
-      );
 
       final now = DateTime.now();
       final offset = now.timeZoneOffset.inMinutes / 60.0;
@@ -132,8 +134,8 @@ class OmaThemeController {
 
       final solar = SolarCalculator(
         instant,
-        position.latitude,
-        position.longitude,
+        latitude,
+        longitude,
         offset,
       );
 
