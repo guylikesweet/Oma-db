@@ -177,6 +177,14 @@ class _WebsiteFeaturesPageState extends State<WebsiteFeaturesPage> {
             locked: !isAdmin,
           ),
 
+          if (isAdmin)
+            _tile(
+              Icons.history,
+              'Audit log',
+              'Who changed what across the system',
+              () => open(AuditLogPage(api: widget.api)),
+            ),
+
           _tile(
             Icons.delete_sweep,
             'Clear test data',
@@ -4417,6 +4425,83 @@ class _PasswordFieldState
           },
         ),
       ),
+    );
+  }
+}
+class AuditLogPage extends StatefulWidget {
+  const AuditLogPage({super.key, required this.api});
+  final ApiClient api;
+  @override
+  State<AuditLogPage> createState() => _AuditLogPageState();
+}
+
+class _AuditLogPageState extends State<AuditLogPage> {
+  List<dynamic> rows = [];
+  bool busy = true;
+  String? error;
+
+  @override
+  void initState() {
+    super.initState();
+    load();
+  }
+
+  Future<void> load() async {
+    try {
+      final result = await widget.api.auditLog();
+      if (mounted) setState(() { rows = result; error = null; });
+    } catch (e) {
+      if (mounted) setState(() => error = e.toString());
+    } finally {
+      if (mounted) setState(() => busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Audit log'),
+        actions: [
+          IconButton(onPressed: load, icon: const Icon(Icons.refresh)),
+        ],
+      ),
+      body: busy
+          ? const Center(child: BrandLoader())
+          : error != null
+              ? Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: Text(error!, textAlign: TextAlign.center),
+                  ),
+                )
+              : rows.isEmpty
+                  ? const Center(child: Text('No audit entries yet.'))
+                  : RefreshIndicator(
+                      onRefresh: load,
+                      child: ListView.separated(
+                        padding: const EdgeInsets.all(12),
+                        itemCount: rows.length,
+                        separatorBuilder: (_, __) => const Divider(height: 1),
+                        itemBuilder: (_, index) {
+                          final row = Map<String, dynamic>.from(rows[index] as Map);
+                          final detail = row['details'];
+                          final subtitle = [
+                            (row['username'] ?? 'System').toString(),
+                            (row['target_type']?.toString() ?? '') +
+                                ' #' +
+                                (row['target_id']?.toString() ?? ''),
+                            (row['created_at'] ?? '').toString(),
+                            if (detail != null) detail.toString(),
+                          ].join(' • ');
+                          return ListTile(
+                            leading: const Icon(Icons.history),
+                            title: Text(row['action']?.toString() ?? 'Action'),
+                            subtitle: Text(subtitle),
+                          );
+                        },
+                      ),
+                    ),
     );
   }
 }
