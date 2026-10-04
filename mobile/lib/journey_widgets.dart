@@ -65,7 +65,7 @@ class _JourneyCardState extends State<JourneyCard> {
 
     if (busy && detail == null) {
       content = const SizedBox(
-        height: 48,
+        height: 82,
         child: Center(
           child: BrandLoader(size: 32),
         ),
@@ -304,7 +304,7 @@ class _JourneyPageState extends State<JourneyPage> {
         ],
       ),
       body: loading
-          ? const Center(child: BrandLoader(label: 'Loading journeys…'))
+          ? const Center(child: BrandLoader(label: 'Please wait'))
           : error != null
               ? _ErrorState(error: error!, onRetry: load)
               : sales.isEmpty
