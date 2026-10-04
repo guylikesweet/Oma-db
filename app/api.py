@@ -23,7 +23,7 @@ from app.services.journey import journey_public, manual_stages_for, stage_label,
 from app.access import require_admin_api
 from app.models import (
     User, Product, Sale, SaleItem, Shipping, Delivery, ShipmentBatch,
-    CourierRate, MonthlyShippingRate, MonthlyAirRate, StockLog, MobileOperation, MobileChange, AuditLog,
+    CourierRate, MonthlyShippingRate, MonthlyAirRate, StockLog, MobileOperation, MobileChange, AuditLog, PushDevice,
 )
 from app.services.sales import create_sale, SaleValidationError, shipping_cost_for_items
 from app.services.rates import get_rate_for_month, get_volume_rate, get_rate_per_kg
