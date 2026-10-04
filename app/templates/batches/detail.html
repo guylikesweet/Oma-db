@@ -3,7 +3,10 @@
 {% block body %}
 <div class="container" style="max-width:1000px; margin-top:20px;">
   <h2>{{ batch.name }}</h2>
-  <p><span class="label label-info">{{ batch.status }}</span></p>
+  <p>
+    <span class="label label-info">{{ batch.status }}</span>
+    <span class="label" style="background:{{ '#FC4300' if batch.is_air else '#039664' }}; color:#fff;">{{ '\u2708 Air' if batch.is_air else '\U0001F6A2 Sea' }}</span>
+  </p>
 
   {% with messages = get_flashed_messages(with_categories=true) %}
     {% for category, message in messages %}
@@ -29,14 +32,14 @@
 
   <h4>Sales in this batch ({{ batch.sales|length }})</h4>
   <table class="table table-striped">
-    <thead><tr><th>Sale</th><th>Customer</th><th>State</th><th>Estimated</th><th>Actual Shipping</th><th>Payment</th><th></th></tr></thead>
+    <thead><tr><th>Sale</th><th>Customer</th><th>State</th><th>Estimated ({{ batch.mode_label }})</th><th>Actual Shipping</th><th>Payment</th><th></th></tr></thead>
     <tbody>
       {% for sale in batch.sales %}
       <tr>
         <td><a href="{{ url_for('sales.sale_detail', sale_id=sale.id) }}">{{ sale.order_id }}</a></td>
         <td>{{ sale.customer_name }}</td>
         <td>{{ sale.customer_state }}</td>
-        <td>{{ sale.estimated_shipping_cost if sale.estimated_shipping_cost is not none else '—' }}</td>
+        <td>{% set est = sale.estimated_shipping_air if batch.is_air else (sale.estimated_shipping_sea if sale.estimated_shipping_sea is not none else sale.estimated_shipping_cost) %}{{ est if est is not none else '—' }}</td>
         <td>{{ sale.actual_shipping_cost if sale.actual_shipping_cost is not none else '—' }}</td>
         <td>
           {% if sale.shipping_payment_settled %}
