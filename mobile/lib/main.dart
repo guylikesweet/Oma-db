@@ -613,7 +613,6 @@ class _AppShellState extends State<AppShell> {
 
   Future<void> sync({bool silent = false}) async {
     if (syncing) return;
-    _touchActivity();
 
     if (mounted) {
       setState(() => syncing = true);
