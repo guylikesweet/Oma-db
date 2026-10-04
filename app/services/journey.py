@@ -112,37 +112,80 @@ def _reached(sale):
 
 
 def journey_for(sale):
-    """The whole journey for one order, ready to render or serialise."""
+    """Return the journey with the latest real/manual milestone as current.
+
+    The current milestone is the newest real business event or explicit
+    operator correction. This permits forwards and backwards corrections
+    without making a batch arrival permanently override the tracking state.
+    """
     reached, _delivery = _reached(sale)
     flow = list(flow_for(sale))
+    mode = sale.batch.transport_mode if (
+        sale.batch is not None and not sale.is_stock_sale
+    ) else None
 
-    returned = "returned" in reached
-    if returned:
-        flow[-1] = "returned"  # the last step is either delivered or returned
+    milestones = []
+    for key, at in reached.items():
+        if key in flow and at is not None:
+            milestones.append((at, key))
 
-    # Current = the furthest stage reached (a later stage implies the earlier
-    # ones were passed, even if nobody recorded them).
-    current_index = 0
-    for index, key in enumerate(flow):
-        if key in reached:
-            current_index = index
+    for event in sale.journey_events:
+        if event.stage in flow and event.created_at is not None:
+            milestones.append((event.created_at, event.stage))
 
-    mode = sale.batch.transport_mode if (sale.batch is not None and not sale.is_stock_sale) else None
+    current_key = "confirmed"
+    current_at = sale.created_at
+    if milestones:
+        milestones.sort(key=lambda item: item[0])
+        current_at, current_key = milestones[-1]
+
+    if "returned" in reached:
+        returned_at = reached.get("returned")
+        if returned_at is not None and (
+            current_at is None or returned_at >= current_at
+        ):
+            current_at, current_key = returned_at, "returned"
+
+    if current_key not in flow:
+        current_key = flow[0]
+        current_at = sale.created_at
+
+    current_index = flow.index(current_key)
     steps = []
+
     for index, key in enumerate(flow):
         label, description, headline = STAGE_INFO[key]
         if key == "cross_border":
             if mode == ShipmentBatch.MODE_AIR:
-                label, description, headline = "Cross-border transit (air)", "Your goods are on their way to Nigeria by air.", "Your order is in cross-border transit by air."
+                label, description, headline = (
+                    "On air",
+                    "Your goods are on their way to Nigeria by air.",
+                    "Your order is in transit by air.",
+                )
             elif mode == ShipmentBatch.MODE_SEA:
-                label, description, headline = "Cross-border transit (sea)", "Your goods are on their way to Nigeria by sea.", "Your order is in cross-border transit by sea."
+                label, description, headline = (
+                    "On sea",
+                    "Your goods are on their way to Nigeria by sea.",
+                    "Your order is in transit by sea.",
+                )
+
         if index < current_index:
             state = "done"
         elif index == current_index:
             state = "final" if key in ("delivered", "returned") else "current"
         else:
             state = "upcoming"
+
         at = reached.get(key)
+        manual_times = [
+            e.created_at for e in sale.journey_events
+            if e.stage == key and e.created_at is not None
+        ]
+        if manual_times:
+            latest_manual = max(manual_times)
+            if at is None or latest_manual > at:
+                at = latest_manual
+
         steps.append({
             "key": key,
             "label": label,
@@ -165,7 +208,6 @@ def journey_for(sale):
         "steps": steps,
     }
 
-
 def journey_public(sale):
     """journey_for() without the raw datetime objects (safe for jsonify)."""
     data = journey_for(sale)
@@ -187,41 +229,30 @@ def current_stage_key(sale):
 
 
 def set_manual_stage(sale, stage, user_id=None):
-    """
-    Moves one sale to a hand-set stage. Raises JourneyError (with a plain
-    reason) if it can't: wrong kind of stage for this sale, cancelled, or the
-    order has already moved on in a way the app tracks itself.
-    Moving back is allowed so a mistake can be corrected.
-    """
-    allowed = manual_stages_for(sale)
-    if stage not in allowed:
-        names = ", ".join(stage_label(k) for k in allowed)
-        raise JourneyError(f"{sale.order_id or sale.id}: only {names} can be set by hand for this kind of order.")
+    """Set the exact current milestone for one sale, forwards or backwards."""
+    stage = (stage or "").strip()
+    flow = list(flow_for(sale))
+
+    if stage not in flow:
+        names = ", ".join(stage_label(k) for k in flow)
+        raise JourneyError(
+            f"{sale.order_id or sale.id}: choose one of the order milestones: {names}."
+        )
     if sale.order_status == "Cancelled":
         raise JourneyError(f"{sale.order_id or sale.id}: the order is cancelled.")
 
-    if sale.is_stock_sale:
-        if sale.delivery_id:
-            raise JourneyError(f"{sale.order_id or sale.id}: it already has a delivery.")
-    else:
-        if sale.batch_id:
-            raise JourneyError(f"{sale.order_id or sale.id}: it is already in a shipment batch.")
+    current = current_stage_key(sale)
+    if current == stage:
+        return False
 
-    order = list(allowed)
-    target_index = order.index(stage)
-
-    # Correcting backwards: forget any hand-set stage later than the target.
-    for event in list(sale.journey_events):
-        if event.stage in order and order.index(event.stage) > target_index:
-            db.session.delete(event)
-
-    existing = [e for e in sale.journey_events if e.stage == stage]
-    if existing:
-        return False  # already there
-
-    db.session.add(SaleJourneyEvent(sale_id=sale.id, stage=stage, user_id=user_id))
+    db.session.add(
+        SaleJourneyEvent(
+            sale_id=sale.id,
+            stage=stage,
+            user_id=user_id,
+        )
+    )
     return True
-
 
 def set_manual_stage_bulk(sales, stage, user_id=None):
     """Applies set_manual_stage() to many sales. Returns (updated, unchanged, skipped)
