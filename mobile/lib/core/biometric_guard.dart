@@ -11,29 +11,60 @@ class BiometricGuard {
 
   static final LocalAuthentication _auth = LocalAuthentication();
 
+  /// Set by the authenticated mobile session. Returns true only when the
+  /// server verifies the user's current password.
+  static Future<bool> Function(String password)? passwordVerifier;
+
   static Future<bool> require(
     BuildContext context, {
     required String reason,
   }) async {
-    // The Flutter web build does not expose the mobile local_auth API.
-    // Keep the existing web functionality intact; native mobile builds
-    // enforce the biometric gate below.
+    // Web/classic authentication is password-based. Mobile gets the OS
+    // biometric first, with an explicit password fallback for hardware issues.
     if (kIsWeb) return true;
+
+    Future<bool> passwordFallback() async {
+      final verifier = passwordVerifier;
+      if (verifier == null) return false;
+      final controller = TextEditingController();
+      try {
+        final password = await showDialog<String>(
+          context: context,
+          builder: (dialogContext) => AlertDialog(
+            title: const Text('Verify with password'),
+            content: TextField(
+              controller: controller,
+              autofocus: true,
+              obscureText: true,
+              decoration: const InputDecoration(labelText: 'Password'),
+              onSubmitted: (value) => Navigator.pop(dialogContext, value),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(dialogContext),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(dialogContext, controller.text),
+                child: const Text('Verify'),
+              ),
+            ],
+          ),
+        );
+        if (password == null || password.isEmpty) return false;
+        final ok = await verifier(password);
+        if (!ok && context.mounted) _show(context, 'Password verification failed.');
+        return ok;
+      } finally {
+        controller.dispose();
+      }
+    }
 
     try {
       final canCheck = await _auth.canCheckBiometrics;
       final supported = await _auth.isDeviceSupported();
 
-      if (!canCheck || !supported) {
-        if (context.mounted) {
-          _show(
-            context,
-            'Biometric verification is required for this action. '
-            'Set up fingerprint or face unlock on this device first.',
-          );
-        }
-        return false;
-      }
+      if (!canCheck || !supported) return passwordFallback();
 
       final authenticated = await _auth.authenticate(
         localizedReason: reason,
@@ -45,11 +76,8 @@ class BiometricGuard {
         ),
       );
 
-      if (!authenticated && context.mounted) {
-        _show(context, 'Biometric verification cancelled or failed.');
-      }
-
-      return authenticated;
+      if (authenticated) return true;
+      return passwordFallback();
     } catch (e) {
       if (context.mounted) {
         _show(context, 'Biometric verification failed. Try again.');
