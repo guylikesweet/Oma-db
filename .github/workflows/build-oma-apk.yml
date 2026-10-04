@@ -173,8 +173,9 @@ jobs:
           )
 
           merge = versions / "final_mobile_merge.py"
+          security = versions / "oma20261004_mobile_session_security.py"
 
-          for required in (d4, e71, merge):
+          for required in (d4, e71, merge, security):
               if not required.exists():
                   raise SystemExit(
                       f"Required migration missing: {required}"
@@ -183,6 +184,7 @@ jobs:
           d4_text = d4.read_text(encoding="utf-8")
           e71_text = e71.read_text(encoding="utf-8")
           merge_text = merge.read_text(encoding="utf-8")
+          security_text = security.read_text(encoding="utf-8")
 
           if (
               'revision = "d4f2c7a91e60"' not in d4_text
@@ -209,6 +211,17 @@ jobs:
           ):
               raise SystemExit(
                   "Final mobile migration merge is invalid."
+              )
+
+          if (
+              'revision = "oma20261004"' not in security_text
+              or
+              'f7a1c9e4b210' not in security_text
+              or
+              '15266d7fb5f3' not in security_text
+          ):
+              raise SystemExit(
+                  "Mobile security migration must merge both current Alembic heads."
               )
 
           print("Mobile migration chain: OK")
