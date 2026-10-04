@@ -12,6 +12,7 @@ class OmaPushNotifications {
 
   static bool _firebaseReady = false;
   static bool _tokenRefreshAttached = false;
+  static bool _foregroundListenerAttached = false;
 
   static final FlutterLocalNotificationsPlugin _local =
       FlutterLocalNotificationsPlugin();
@@ -98,10 +99,13 @@ class OmaPushNotifications {
         _tokenRefreshAttached = true;
       }
 
-      FirebaseMessaging.onMessage.listen((message) async {
-        if (kIsWeb) return;
-        await _showAndRepeat(message.data);
-      });
+      if (!_foregroundListenerAttached) {
+        FirebaseMessaging.onMessage.listen((message) async {
+          if (kIsWeb) return;
+          await _showAndRepeat(message.data);
+        });
+        _foregroundListenerAttached = true;
+      }
     } catch (_) {
       // Notification setup must never prevent the sales app from opening.
     }
