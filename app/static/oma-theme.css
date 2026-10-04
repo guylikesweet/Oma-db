@@ -322,4 +322,13 @@ form.form-inline textarea {
   margin-bottom: 0;
 }
 
+/* Directly stacked controls are separated even when a template has no
+   .form-group wrapper. Hidden CSRF/metadata inputs are excluded. */
+form:not(.form-inline) > :not([type="hidden"]) + :not([type="hidden"]) {
+  margin-top: 12px;
+}
+
+form:not(.form-inline) .form-group + .form-group {
+  margin-top: 12px;
+}
 
