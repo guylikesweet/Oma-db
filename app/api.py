@@ -53,19 +53,19 @@ def require_api_token(f):
 
         now = datetime.utcnow()
         last = user.api_last_activity_at
-        if last is not None and now - last >= timedelta(minutes=30):
+        if last is not None and now - last >= timedelta(hours=6):
             record_audit(
                 "logout.timeout",
                 target_type="user",
                 target_id=user.id,
                 outcome="success",
-                details={"source": "api", "timeout_minutes": 30},
+                details={"source": "api", "timeout_minutes": 360},
                 user=user,
             )
             user.api_token = None
             user.api_last_activity_at = None
             db.session.commit()
-            return jsonify({"error": "Your session expired after 30 minutes of inactivity. Please sign in again."}), 401
+            return jsonify({"error": "Your session expired after 6 hours of inactivity. Please sign in again."}), 401
 
         user.api_last_activity_at = now
         db.session.commit()
@@ -722,6 +722,11 @@ def register_push_device():
         device.last_seen_at = datetime.utcnow()
 
     db.session.commit()
+    try:
+        from app.services.push_notifications import flush_outbox
+        flush_outbox()
+    except Exception:
+        pass
     return jsonify({"registered": True})
 
 
@@ -798,6 +803,8 @@ def mobile_create_product():
                     stock=int(data.get("stock") or 0))
         if p.stock < 0: raise ValueError("Stock cannot be negative.")
         db.session.add(p); db.session.flush()
+        record_audit("product.create", target_type="product", target_id=p.id,
+                     details={"name": p.name, "source": "api"}, user=g.api_user)
         return _mobile_finish(op, "create_product", 201, _product_json(p))
     except (ValueError, TypeError, InvalidOperation) as e:
         db.session.rollback(); return jsonify({"error": str(e)}), 400
@@ -816,6 +823,8 @@ def mobile_update_product(product_id):
                 value = data[f]
                 if f == "sku": value = str(value or "").strip() or None
                 setattr(p, f, value)
+        record_audit("product.update", target_type="product", target_id=p.id,
+                     details={"source": "api"}, user=g.api_user)
         return _mobile_finish(op, "update_product", 200, _product_json(p))
     except (ValueError, TypeError, InvalidOperation) as e:
         db.session.rollback(); return jsonify({"error": str(e)}), 400
@@ -830,6 +839,8 @@ def mobile_delete_product(product_id):
         if existing: return _mobile_replay(existing)
         p = Product.query.get_or_404(product_id)
         if p.sale_items: raise ValueError("A product used in sales cannot be deleted.")
+        record_audit("product.delete", target_type="product", target_id=p.id,
+                     details={"name": p.name, "source": "api"}, user=g.api_user)
         db.session.delete(p)
         return _mobile_finish(op, "delete_product", 200, {"ok": True, "id": product_id})
     except ValueError as e:
@@ -1047,10 +1058,10 @@ def mobile_batch_arrive(batch_id):
         b.status = ShipmentBatch.STATUS_ARRIVED
         record_audit(
             'batch.arrive', target_type='shipment_batch', target_id=b.id,
-            details={'transport_mode': b.transport_mode, 'sale_count': len(b.sales), 'source': 'api'},
+            details={'transport_mode': b.transport_mode, 'sale_count': len(b.sales), 'name': b.name, 'source': 'api'},
             user=g.api_user,
         )
-        queue_batch_arrival(b)
+        queue_batch_arrival(b, exclude_user_id=g.api_user.id)
         result = _mobile_finish(op, "batch_arrive", 200, _batch_json(b))
         db.session.flush()
         db.session.commit()
@@ -1171,6 +1182,8 @@ def mobile_prepare_label(delivery_id):
         d=Delivery.query.get_or_404(delivery_id);weight=Decimal(str(data.get("package_weight_kg") or "0"));dims=str(data.get("package_dimensions") or "").strip()
         if weight<=0 or not dims:raise ValueError("Package weight and dimensions are required.")
         d.package_weight_kg=weight;d.package_dimensions=dims;d.remarks=str(data.get("remarks") or "").strip() or None
+        record_audit("delivery.label_update", target_type="delivery", target_id=d.id,
+                     details={"source": "api"}, user=g.api_user)
         return _mobile_finish(op,"prepare_label",200,_delivery_json(d))
     except (ValueError,InvalidOperation) as e:
         db.session.rollback();return jsonify({"error":str(e)}),400
@@ -1255,7 +1268,10 @@ def mobile_create_shipping():
         if sale.shipping:raise ValueError('This sale already has a shipment.')
         cbm=sum((i.line_cbm or Decimal('0')) for i in sale.items);actual=sum(((i.product.actual_weight_kg if i.product else Decimal('0')) or Decimal('0'))*i.qty for i in sale.items);vol=sum((i.line_volumetric_kg or Decimal('0')) for i in sale.items)
         s=Shipping(sale_id=sale.id,courier=str(data.get('courier') or '').strip(),tracking_number=str(data.get('tracking_number') or '').strip(),total_cbm=cbm,chargeable_weight_kg=max(actual,vol),shipping_status='Shipped',shipped_at=datetime.utcnow(),notes=str(data.get('notes') or '').strip() or None)
-        db.session.add(s);sale.order_status='Shipped';db.session.flush();return _mobile_finish(op,'create_shipping',201,_shipping_json(s))
+        db.session.add(s);sale.order_status='Shipped';db.session.flush()
+        record_audit("shipping.create", target_type="shipping", target_id=s.id,
+                     details={"sale_id": sale.id, "source": "api"}, user=g.api_user)
+        return _mobile_finish(op,'create_shipping',201,_shipping_json(s))
     except (ValueError,KeyError) as e:
         db.session.rollback();return jsonify({'error':str(e)}),400
 
@@ -1278,6 +1294,8 @@ def mobile_update_shipping(shipping_id):
             if st=='Delivered':
                 s.delivered_at=datetime.utcnow();sale=Sale.query.get(s.sale_id)
                 if sale:sale.order_status='Delivered'
+        record_audit("shipping.update", target_type="shipping", target_id=s.id,
+                     details={"sale_id": s.sale_id, "source": "api"}, user=g.api_user)
         return _mobile_finish(op,'update_shipping',200,_shipping_json(s))
     except ValueError as e:
         db.session.rollback();return jsonify({'error':str(e)}),400
@@ -1295,7 +1313,10 @@ def mobile_create_courier_rate():
     try:
         op,existing=_mobile_operation(data)
         if existing:return _mobile_replay(existing)
-        r=CourierRate(state=str(data.get('state') or '').strip(),rate_per_cbm=Decimal(str(data.get('rate_per_cbm'))));db.session.add(r);db.session.flush();return _mobile_finish(op,'create_courier_rate',201,_rate_json(r))
+        r=CourierRate(state=str(data.get('state') or '').strip(),rate_per_cbm=Decimal(str(data.get('rate_per_cbm'))));db.session.add(r);db.session.flush()
+        record_audit("rate.courier.create", target_type="courier_rate", target_id=r.id,
+                     details={"state": r.state, "source": "api"}, user=g.api_user)
+        return _mobile_finish(op,'create_courier_rate',201,_rate_json(r))
     except (ValueError,InvalidOperation) as e:db.session.rollback();return jsonify({'error':str(e)}),400
 
 @api_bp.route("/v1/courier-rates/<int:rate_id>", methods=("PUT","PATCH","DELETE"))
@@ -1307,10 +1328,15 @@ def mobile_update_courier_rate(rate_id):
         op,existing=_mobile_operation(data)
         if existing:return _mobile_replay(existing)
         r=CourierRate.query.get_or_404(rate_id)
-        if request.method=='DELETE':db.session.delete(r);payload={'ok':True,'id':rate_id}
+        if request.method=='DELETE':
+            record_audit("rate.courier.delete", target_type="courier_rate", target_id=r.id,
+                         details={"state": r.state, "source": "api"}, user=g.api_user)
+            db.session.delete(r);payload={'ok':True,'id':rate_id}
         else:
             if 'state' in data:r.state=str(data['state']).strip()
             if 'rate_per_cbm' in data:r.rate_per_cbm=Decimal(str(data['rate_per_cbm']))
+            record_audit("rate.courier.update", target_type="courier_rate", target_id=r.id,
+                         details={"state": r.state, "source": "api"}, user=g.api_user)
             payload=_rate_json(r)
         return _mobile_finish(op,'update_courier_rate',200,payload)
     except (ValueError,InvalidOperation) as e:db.session.rollback();return jsonify({'error':str(e)}),400
@@ -1332,6 +1358,8 @@ def mobile_create_monthly_air_rate():
         rate=Decimal(str(data.get("rate_per_kg")))
         if rate < 0: raise ValueError("Air rate cannot be negative.")
         row=MonthlyAirRate(month=month,rate_per_kg=rate);db.session.add(row);db.session.flush()
+        record_audit("rate.air.create", target_type="monthly_air_rate", target_id=row.id,
+                     details={"month": row.month.isoformat(), "source": "api"}, user=g.api_user)
         return _mobile_finish(op,"create_monthly_air_rate",201,{"id":row.id,"month":row.month.isoformat(),"rate_per_kg":float(row.rate_per_kg)})
     except (ValueError,InvalidOperation) as e:db.session.rollback();return jsonify({"error":str(e)}),400
 
@@ -1344,10 +1372,15 @@ def mobile_update_monthly_air_rate(rate_id):
         op,existing=_mobile_operation(data)
         if existing:return _mobile_replay(existing)
         row=MonthlyAirRate.query.get_or_404(rate_id)
-        if request.method=="DELETE":db.session.delete(row);payload={"ok":True,"id":rate_id}
+        if request.method=="DELETE":
+            record_audit("rate.air.delete", target_type="monthly_air_rate", target_id=row.id,
+                         details={"month": row.month.isoformat(), "source": "api"}, user=g.api_user)
+            db.session.delete(row);payload={"ok":True,"id":rate_id}
         else:
             if "month" in data:row.month=date.fromisoformat(str(data["month"])[:10]).replace(day=1)
             if "rate_per_kg" in data:row.rate_per_kg=Decimal(str(data["rate_per_kg"]))
+            record_audit("rate.air.update", target_type="monthly_air_rate", target_id=row.id,
+                         details={"month": row.month.isoformat(), "source": "api"}, user=g.api_user)
             payload={"id":row.id,"month":row.month.isoformat(),"rate_per_kg":float(row.rate_per_kg)}
         return _mobile_finish(op,"update_monthly_air_rate",200,payload)
     except (ValueError,InvalidOperation) as e:db.session.rollback();return jsonify({"error":str(e)}),400
@@ -1364,7 +1397,10 @@ def mobile_create_monthly_rate():
     try:
         op,existing=_mobile_operation(data)
         if existing:return _mobile_replay(existing)
-        month=date.fromisoformat(str(data.get('month'))[:10]).replace(day=1);r=MonthlyShippingRate(month=month,rate_per_cbm=Decimal(str(data.get('rate_per_cbm'))));db.session.add(r);db.session.flush();return _mobile_finish(op,'create_monthly_rate',201,_monthly_rate_json(r))
+        month=date.fromisoformat(str(data.get('month'))[:10]).replace(day=1);r=MonthlyShippingRate(month=month,rate_per_cbm=Decimal(str(data.get('rate_per_cbm'))));db.session.add(r);db.session.flush()
+        record_audit("rate.sea.create", target_type="monthly_shipping_rate", target_id=r.id,
+                     details={"month": r.month.isoformat(), "source": "api"}, user=g.api_user)
+        return _mobile_finish(op,'create_monthly_rate',201,_monthly_rate_json(r))
     except (ValueError,InvalidOperation) as e:db.session.rollback();return jsonify({'error':str(e)}),400
 
 @api_bp.route("/v1/monthly-shipping-rates/<int:rate_id>", methods=("PUT","PATCH","DELETE"))
@@ -1376,10 +1412,15 @@ def mobile_update_monthly_rate(rate_id):
         op,existing=_mobile_operation(data)
         if existing:return _mobile_replay(existing)
         r=MonthlyShippingRate.query.get_or_404(rate_id)
-        if request.method=='DELETE':db.session.delete(r);payload={'ok':True,'id':rate_id}
+        if request.method=='DELETE':
+            record_audit("rate.sea.delete", target_type="monthly_shipping_rate", target_id=r.id,
+                         details={"month": r.month.isoformat(), "source": "api"}, user=g.api_user)
+            db.session.delete(r);payload={'ok':True,'id':rate_id}
         else:
             if 'month' in data:r.month=date.fromisoformat(str(data['month'])[:10]).replace(day=1)
             if 'rate_per_cbm' in data:r.rate_per_cbm=Decimal(str(data['rate_per_cbm']))
+            record_audit("rate.sea.update", target_type="monthly_shipping_rate", target_id=r.id,
+                         details={"month": r.month.isoformat(), "source": "api"}, user=g.api_user)
             payload=_monthly_rate_json(r)
         return _mobile_finish(op,'update_monthly_rate',200,payload)
     except (ValueError,InvalidOperation) as e:db.session.rollback();return jsonify({'error':str(e)}),400

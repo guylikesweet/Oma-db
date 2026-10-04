@@ -18,7 +18,11 @@ class BiometricGuard {
   static Future<bool> canUseBiometrics() async {
     if (kIsWeb) return false;
     try {
-      return await _auth.canCheckBiometrics && await _auth.isDeviceSupported();
+      if (!await _auth.canCheckBiometrics || !await _auth.isDeviceSupported()) {
+        return false;
+      }
+      final enrolled = await _auth.getAvailableBiometrics();
+      return enrolled.isNotEmpty;
     } catch (_) {
       return false;
     }

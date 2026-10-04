@@ -363,6 +363,18 @@ class _LoginPageState extends State<LoginPage> {
         this.username.text = username;
       }
     });
+
+    // If this device already has a biometric credential for the account,
+    // present the OS biometric prompt immediately when the login screen is
+    // reached (including after the six-hour inactivity timeout).
+    if (username != null &&
+        username.isNotEmpty &&
+        available &&
+        mounted) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && !busy) biometricLogin();
+      });
+    }
   }
 
   Future<void> biometricLogin() async {
@@ -375,7 +387,10 @@ class _LoginPageState extends State<LoginPage> {
         savedUser == null ||
         credential == null ||
         entered.toLowerCase() != savedUser.toLowerCase()) {
-      setState(() => error = 'Enter the username registered for biometric login.');
+      if (mounted) {
+        setState(() => error =
+            'Biometric sign-in is not available on this device. Use your password once.');
+      }
       return;
     }
 
@@ -722,7 +737,7 @@ class _AppShellState extends State<AppShell> {
   }
 
   Future<void> _checkInactivity() async {
-    if (DateTime.now().difference(_lastActivity) < const Duration(minutes: 30)) {
+    if (DateTime.now().difference(_lastActivity) < const Duration(hours: 6)) {
       return;
     }
 
@@ -737,13 +752,15 @@ class _AppShellState extends State<AppShell> {
     );
 
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('You were logged out after 30 minutes of inactivity.')),
+      const SnackBar(content: Text('You were logged out after 6 hours of inactivity.')),
     );
   }
 
   Future<void> logout() async {
     await widget.api.clearToken();
-    await widget.api.clearBiometricCredential();
+    // Keep the device biometric credential across an explicit sign-out so
+    // this previously trusted device can use its OS biometric to sign in
+    // again. The server-side credential is invalidated when the password changes.
     AppSession.reset();
 
     if (!mounted) return;

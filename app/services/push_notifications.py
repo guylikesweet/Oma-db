@@ -45,17 +45,52 @@ def _firebase():
     return _firebase_app
 
 
-def queue_batch_arrival(batch):
-    """Queue one arrival notification for every active user/device."""
+def _push_user_ids(exclude_user_id=None):
+    """Return users that actually have an enabled mobile push registration."""
+    query = (
+        db.session.query(PushDevice.user_id)
+        .filter(PushDevice.enabled.is_(True))
+        .distinct()
+    )
+    if exclude_user_id is not None:
+        query = query.filter(PushDevice.user_id != exclude_user_id)
+    return [row[0] for row in query.all()]
+
+
+def queue_change_notification(
+    *,
+    actor_user_id=None,
+    event_type,
+    title,
+    body,
+    data=None,
+    sound="scanner_beep",
+):
+    """Queue one meaningful-change notification for every other registered user."""
+    payload = dict(data or {})
+    payload.setdefault("type", event_type)
+    payload.setdefault("sound", sound)
+
+    for user_id in _push_user_ids(exclude_user_id=actor_user_id):
+        queue_user_notification(
+            user_id,
+            event_type=event_type,
+            title=title,
+            body=body,
+            data=payload,
+        )
+
+
+def queue_batch_arrival(batch, exclude_user_id=None):
+    """Queue the specialized air/sea arrival notification for other registered users."""
     mode = "air" if batch.transport_mode == ShipmentBatch.MODE_AIR else "sea"
     sound = "airport_arrival" if mode == "air" else "ship_horn"
     title = "Air shipment arrived" if mode == "air" else "Sea shipment arrived"
     body = f"{batch.name} has arrived and is ready for shipping settlement."
 
-    users = User.query.all()
-    for user in users:
+    for user_id in _push_user_ids(exclude_user_id=exclude_user_id):
         queue_user_notification(
-            user.id,
+            user_id,
             event_type="batch_arrival",
             title=title,
             body=body,
@@ -119,8 +154,8 @@ def flush_outbox(limit=100):
         ).all()
 
         if not devices:
-            row.status = "sent"
-            row.sent_at = datetime.utcnow()
+            # Keep the outbox pending. The recipient may register a device
+            # later; register-device will trigger another flush.
             continue
 
         data = {
@@ -160,6 +195,12 @@ def flush_outbox(limit=100):
                 failures += 1
                 row.attempts = (row.attempts or 0) + 1
                 row.last_error = str(exc)[:4000]
+                try:
+                    from firebase_admin import messaging as _messaging
+                    if isinstance(exc, _messaging.UnregisteredError):
+                        device.enabled = False
+                except Exception:
+                    pass
 
         if successful and not failures:
             row.status = "sent"
