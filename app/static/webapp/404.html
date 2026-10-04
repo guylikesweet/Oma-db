@@ -33,6 +33,32 @@
   <link rel="manifest" href="manifest.json">
 </head>
 <body>
+  <div id="oma-first-paint-loader" role="status" aria-live="polite">
+    <div class="oma-first-paint-spinner"></div>
+    <div class="oma-first-paint-text">Please wait</div>
+  </div>
+  <style>
+    #oma-first-paint-loader{
+      position:fixed;inset:0;z-index:2147483647;
+      display:flex;flex-direction:column;align-items:center;justify-content:center;
+      gap:14px;background:#fff;color:#212529;
+      font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif;
+    }
+    .oma-first-paint-spinner{
+      width:46px;height:46px;border:4px solid #dfeee8;border-top-color:#039664;
+      border-radius:50%;animation:oma-first-paint-spin .8s linear infinite;
+    }
+    .oma-first-paint-text{font-size:15px;font-weight:700}
+    @keyframes oma-first-paint-spin{to{transform:rotate(360deg)}}
+    html.oma-flutter-ready #oma-first-paint-loader{
+      opacity:0;pointer-events:none;transition:opacity .16s ease;
+    }
+  </style>
+  <script>
+    window.addEventListener('flutter-first-frame', function(){
+      document.documentElement.classList.add('oma-flutter-ready');
+    });
+  </script>
   <script>
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', function () {
