@@ -1,0 +1,6 @@
+{% extends admin_base_template %}
+{# Loads the Omabuy brand colours (orange / green / white) on the Flask-Admin pages too. #}
+{% block head_css %}
+  {{ super() }}
+  <link rel="stylesheet" href="{{ url_for('static', filename='oma-theme.css') }}">
+{% endblock %}
