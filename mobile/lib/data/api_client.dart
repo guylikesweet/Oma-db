@@ -628,6 +628,30 @@ class ApiClient {
     );
   }
 
+  Future<Map<String, dynamic>> undoBatchArrival(int id) {
+    return _map(
+      'POST',
+      '/v1/batches/$id/undo-arrival',
+      body: <String, dynamic>{},
+    );
+  }
+
+  Future<Map<String, dynamic>> deleteSale(int id) {
+    return _map(
+      'DELETE',
+      '/v1/admin/sales/$id',
+      body: <String, dynamic>{},
+    );
+  }
+
+  Future<Map<String, dynamic>> deleteBatch(int id) {
+    return _map(
+      'DELETE',
+      '/v1/admin/batches/$id',
+      body: <String, dynamic>{},
+    );
+  }
+
   // ============================================================
   // DELIVERIES
   // ============================================================
