@@ -122,10 +122,20 @@ jobs:
       # build succeeds.
       # ------------------------------------------------------------
       - name: Configure Firebase web messaging worker
+        env:
+          FCM_API_KEY: ${{ secrets.FCM_API_KEY }}
+          FCM_APP_ID: ${{ secrets.FCM_APP_ID }}
+          FCM_MESSAGING_SENDER_ID: ${{ secrets.FCM_MESSAGING_SENDER_ID }}
+          FCM_PROJECT_ID: ${{ secrets.FCM_PROJECT_ID }}
+          FCM_AUTH_DOMAIN: ${{ secrets.FCM_AUTH_DOMAIN }}
+          FCM_STORAGE_BUCKET: ${{ secrets.FCM_STORAGE_BUCKET }}
         shell: bash
         run: |
           set -euo pipefail
-          cat > mobile/web/firebase-messaging-sw.js <<EOF
+          # working-directory is already "mobile", so the path is web/,
+          # not mobile/web/ (that resolved to mobile/mobile/web).
+          mkdir -p web
+          cat > web/firebase-messaging-sw.js <<EOF
           importScripts("https://www.gstatic.com/firebasejs/11.6.1/firebase-app-compat.js");
           importScripts("https://www.gstatic.com/firebasejs/11.6.1/firebase-messaging-compat.js");
 

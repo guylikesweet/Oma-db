@@ -476,6 +476,77 @@ jobs:
           PY
 
       # ------------------------------------------------------------
+      # 7b. FORCE minSdk 23
+      #
+      # firebase_messaging (and its Firebase Android SDK deps) require
+      # minSdk 23. The generated project defaults to flutter.minSdkVersion
+      # (21 on Flutter 3.24), which fails manifest merging, so pin it here.
+      # ------------------------------------------------------------
+      - name: Force Android minSdk 23
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          MIN_SDK = 23
+
+          path = next(
+              (
+                  p for p in (
+                      Path("android/app/build.gradle"),
+                      Path("android/app/build.gradle.kts"),
+                  )
+                  if p.exists()
+              ),
+              None,
+          )
+
+          if path is None:
+              raise SystemExit("android/app/build.gradle was not generated.")
+
+          kts = path.suffix == ".kts"
+          new_value = (
+              f"minSdk = {MIN_SDK}" if kts else f"minSdkVersion {MIN_SDK}"
+          )
+
+          s = path.read_text(encoding="utf-8")
+
+          pattern = re.compile(
+              r"(?m)^([ \t]*)minSdk(?:Version)?(?:[ \t]*=[ \t]*|[ \t]+)\S.*$"
+          )
+
+          if pattern.search(s):
+              s = pattern.sub(lambda m: m.group(1) + new_value, s)
+          else:
+              default_config = re.search(
+                  r"(?m)^([ \t]*)defaultConfig\s*\{[ \t]*$",
+                  s,
+              )
+              if not default_config:
+                  raise SystemExit("Could not locate defaultConfig { block.")
+              indent = default_config.group(1) + "    "
+              s = (
+                  s[:default_config.end()]
+                  + "\n" + indent + new_value
+                  + s[default_config.end():]
+              )
+
+          path.write_text(s, encoding="utf-8")
+
+          check = path.read_text(encoding="utf-8")
+          if not re.search(
+              rf"(?m)^[ \t]*minSdk(?:Version)?(?:[ \t]*=[ \t]*|[ \t]+){MIN_SDK}[ \t]*$",
+              check,
+          ):
+              raise SystemExit("minSdk was not set to 23.")
+
+          print(f"minSdk forced to {MIN_SDK} in {path}.")
+          PY
+
+      # ------------------------------------------------------------
       # 8. INSTALL JAVA
       # ------------------------------------------------------------
       - name: Install Java 17
