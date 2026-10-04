@@ -1122,4 +1122,3 @@ def mobile_clear_test_data():
     except ValueError as e:
         return jsonify({'error':str(e)}),400
     return jsonify({'ok':True,'counts':counts}),
-        "journey": _journey_json(s)
