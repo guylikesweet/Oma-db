@@ -458,8 +458,7 @@ _SYNC_MODELS = (
     Sale,
     SaleItem,
     Shipping,
-    StockLog,
-)
+    StockLog,\n    SaleJourneyEvent,\n
 
 
 def _json_value(value):
