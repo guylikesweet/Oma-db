@@ -26,7 +26,7 @@ from app.models import (
     CourierRate, MonthlyShippingRate, MonthlyAirRate, StockLog, MobileOperation, MobileChange, AuditLog, PushDevice,
 )
 from app.services.sales import create_sale, SaleValidationError, shipping_cost_for_items
-from app.services.rates import get_rate_for_month, get_volume_rate, get_rate_per_kg
+from app.services.rates import get_rate_for_month, get_volume_rate, get_rate_per_kg, RateMissingError
 from app.services.delivery import check_consolidation, find_consolidation_groups
 from app.services.audit import record_audit
 from app.services.push_notifications import queue_batch_arrival, flush_outbox
@@ -1462,7 +1462,7 @@ def mobile_update_user(user_id):
             details={"source": "api"},
             user=g.api_user,
         )
-        return _mobile_finish(op,'update_user',200,{'id':u.id,'username':u.username,'role':u.role,'is_admin':u.is_admin,'is_primary_admin':u.is_primary_admin,'created_at':u.created_at.isoformat() if u.created_at else None})
+        return _mobile_finish(op,'update_user',200,{'id':u.id,'username':u.username,'role':u.role,'is_admin':u.is_admin,'is_primary_admin':u.is_primary_admin,'is_active':u.is_active,'created_at':u.created_at.isoformat() if u.created_at else None})
     except ValueError as e:db.session.rollback();return jsonify({'error':str(e)}),400
     except PermissionError as e:db.session.rollback();return jsonify({'error':str(e)}),403
 
