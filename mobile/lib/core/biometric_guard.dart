@@ -18,7 +18,10 @@ class BiometricGuard {
   static Future<bool> canUseBiometrics() async {
     if (kIsWeb) return false;
     try {
-      return await _auth.canCheckBiometrics && await _auth.isDeviceSupported();
+      final canCheck = await _auth.canCheckBiometrics;
+      if (!canCheck || !await _auth.isDeviceSupported()) return false;
+      final enrolled = await _auth.getAvailableBiometrics();
+      return enrolled.isNotEmpty;
     } catch (_) {
       return false;
     }
@@ -93,6 +96,8 @@ class BiometricGuard {
       final supported = await _auth.isDeviceSupported();
 
       if (!canCheck || !supported) return passwordFallback();
+      final enrolled = await _auth.getAvailableBiometrics();
+      if (enrolled.isEmpty) return passwordFallback();
 
       final authenticated = await _auth.authenticate(
         localizedReason: reason,
@@ -107,8 +112,10 @@ class BiometricGuard {
       if (authenticated) return true;
       return passwordFallback();
     } catch (e) {
-      // Hardware/OS biometric errors must never lock the user out.
-      return passwordFallback();
+      if (context.mounted) {
+        _show(context, 'Biometric verification could not be started. Check your phone biometric settings.');
+      }
+      return false;
     }
   }
 
