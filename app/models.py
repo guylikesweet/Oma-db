@@ -364,6 +364,30 @@ class Shipping(db.Model):
 
 
 # ---------------------------------------------------------------------------
+# AUDIT_LOG — Stage 3 immutable actor/action history.
+# ---------------------------------------------------------------------------
+class AuditLog(db.Model):
+    __tablename__ = "audit_log"
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True)
+    username = db.Column(db.String(80), nullable=True)
+    action = db.Column(db.String(120), nullable=False)
+    target_type = db.Column(db.String(80), nullable=True)
+    target_id = db.Column(db.String(80), nullable=True)
+    outcome = db.Column(db.String(30), nullable=False, default="success")
+    details_json = db.Column(db.Text, nullable=True)
+    ip_address = db.Column(db.String(64), nullable=True)
+    user_agent = db.Column(db.String(500), nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+
+    user = db.relationship("User", backref=db.backref("audit_logs", lazy=True))
+
+    def __repr__(self):
+        return f"<AuditLog {self.action} by {self.username or self.user_id}>"
+
+
+# ---------------------------------------------------------------------------
 # 7. STOCK_LOG
 # ---------------------------------------------------------------------------
 class StockLog(db.Model):
