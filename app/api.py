@@ -30,6 +30,7 @@ from app.services.rates import get_rate_for_month, get_volume_rate, get_rate_per
 from app.services.delivery import check_consolidation, find_consolidation_groups
 from app.services.audit import record_audit
 from app.services.push_notifications import queue_batch_arrival, flush_outbox
+from app.services.dashboard import get_kpis, get_sales_last_30_days
 
 api_bp = Blueprint("api", __name__, url_prefix="/api")
 
@@ -404,6 +405,24 @@ def sync():
             }
             for row in rows
         ],
+    })
+
+
+@api_bp.route("/v1/dashboard", methods=("GET",))
+@require_api_token
+def mobile_dashboard():
+    kpis = get_kpis()
+    labels, values = get_sales_last_30_days()
+    return jsonify({
+        "sales_today": float(kpis["sales_today"]),
+        "profit_today": float(kpis["profit_today"]),
+        "pending_shipments": kpis["pending_shipments"],
+        "shipping_owed": float(kpis["shipping_owed"]),
+        "low_stock_count": kpis["low_stock_count"],
+        "batches_in_transit": kpis["batches_in_transit"],
+        "sync_exceptions": kpis["sync_exceptions"],
+        "journey_counts": kpis["journey_counts"],
+        "sales_last_30_days": {"labels": labels, "values": values},
     })
 
 
