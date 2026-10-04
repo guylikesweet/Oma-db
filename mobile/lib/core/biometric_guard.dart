@@ -21,8 +21,6 @@ class BiometricGuard {
   }) async {
     // Web/classic authentication is password-based. Mobile gets the OS
     // biometric first, with an explicit password fallback for hardware issues.
-    if (kIsWeb) return passwordFallback();
-
     Future<bool> passwordFallback() async {
       final verifier = passwordVerifier;
       if (verifier == null) return false;
@@ -59,6 +57,8 @@ class BiometricGuard {
         controller.dispose();
       }
     }
+
+    if (kIsWeb) return passwordFallback();
 
     try {
       final canCheck = await _auth.canCheckBiometrics;
