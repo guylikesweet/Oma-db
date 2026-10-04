@@ -41,6 +41,24 @@ class ApiClient {
     return _storage.delete(key: 'api_token');
   }
 
+  Future<String?> biometricCredential() {
+    return _storage.read(key: 'biometric_credential');
+  }
+
+  Future<String?> biometricUsername() {
+    return _storage.read(key: 'biometric_username');
+  }
+
+  Future<void> saveBiometricCredential(String username, String credential) async {
+    await _storage.write(key: 'biometric_username', value: username);
+    await _storage.write(key: 'biometric_credential', value: credential);
+  }
+
+  Future<void> clearBiometricCredential() async {
+    await _storage.delete(key: 'biometric_username');
+    await _storage.delete(key: 'biometric_credential');
+  }
+
   Future<dynamic> _request(
     String method,
     String path, {
@@ -238,6 +256,20 @@ class ApiClient {
     return _map(
       'GET',
       '/v1/auth/me',
+    );
+  }
+
+  Future<Map<String, dynamic>> biometricLogin(
+    String username,
+    String credential,
+  ) {
+    return _map(
+      'POST',
+      '/v1/auth/biometric-login',
+      body: {
+        'username': username,
+        'credential': credential,
+      },
     );
   }
 
