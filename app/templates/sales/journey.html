@@ -3,7 +3,6 @@
 {% block body %}
 <div class="container" style="max-width:1000px; margin-top:20px;">
   <h2>Order Journey</h2>
-  <p class="text-muted">Tick orders and move them to an early stage in one go. Preordered goods: <b>Fulfilled</b>, <b>CN domestic transit</b>, <b>Consolidation</b>. Stocked goods: <b>Packing</b>. Later stages (cross-border, awaiting clearance, packing, out for delivery, delivered, returned) update by themselves from batches, shipping settlement and deliveries.</p>
 
   {% with messages = get_flashed_messages(with_categories=true) %}
     {% for category, message in messages %}
