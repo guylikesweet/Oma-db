@@ -380,6 +380,34 @@ def generate_label_pdf(delivery):
         pagesize=(width, height),
     )
 
+    # Full-page brand watermark behind every label element.
+    logo_bytes, _ = get_logo_bytes()
+    if logo_bytes:
+        try:
+            watermark_reader = ImageReader(io.BytesIO(logo_bytes))
+            iw, ih = watermark_reader.getSize()
+            max_w = width * 0.70
+            max_h = height * 0.70
+            scale = min(max_w / iw, max_h / ih)
+            watermark_w, watermark_h = iw * scale, ih * scale
+            pdf.saveState()
+            try:
+                pdf.setFillAlpha(0.25)
+            except Exception:
+                pass
+            pdf.drawImage(
+                watermark_reader,
+                (width - watermark_w) / 2,
+                (height - watermark_h) / 2,
+                width=watermark_w,
+                height=watermark_h,
+                preserveAspectRatio=True,
+                mask="auto",
+            )
+            pdf.restoreState()
+        except Exception:
+            pass
+
     # ============================================================
     # TEXT HELPERS
     # ============================================================
