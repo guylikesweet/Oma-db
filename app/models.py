@@ -117,6 +117,20 @@ class MonthlyShippingRate(db.Model):
 
 
 # ---------------------------------------------------------------------------
+# MONTHLY_AIR_RATES — monthly AIR shipping rate per volumetric kg.
+# ---------------------------------------------------------------------------
+class MonthlyAirRate(db.Model):
+    __tablename__ = "monthly_air_rates"
+
+    id = db.Column(db.Integer, primary_key=True)
+    month = db.Column(db.Date, nullable=False, unique=True)
+    rate_per_kg = db.Column(db.Numeric(12, 2), nullable=False)
+
+    def __repr__(self):
+        return f"<MonthlyAirRate {self.month.strftime('%Y-%m')}: {self.rate_per_kg}>"
+
+
+# ---------------------------------------------------------------------------
 # SHIPMENT_BATCHES — Stage 6. An inbound consignment from the supplier
 # containing many customers' sales, arriving together (60-70 day window).
 # ---------------------------------------------------------------------------
@@ -130,8 +144,13 @@ class ShipmentBatch(db.Model):
     # no new code sets a whole batch to this status.
     STATUS_SETTLED = "Payment Settled - Ready for Delivery"
 
+    MODE_AIR = "air"
+    MODE_SEA = "sea"
+    MODES = (MODE_AIR, MODE_SEA)
+
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(255), nullable=False)
+    transport_mode = db.Column(db.String(10), nullable=False, default=MODE_SEA, server_default=MODE_SEA)
     status = db.Column(db.String(50), default=STATUS_IN_TRANSIT)
     departed_at = db.Column(db.DateTime)
     arrived_at = db.Column(db.DateTime)
@@ -156,6 +175,7 @@ class Delivery(db.Model):
     STATUS_PENDING = "Pending"
     STATUS_OUT_FOR_DELIVERY = "Out for Delivery"
     STATUS_DELIVERED = "Delivered"
+    STATUS_RETURNED = "Returned"
 
     id = db.Column(db.Integer, primary_key=True)
     method = db.Column(db.String(100))  # e.g. Dispatch Rider, Self Pickup, Interstate Courier
@@ -175,6 +195,7 @@ class Delivery(db.Model):
     # the label's "date of shipment", not when the delivery record was created.
     shipped_at = db.Column(db.DateTime)
     delivered_at = db.Column(db.DateTime)
+    returned_at = db.Column(db.DateTime)
 
     # Captured fresh per label (not pulled from product records) — the actual
     # packed parcel may not match the original per-product dimensions.
@@ -200,6 +221,9 @@ class Sale(db.Model):
     # app/services/sales.py generate_order_id). Also doubles as the label's
     # tracking number.
     order_id = db.Column(db.String(20), unique=True, nullable=True)
+    # Random public identifier for customer tracking. Never expose the numeric
+    # sale id or use the customer-facing order id as the public URL key.
+    public_tracking_code = db.Column(db.String(32), unique=True, nullable=True, index=True)
     client_operation_id = db.Column(db.String(100), unique=True, nullable=True)
     sale_date = db.Column(db.Date, default=date.today)
     customer_name = db.Column(db.String(255))
@@ -216,7 +240,9 @@ class Sale(db.Model):
     sale_type = db.Column(db.String(20), default="preorder", nullable=False, server_default="preorder")
 
     subtotal_amount = db.Column(db.Numeric(12, 2), default=0.00)
-    estimated_shipping_cost = db.Column(db.Numeric(12, 2))  # Stage 8: deprecated, no longer calculated
+    estimated_shipping_cost = db.Column(db.Numeric(12, 2))  # Backward-compatible sea estimate
+    estimated_shipping_sea = db.Column(db.Numeric(12, 2))
+    estimated_shipping_air = db.Column(db.Numeric(12, 2))
     total_amount = db.Column(db.Numeric(12, 2), default=0.00)
     profit = db.Column(db.Numeric(12, 2))  # Stage 8: NULL until shipping is settled (see services/sales.py)
 
@@ -228,6 +254,7 @@ class Sale(db.Model):
     estimated_arrival_start = db.Column(db.Date)  # sale_date + 60 days
     estimated_arrival_end = db.Column(db.Date)    # sale_date + 70 days
     batch_id = db.Column(db.Integer, db.ForeignKey("shipment_batches.id"), nullable=True)
+    batch_assigned_at = db.Column(db.DateTime)
     # Locked in only when the batch arrives, using that month's MonthlyShippingRate.
     # Distinct from estimated_shipping_cost (the by-state estimate made at order time).
     actual_shipping_cost = db.Column(db.Numeric(12, 2))
@@ -242,6 +269,7 @@ class Sale(db.Model):
 
     items = db.relationship("SaleItem", backref="sale", lazy=True, cascade="all, delete-orphan")
     shipping = db.relationship("Shipping", backref="sale", uselist=False, cascade="all, delete-orphan")
+    journey_events = db.relationship("SaleJourneyEvent", backref="sale", lazy=True, cascade="all, delete-orphan", order_by="SaleJourneyEvent.created_at")
 
     @property
     def is_stock_sale(self):
@@ -254,6 +282,22 @@ class Sale(db.Model):
 
     def __repr__(self):
         return f"<Sale #{self.id} {self.customer_name}>"
+
+
+# ---------------------------------------------------------------------------
+# SALE_JOURNEY_EVENTS — audit trail for manually advanced early journey stages.
+# ---------------------------------------------------------------------------
+class SaleJourneyEvent(db.Model):
+    __tablename__ = "sale_journey_events"
+
+    id = db.Column(db.Integer, primary_key=True)
+    sale_id = db.Column(db.Integer, db.ForeignKey("sales.id", ondelete="CASCADE"), nullable=False, index=True)
+    stage = db.Column(db.String(30), nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True)
+
+    def __repr__(self):
+        return f"<SaleJourneyEvent sale={self.sale_id} stage={self.stage}>"
 
 
 # ---------------------------------------------------------------------------
@@ -408,6 +452,7 @@ _SYNC_MODELS = (
     Product,
     CourierRate,
     MonthlyShippingRate,
+    MonthlyAirRate,
     ShipmentBatch,
     Delivery,
     Sale,
