@@ -18,6 +18,7 @@ from app import db
 from app.models import ShipmentBatch, Sale
 from app.services.rates import get_volume_rate, get_rate_per_kg, RateMissingError
 from app.services.sales import shipping_cost_for_items
+from app.services.push_notifications import queue_batch_arrival, flush_outbox
 
 
 class BatchValidationError(Exception):
@@ -104,7 +105,13 @@ def mark_arrived(batch_id):
 
     batch.arrived_at = datetime.utcnow()
     batch.status = ShipmentBatch.STATUS_ARRIVED
+    queue_batch_arrival(batch)
     db.session.commit()
+    try:
+        flush_outbox()
+    except Exception:
+        # The outbox remains committed and can be delivered on a later flush.
+        pass
     return batch
 
 
