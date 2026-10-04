@@ -27,7 +27,7 @@ def login():
         password = request.form.get("password", "")
 
         user = User.query.filter_by(username=username).first()
-        if user and check_password_hash(user.password_hash, password):
+        if user and user.is_active and check_password_hash(user.password_hash, password):
             login_user(user)
             session.permanent = True
             session["last_activity"] = time.time()
@@ -98,6 +98,8 @@ def change_password():
             from app import db
             current_user.password_hash = generate_password_hash(new_password)
             current_user.api_token = secrets.token_hex(32)
+            current_user.biometric_credential_hash = None
+            current_user.api_last_activity_at = None
             record_audit(
                 "password.change",
                 target_type="user",
