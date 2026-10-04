@@ -195,6 +195,7 @@ def _delivery_json(d):
         "created_at": d.created_at.isoformat() if d.created_at else None,
         "shipped_at": d.shipped_at.isoformat() if d.shipped_at else None,
         "delivered_at": d.delivered_at.isoformat() if d.delivered_at else None,
+        "returned_at": d.returned_at.isoformat() if d.returned_at else None,
         "package_weight_kg": float(d.package_weight_kg) if d.package_weight_kg is not None else None,
         "package_dimensions": d.package_dimensions,
         "remarks": d.remarks,
