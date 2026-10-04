@@ -14,6 +14,7 @@ import 'data/sale_kind.dart';
 import 'data/sync_repository.dart';
 import 'core/theme_controller.dart';
 import 'core/biometric_guard.dart';
+import 'core/push_notifications.dart';
 import 'theme_settings_page.dart';
 import 'full_features.dart';
 import 'journey_widgets.dart';
@@ -239,10 +240,29 @@ class _SessionGateState extends State<SessionGate> {
           }
 
           return snapshot.data?.isNotEmpty == true
-              ? AppShell(api: api)
+              ? _AuthenticatedShell(api: api)
               : LoginPage(api: api);
         },
       );
+}
+
+class _AuthenticatedShell extends StatefulWidget {
+  const _AuthenticatedShell({required this.api});
+  final ApiClient api;
+
+  @override
+  State<_AuthenticatedShell> createState() => _AuthenticatedShellState();
+}
+
+class _AuthenticatedShellState extends State<_AuthenticatedShell> {
+  @override
+  void initState() {
+    super.initState();
+    OmaPushNotifications.initialize(widget.api);
+  }
+
+  @override
+  Widget build(BuildContext context) => AppShell(api: widget.api);
 }
 
 class LoginPage extends StatefulWidget {
