@@ -3605,11 +3605,11 @@ class _ChangePasswordDialogState
   String? error;
 
   Future<void> save() async {
-    if (next.text.length < 6 ||
+    if (next.text.length < 8 ||
         next.text != confirm.text) {
       setState(
         () => error =
-            'New passwords must match and be at least 6 characters.',
+            'New passwords must match and be at least 8 characters.',
       );
       return;
     }
@@ -3617,10 +3617,15 @@ class _ChangePasswordDialogState
     setState(() => busy = true);
 
     try {
-      await widget.api.changePassword(
+      final result = await widget.api.changePassword(
         current.text,
         next.text,
       );
+      final token = result['token']?.toString();
+      if (token != null && token.isNotEmpty) {
+        await widget.api.saveToken(token);
+      }
+      await widget.api.clearBiometricCredential();
 
       if (mounted) {
         Navigator.pop(context);
