@@ -9,7 +9,7 @@
     body { background:#f4f5f7; margin:0; }
     .home-wrap { max-width:900px; margin:0 auto; padding:40px 20px; }
     .home-title { font-size:24px; font-weight:700; margin-bottom:6px; }
-    .home-sub { color:#666; margin-bottom:28px; }
+    .home-sub { color:#666; margin-bottom:22px; }
     .action-grid {
       display:grid; grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)); gap:16px;
     }
@@ -32,7 +32,12 @@
 <body>
   <div class="home-wrap">
     <div class="home-title">Omabuy Admin</div>
-    <div class="home-sub">Pick what you need to do.</div>
+    <div class="kpi-grid" style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-bottom:22px;">
+      <div class="card" style="padding:16px;"><small>Sales today</small><div style="font-size:22px;font-weight:800;">NGN {{ '{:,.0f}'.format(kpis.sales_today|float) }}</div></div>
+      <div class="card" style="padding:16px;"><small>Profit today</small><div style="font-size:22px;font-weight:800;">NGN {{ '{:,.0f}'.format(kpis.profit_today|float) }}</div></div>
+      <div class="card" style="padding:16px;"><small>Shipping owed</small><div style="font-size:22px;font-weight:800;">NGN {{ '{:,.0f}'.format(kpis.shipping_owed|float) }}</div></div>
+      <div class="card" style="padding:16px;"><small>Low stock</small><div style="font-size:22px;font-weight:800;">{{ kpis.low_stock_count }}</div></div>
+    </div>
 
     <div class="action-grid">
       <a class="action-btn primary" href="{{ url_for('sales.new_sale') }}">
@@ -74,3 +79,8 @@
   <script src="{{ url_for('static', filename='oma-theme.js') }}"></script>
 </body>
 </html>
+
+<style>
+@media(max-width:900px){.kpi-grid{grid-template-columns:repeat(2,minmax(0,1fr))!important}}
+@media(max-width:520px){.kpi-grid{grid-template-columns:1fr!important}.home-wrap{padding:24px 10px}}
+</style>
