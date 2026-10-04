@@ -15,7 +15,7 @@ from datetime import date, datetime
 from decimal import Decimal
 
 from app import db
-from app.models import ShipmentBatch, Sale
+from app.models import ShipmentBatch, Sale, SaleJourneyEvent
 from app.services.rates import get_volume_rate, get_rate_per_kg, RateMissingError
 from app.services.sales import shipping_cost_for_items
 from app.services.push_notifications import queue_batch_arrival, flush_outbox
@@ -158,6 +158,16 @@ def mark_unarrived(batch_id):
         sale.total_amount = sale.subtotal_amount or Decimal("0")
         sale.shipping_payment_settled = False
         sale.shipping_payment_settled_at = None
+        # The automatic arrival milestone must be reversible too. Recording
+        # the current batch mode as a fresh journey event makes the downgrade
+        # visible immediately on every client.
+        db.session.add(
+            SaleJourneyEvent(
+                sale_id=sale.id,
+                stage="cross_border",
+                user_id=None,
+            )
+        )
 
     previous_arrival = batch.arrived_at
     batch.arrived_at = None
