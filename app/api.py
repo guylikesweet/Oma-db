@@ -23,11 +23,12 @@ from app.services.journey import journey_public, manual_stages_for, stage_label,
 from app.access import require_admin_api
 from app.models import (
     User, Product, Sale, SaleItem, Shipping, Delivery, ShipmentBatch,
-    CourierRate, MonthlyShippingRate, MonthlyAirRate, StockLog, MobileOperation, MobileChange,
+    CourierRate, MonthlyShippingRate, MonthlyAirRate, StockLog, MobileOperation, MobileChange, AuditLog,
 )
 from app.services.sales import create_sale, SaleValidationError, shipping_cost_for_items
 from app.services.rates import get_rate_for_month, get_rate_per_kg
 from app.services.delivery import check_consolidation, find_consolidation_groups
+from app.services.audit import record_audit
 
 api_bp = Blueprint("api", __name__, url_prefix="/api")
 
@@ -59,6 +60,37 @@ def _ensure_api_token(user):
     return user.api_token
 
 
+@api_bp.route("/v1/audit", methods=("GET",))
+@require_api_token
+def mobile_audit_log():
+    if not g.api_user.is_admin:
+        return jsonify({"error": "Admin access required."}), 403
+
+    limit = min(max(int(request.args.get("limit", 100)), 1), 500)
+    query = AuditLog.query.order_by(AuditLog.created_at.desc())
+
+    action = (request.args.get("action") or "").strip()
+    if action:
+        query = query.filter(AuditLog.action == action)
+
+    rows = query.limit(limit).all()
+    return jsonify([
+        {
+            "id": row.id,
+            "created_at": row.created_at.isoformat() if row.created_at else None,
+            "user_id": row.user_id,
+            "username": row.username,
+            "action": row.action,
+            "target_type": row.target_type,
+            "target_id": row.target_id,
+            "outcome": row.outcome,
+            "details": json.loads(row.details_json) if row.details_json else None,
+            "ip_address": row.ip_address,
+        }
+        for row in rows
+    ])
+
+
 @api_bp.route("/v1/auth/login", methods=("POST",))
 def api_login():
     data = request.get_json(silent=True) or {}
@@ -73,6 +105,14 @@ def api_login():
         return jsonify({"error": "Invalid username or password."}), 401
 
     token = _ensure_api_token(user)
+    record_audit(
+        "login",
+        target_type="user",
+        target_id=user.id,
+        details={"source": "api"},
+        user=user,
+    )
+    db.session.commit()
     return jsonify({
         "token": token,
         "user": {
