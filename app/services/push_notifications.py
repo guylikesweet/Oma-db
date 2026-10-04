@@ -107,7 +107,7 @@ def flush_outbox(limit=100):
 
         data = {str(k): str(v) for k, v in (row.data_json or {}).items()}
         sound = data.get("sound", "scanner_beep")
-        channel_id = "oma_arrival_air" if sound == "airport_arrival" else "oma_arrival_sea" if sound == "ship_horn" else "oma_scanner"
+        channel_id = "oma_arrival_air_v2" if sound == "airport_arrival" else "oma_arrival_sea_v2" if sound == "ship_horn" else "oma_scanner_v2"
 
         successful = 0
         failures = 0
