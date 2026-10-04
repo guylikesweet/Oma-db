@@ -11,13 +11,15 @@
   {% endwith %}
 
   <form method="post" class="form">
-    <div class="form-group">
-      <label>Quantity change</label>
-      <input type="number" name="change_qty" class="form-control" placeholder="e.g. 50 to add, -3 to remove" required>
-    </div>
-    <div class="form-group">
-      <label>Reason</label>
-      <input type="text" name="reason" class="form-control" placeholder="e.g. New Stock, Damaged, Correction">
+    <div class="row">
+      <div class="col-md-5 form-group">
+        <label>Quantity change</label>
+        <input type="number" name="change_qty" class="form-control" placeholder="e.g. 50 to add, -3 to remove" required>
+      </div>
+      <div class="col-md-7 form-group">
+        <label>Reason</label>
+        <input type="text" name="reason" class="form-control" placeholder="e.g. New Stock, Damaged, Correction">
+      </div>
     </div>
     <button type="submit" class="btn btn-primary">Save Adjustment</button>
     <a href="{{ url_for('product.index_view') }}" class="btn btn-default">Cancel</a>
