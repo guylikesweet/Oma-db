@@ -177,7 +177,31 @@ class SaleView(SecureModelView):
 
     can_create = False
     can_edit = False
-    can_delete = False
+    can_delete = True
+
+    def on_model_delete(self, model):
+        if model.delivery_id:
+            raise Exception("Remove this sale from its delivery before deleting it.")
+        if model.shipping_payment_settled:
+            raise Exception("A sale with settled shipping cannot be deleted.")
+        if model.is_stock_sale:
+            for item in model.items:
+                product = Product.query.get(item.product_id)
+                if product:
+                    product.stock += item.qty
+                    db.session.add(
+                        StockLog(
+                            product_id=product.id,
+                            change_qty=item.qty,
+                            reason=f"Deleted sale #{model.id}",
+                        )
+                    )
+        record_audit(
+            "sale.delete",
+            target_type="sale",
+            target_id=model.id,
+            details={"order_id": model.order_id, "sale_type": model.sale_type},
+        )
 
     def _sale_link_formatter(view, context, model, name):
         url = url_for("sales.sale_detail", sale_id=model.id)
@@ -260,7 +284,20 @@ class ShipmentBatchView(SecureModelView):
     form_columns = ("name", "transport_mode", "notes")
     form_args = {"transport_mode": {"choices": [("air", "Air"), ("sea", "Sea")]}}
     can_edit = False
-    can_delete = False
+    can_delete = True
+
+    def on_model_delete(self, model):
+        sale_ids = [sale.id for sale in model.sales]
+        for sale in model.sales:
+            sale.batch_id = None
+            sale.batch_assigned_at = None
+        record_audit(
+            "batch.delete",
+            target_type="shipment_batch",
+            target_id=model.id,
+            details={"name": model.name, "sale_ids": sale_ids},
+        )
+
 
     def _batch_link_formatter(view, context, model, name):
         url = url_for("batches.batch_detail", batch_id=model.id)
