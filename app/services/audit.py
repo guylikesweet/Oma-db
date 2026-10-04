@@ -1,6 +1,6 @@
 import json
 
-from flask import has_request_context, request
+from flask import has_request_context, request, g
 from flask_login import current_user
 
 from app import db
@@ -12,6 +12,7 @@ _CHANGE_NOTIFICATIONS = {
     "sale.status": ("Sale updated", "A sale status was changed."),
     "sale.payment_status": ("Sale payment updated", "A sale payment status was changed."),
     "sale.delete": ("Sale deleted", "A sale was deleted."),
+    "shipping.settle": ("Shipping payment settled", "A sale's shipping payment was settled."),
     "stock.adjust": ("Stock updated", "Stock was manually adjusted."),
     "batch.create": ("Shipment batch created", "A new shipment batch was created."),
     "batch.add_sale": ("Sale added to shipment", "A sale was added to a shipment batch."),
@@ -44,8 +45,11 @@ def record_audit(
     rolls back with the business operation it describes.
     """
     actor = user
-    if actor is None and has_request_context() and current_user.is_authenticated:
-        actor = current_user
+    if actor is None and has_request_context():
+        if current_user.is_authenticated:
+            actor = current_user
+        else:
+            actor = getattr(g, "api_user", None)
 
     details_json = None
     if details is not None:
