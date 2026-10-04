@@ -26,16 +26,16 @@ from app import db
 from app.models import Delivery, SaleJourneyEvent, ShipmentBatch
 
 STAGE_INFO = {
-    "confirmed": ("Order confirmed", "Your order has been recorded."),
-    "fulfilled": ("Fulfilled", "Your order is packed and ready to be transported to the shipping warehouse."),
-    "cn_transit": ("CN domestic transit", "Your goods are on the move to the shipping warehouse."),
-    "consolidation": ("Consolidation", "Your order is being packed to be shipped."),
-    "cross_border": ("Cross-border transit", "Your goods are on their way to Nigeria."),
-    "awaiting_clearance": ("Awaiting clearance", "Your goods have arrived in the country and are pending shipping cost."),
-    "packing": ("Packing", "Your order is being prepared for delivery."),
-    "ng_transit": ("NG domestic transit", "Your order is out for delivery."),
-    "delivered": ("Delivered", "Your order has been delivered and signed for."),
-    "returned": ("Returned", "Your order was rejected and has been returned."),
+    "confirmed": ("Confirmed", "Your order has been recorded.", "Your order is confirmed."),
+    "fulfilled": ("Fulfilled", "Your order is packed and ready to be transported to the shipping warehouse.", "Your order is fulfilled and ready for transport."),
+    "cn_transit": ("CN domestic transit", "Your goods are on the move to the shipping warehouse.", "Your order is in transit through China."),
+    "consolidation": ("Consolidation", "Your order is being packed to be shipped.", "Your order is being consolidated for international shipping."),
+    "cross_border": ("Cross-border transit", "Your goods are on their way to Nigeria.", "Your order is in cross-border transit."),
+    "awaiting_clearance": ("Awaiting customs clearance", "Your goods have arrived in the country and are pending shipping cost.", "Your order is awaiting customs clearance."),
+    "packing": ("Packing", "Your order is being prepared for delivery.", "Your order is being prepared for delivery."),
+    "ng_transit": ("Out for delivery", "Your order is out for delivery.", "Your order is out for delivery."),
+    "delivered": ("Delivered", "Your order has been delivered and signed for.", "Your order has been delivered."),
+    "returned": ("Returned", "Your order was rejected and has been returned.", "Your order has been returned."),
 }
 
 PREORDER_FLOW = [
@@ -127,12 +127,12 @@ def journey_for(sale):
     mode = sale.batch.transport_mode if (sale.batch is not None and not sale.is_stock_sale) else None
     steps = []
     for index, key in enumerate(flow):
-        label, description = STAGE_INFO[key]
+        label, description, headline = STAGE_INFO[key]
         if key == "cross_border":
             if mode == ShipmentBatch.MODE_AIR:
-                label, description = "Cross-border transit (air)", "Your goods are on their way to Nigeria by air."
+                label, description, headline = "Cross-border transit (air)", "Your goods are on their way to Nigeria by air.", "Your order is in cross-border transit by air."
             elif mode == ShipmentBatch.MODE_SEA:
-                label, description = "Cross-border transit (sea)", "Your goods are on their way to Nigeria by sea."
+                label, description, headline = "Cross-border transit (sea)", "Your goods are on their way to Nigeria by sea.", "Your order is in cross-border transit by sea."
         if index < current_index:
             state = "done"
         elif index == current_index:
@@ -144,6 +144,7 @@ def journey_for(sale):
             "key": key,
             "label": label,
             "description": description,
+            "headline": headline,
             "state": state,
             "at": at.isoformat() if at else None,
             "at_dt": at,
@@ -155,6 +156,7 @@ def journey_for(sale):
         "current": current["key"],
         "current_label": current["label"],
         "current_description": current["description"],
+        "current_headline": current["headline"],
         "mode": mode,
         "cancelled": sale.order_status == "Cancelled",
         "steps": steps,
