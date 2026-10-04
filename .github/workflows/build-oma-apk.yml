@@ -603,7 +603,7 @@ jobs:
               )
 
           project_id = config.get("project_info", {}).get("project_id")
-          if project_id != "omasales-5208":
+          if project_id != "omasales-5208e":
               raise SystemExit(
                   "google-services.json belongs to a different Firebase "
                   f"project. Expected omasales-5208, found {project_id!r}."
