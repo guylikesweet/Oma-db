@@ -629,66 +629,59 @@ class _DashboardPageState extends State<DashboardPage> {
 
   Future<void> load() async {
     try {
+      final remote = await widget.api.dashboard();
       final db = await widget.local.db;
-
       final products = await db.query('products');
       final sales = await db.query('sales');
-
       final low = products
           .where((x) => (x['stock'] as int? ?? 0) <= 5)
           .take(8)
           .toList();
 
       if (mounted) {
-        setState(
-          () => data = {
+        setState(() {
+          data = {
+            ...remote,
+            'low_stock_products': low,
+            'local_counts': {
+              'products': products.length,
+              'sales': sales.length,
+            },
+          };
+        });
+      }
+    } catch (_) {
+      final db = await widget.local.db;
+      final products = await db.query('products');
+      final sales = await db.query('sales');
+      final low = products
+          .where((x) => (x['stock'] as int? ?? 0) <= 5)
+          .take(8)
+          .toList();
+
+      if (mounted) {
+        setState(() {
+          data = {
             'sales_today': 0,
             'profit_today': 0,
             'pending_shipments': 0,
+            'shipping_owed': 0,
+            'batches_in_transit': 0,
+            'sync_exceptions': 0,
             'low_stock_count': low.length,
             'low_stock_products': low,
             'local_counts': {
               'products': products.length,
               'sales': sales.length,
             },
-          },
-        );
-      }
-    } catch (_) {
-      final db = await widget.local.db;
-
-      final p = await db.rawQuery(
-        'SELECT COUNT(*) c FROM products',
-      );
-
-      final s = await db.rawQuery(
-        'SELECT COUNT(*) c FROM sales',
-      );
-
-      if (mounted) {
-        setState(
-          () => data = {
-            'sales_today': 0,
-            'profit_today': 0,
-            'pending_shipments': 0,
-            'low_stock_count': 0,
-            'low_stock_products': const [],
-            'local_counts': {
-              'products': p.first['c'],
-              'sales': s.first['c'],
-            },
-          },
-        );
+          };
+        });
       }
     }
 
     pending = await widget.repo.pendingCount();
-
-    if (mounted) {
-      setState(() {});
-    }
+    if (mounted) setState(() {});
   }
-
   @override
   Widget build(BuildContext context) => RefreshIndicator(
         onRefresh: () async {
@@ -779,6 +772,24 @@ class _DashboardPageState extends State<DashboardPage> {
                             value:
                                 '${data!['low_stock_count'] ?? 0}',
                             icon: Icons.warning_amber,
+                          ),
+                          _Kpi(
+                            title: 'Shipping owed',
+                            value:
+                                '₦${data!['shipping_owed'] ?? 0}',
+                            icon: Icons.account_balance_wallet_outlined,
+                          ),
+                          _Kpi(
+                            title: 'Batches in transit',
+                            value:
+                                '${data!['batches_in_transit'] ?? 0}',
+                            icon: Icons.flight_takeoff,
+                          ),
+                          _Kpi(
+                            title: 'Sync exceptions',
+                            value:
+                                '${data!['sync_exceptions'] ?? 0}',
+                            icon: Icons.sync_problem,
                           ),
                         ],
                       )
