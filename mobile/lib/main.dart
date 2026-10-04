@@ -37,6 +37,7 @@ Future<void> _initializeOma() async {
   await LocalDatabase.instance.db;
   await OmaThemeController.initialize(LocalDatabase.instance);
   await OmaPushNotifications.requestInitialPermissions(LocalDatabase.instance);
+  await OmaPushNotifications.initialize(ApiClient());
 }
 
 void main() {
