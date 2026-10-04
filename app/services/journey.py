@@ -38,6 +38,8 @@ STAGE_INFO = {
     "returned": ("Returned", "Your order was rejected and has been returned.", "Your order has been returned."),
 }
 
+# Public ordered list of all journey stages, used by dashboard/reporting code.\nSTAGES = tuple(STAGE_INFO.keys())
+
 PREORDER_FLOW = [
     "confirmed", "fulfilled", "cn_transit", "consolidation", "cross_border",
     "awaiting_clearance", "packing", "ng_transit", "delivered",
