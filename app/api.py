@@ -26,9 +26,10 @@ from app.models import (
     CourierRate, MonthlyShippingRate, MonthlyAirRate, StockLog, MobileOperation, MobileChange, AuditLog,
 )
 from app.services.sales import create_sale, SaleValidationError, shipping_cost_for_items
-from app.services.rates import get_rate_for_month, get_rate_per_kg
+from app.services.rates import get_rate_for_month, get_volume_rate, get_rate_per_kg
 from app.services.delivery import check_consolidation, find_consolidation_groups
 from app.services.audit import record_audit
+from app.services.push_notifications import queue_batch_arrival, flush_outbox
 
 api_bp = Blueprint("api", __name__, url_prefix="/api")
 
@@ -279,6 +280,7 @@ def _batch_json(b):
         "id": b.id,
         "name": b.name,
         "status": b.status,
+        "transport_mode": b.transport_mode,
         "departed_at": b.departed_at.isoformat() if b.departed_at else None,
         "arrived_at": b.arrived_at.isoformat() if b.arrived_at else None,
         "payment_settled_at": b.payment_settled_at.isoformat() if b.payment_settled_at else None,
@@ -783,13 +785,24 @@ def mobile_batch_arrive(batch_id):
         b = ShipmentBatch.query.get_or_404(batch_id)
         if b.status != ShipmentBatch.STATUS_IN_TRANSIT: raise ValueError("Batch must be In Transit.")
         if not b.sales: raise ValueError("Batch has no sales assigned.")
-        rate = get_rate_for_month(date.today())
+        volume_rate = get_volume_rate(b.transport_mode, date.today())
         kg_rate = get_rate_per_kg()
         for s in b.sales:
-            s.actual_shipping_cost = shipping_cost_for_items(s.items, rate, kg_rate)
+            s.actual_shipping_cost = shipping_cost_for_items(
+                s.items, b.transport_mode, volume_rate, kg_rate
+            )
             s.total_amount = (s.subtotal_amount or Decimal("0")) + s.actual_shipping_cost
-        b.arrived_at = datetime.utcnow(); b.status = ShipmentBatch.STATUS_ARRIVED
-        return _mobile_finish(op, "batch_arrive", 200, _batch_json(b))
+        b.arrived_at = datetime.utcnow()
+        b.status = ShipmentBatch.STATUS_ARRIVED
+        queue_batch_arrival(b)
+        result = _mobile_finish(op, "batch_arrive", 200, _batch_json(b))
+        db.session.flush()
+        db.session.commit()
+        try:
+            flush_outbox()
+        except Exception:
+            pass
+        return result
     except ValueError as e:
         db.session.rollback(); return jsonify({"error": str(e)}), 400
 
