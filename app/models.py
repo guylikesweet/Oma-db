@@ -160,7 +160,15 @@ class ShipmentBatch(db.Model):
 
     sales = db.relationship("Sale", backref="batch", lazy=True)
 
-    @property\n    def is_air(self):\n        return self.transport_mode == self.MODE_AIR\n\n    @property\n    def mode_label(self):\n        return "Air" if self.is_air else "Sea"\n\n    def __repr__(self):
+    @property
+    def is_air(self):
+        return self.transport_mode == self.MODE_AIR
+
+    @property
+    def mode_label(self):
+        return "Air" if self.is_air else "Sea"
+
+    def __repr__(self):
         return f"<ShipmentBatch {self.name}: {self.status}>"
 
 
@@ -460,7 +468,7 @@ _SYNC_MODELS = (
     Shipping,
     StockLog,
     SaleJourneyEvent,
-
+)
 
 
 def _json_value(value):
