@@ -334,10 +334,87 @@ jobs:
           cat > android/app/src/main/kotlin/com/example/oma_mobile/MainActivity.kt <<'EOF'
           package com.example.oma_mobile
 
+          import android.app.NotificationChannel
+          import android.app.NotificationManager
+          import android.media.AudioAttributes
+          import android.os.Build
           import io.flutter.embedding.android.FlutterFragmentActivity
 
-          class MainActivity : FlutterFragmentActivity()
+          class MainActivity : FlutterFragmentActivity() {
+              override fun onCreate(savedInstanceState: android.os.Bundle?) {
+                  super.onCreate(savedInstanceState)
+
+                  if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                      val audio = AudioAttributes.Builder()
+                          .setUsage(AudioAttributes.USAGE_NOTIFICATION)
+                          .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                          .build()
+
+                      val channels = listOf(
+                          Triple("oma_scanner", "Oma scanner", R.raw.scanner_beep),
+                          Triple("oma_arrival_sea", "Sea shipment arrivals", R.raw.ship_horn),
+                          Triple("oma_arrival_air", "Air shipment arrivals", R.raw.airport_arrival),
+                      )
+
+                      val manager = getSystemService(NotificationManager::class.java)
+                      channels.forEach { (id, name, sound) ->
+                          val uri = android.net.Uri.parse(
+                              "android.resource://$packageName/${sound}"
+                          )
+                          val channel = NotificationChannel(
+                              id,
+                              name,
+                              NotificationManager.IMPORTANCE_HIGH
+                          ).apply {
+                              setSound(uri, audio)
+                              enableVibration(true)
+                          }
+                          manager.createNotificationChannel(channel)
+                      }
+                  }
+              }
+          }
           EOF
+
+          # --------------------------------------------------------
+          # Notification sounds + Android notification channels
+          # --------------------------------------------------------
+          python3 - <<'PY'
+          from pathlib import Path
+          import math
+          import struct
+          import wave
+
+          raw = Path("android/app/src/main/res/raw")
+          raw.mkdir(parents=True, exist_ok=True)
+
+          def tone(path, seconds, frequencies, amplitude=0.42, sample_rate=44100):
+              frames = int(seconds * sample_rate)
+              with wave.open(str(path), "wb") as out:
+                  out.setnchannels(1)
+                  out.setsampwidth(2)
+                  out.setframerate(sample_rate)
+                  data = bytearray()
+                  for n in range(frames):
+                      t = n / sample_rate
+                      env = min(1.0, n / (sample_rate * 0.012))
+                      env *= min(1.0, (frames - n) / (sample_rate * 0.035))
+                      value = sum(math.sin(2 * math.pi * f * t) for f in frequencies)
+                      value /= len(frequencies)
+                      data.extend(struct.pack("<h", int(32767 * amplitude * env * value)))
+                  out.writeframes(data)
+
+          # Short, clean scanner confirmation: two quick tones.
+          tone(raw / "scanner_beep.wav", 0.18, (1850, 2400), 0.34)
+
+          # Brief sea-shipment horn, deliberately short enough not to be annoying.
+          tone(raw / "ship_horn.wav", 0.72, (330, 392), 0.48)
+
+          # Brief airport-style arrival chime rather than a long notification.
+          tone(raw / "airport_arrival.wav", 0.62, (523, 659, 784), 0.36)
+
+          print("Notification sounds generated.")
+          PY
 
           # --------------------------------------------------------
           # Android permissions + app name
