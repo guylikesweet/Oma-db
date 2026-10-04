@@ -71,18 +71,18 @@ class SecureAdminIndexView(AdminIndexView):
 # USERS — never expose/edit password_hash directly; set via a plain field
 # ---------------------------------------------------------------------------
 class UserView(AdminOnlyModelView):
-    column_list = ("id", "username", "role", "is_primary_admin", "created_at")
-    column_labels = {"is_primary_admin": "Original admin"}
-    form_columns = ("username", "role")
+    column_list = ("id", "username", "role", "is_active", "is_primary_admin", "created_at")
+    column_labels = {"is_primary_admin": "Original admin", "is_active": "Active"}
+    form_columns = ("username", "role", "is_active")
     form_choices = {"role": [("admin", "Admin"), ("staff", "Staff")]}
 
     def on_model_change(self, form, model, is_created):
         # New users are created with a default password they must change on first login.
         if is_created:
             model.password_hash = generate_password_hash("changeme123")
-        if model.is_primary_admin and model.role != "admin":
-            flash("The original admin account cannot be demoted.", "error")
+        if model.is_primary_admin:
             model.role = "admin"
+            model.is_active = True
         super().on_model_change(form, model, is_created)
 
     def on_model_delete(self, model):
