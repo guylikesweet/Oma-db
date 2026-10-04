@@ -1655,13 +1655,13 @@ class SaleDetailPage extends StatefulWidget {
   final int saleId;
 
   @override
-  State<SaleDetailPage> createState() =>
-      _SaleDetailPageState();
+  State<SaleDetailPage> createState() => _SaleDetailPageState();
 }
 
 class _SaleDetailPageState extends State<SaleDetailPage> {
   Map<String, dynamic>? sale;
   List<Map<String, dynamic>> items = [];
+  bool loading = true;
 
   @override
   void initState() {
@@ -1670,36 +1670,37 @@ class _SaleDetailPageState extends State<SaleDetailPage> {
   }
 
   Future<void> load() async {
-    final db = await widget.local.db;
+    try {
+      final db = await widget.local.db;
+      final rows = await db.query(
+        'sales',
+        where: 'id=?',
+        whereArgs: [widget.saleId],
+        limit: 1,
+      );
+      if (rows.isEmpty) {
+        if (mounted) setState(() => loading = false);
+        return;
+      }
 
-    final rows = await db.query(
-      'sales',
-      where: 'id=?',
-      whereArgs: [widget.saleId],
-      limit: 1,
-    );
+      final its = await db.query(
+        'sale_items',
+        where: 'sale_id=?',
+        whereArgs: [widget.saleId],
+      );
 
-    if (rows.isEmpty) return;
-
-    final its = await db.query(
-      'sale_items',
-      where: 'sale_id=?',
-      whereArgs: [widget.saleId],
-    );
-
-    if (mounted) {
-      setState(() {
-        sale = rows.first;
-        items = its;
-      });
+      if (mounted) {
+        setState(() {
+          sale = rows.first;
+          items = its;
+          loading = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) setState(() => loading = false);
     }
   }
 
-  /// Generating a PDF invoice needs the live server (it's built from
-  /// current pricing/settings, not the offline copy), so this is a
-  /// plain network call rather than something queued through [repo]
-  /// for later sync — it will simply fail with a clear message if
-  /// there's no connection right now.
   Future<void> shareInvoice() => showInvoiceDialog(
         context,
         widget.api,
@@ -1716,27 +1717,18 @@ class _SaleDetailPageState extends State<SaleDetailPage> {
 
   Future<void> status(String value) async {
     try {
-      await widget.repo.queueSaleStatus(
-        widget.saleId,
-        value,
-      );
-
+      await widget.repo.queueSaleStatus(widget.saleId, value);
       await widget.repo.syncOnce();
       await load();
-
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Status queued: $value'),
-          ),
+          SnackBar(content: Text('Status updated: $value')),
         );
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(e.toString()),
-          ),
+          SnackBar(content: Text(e.toString())),
         );
       }
     }
@@ -1745,56 +1737,360 @@ class _SaleDetailPageState extends State<SaleDetailPage> {
   Future<void> payment(String value) async {
     try {
       if (kIsWeb) {
-        // No offline queue on web — update it for real, right now.
         await widget.api.updateSaleStatus(
           widget.saleId,
           {'payment_status': value},
         );
       } else {
-        await widget.repo.queuePaymentStatus(
-          widget.saleId,
-          value,
-        );
+        await widget.repo.queuePaymentStatus(widget.saleId, value);
         await widget.repo.syncOnce();
       }
-
       await load();
-
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Payment marked: $value'),
-          ),
+          SnackBar(content: Text('Payment marked: $value')),
         );
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(e.toString()),
-          ),
+          SnackBar(content: Text(e.toString())),
         );
       }
     }
   }
 
+  Color _statusColor(BuildContext context, String value) {
+    final lower = value.toLowerCase();
+    if (lower == 'paid' || lower == 'delivered') return Colors.green;
+    if (lower == 'cancelled' || lower == 'refunded') return Colors.red;
+    if (lower == 'shipped' || lower == 'packed') return Colors.orange;
+    return Theme.of(context).colorScheme.primary;
+  }
+
+  Widget _pill(BuildContext context, String value, {IconData? icon}) {
+    final color = _statusColor(context, value);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: color.withOpacity(.10),
+        borderRadius: BorderRadius.circular(30),
+        border: Border.all(color: color.withOpacity(.22)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (icon != null) ...[
+            Icon(icon, size: 15, color: color),
+            const SizedBox(width: 5),
+          ],
+          Text(
+            value,
+            style: TextStyle(
+              color: color,
+              fontWeight: FontWeight.w700,
+              fontSize: 12,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _sectionTitle(BuildContext context, String title, {String? action}) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              title,
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w800,
+                  ),
+            ),
+          ),
+          if (action != null)
+            Text(
+              action,
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _customerCard(BuildContext context, Map<String, dynamic> s) {
+    final name = '${s['customer_name'] ?? 'Customer'}';
+    final phone = '${s['customer_phone'] ?? ''}'.trim();
+    final address = '${s['customer_address'] ?? ''}'.trim();
+    final state = '${s['customer_state'] ?? ''}'.trim();
+    final city = '${s['customer_city'] ?? ''}'.trim();
+
+    return Card(
+      clipBehavior: Clip.antiAlias,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                CircleAvatar(
+                  radius: 24,
+                  child: Text(
+                    name.isEmpty ? '?' : name.substring(0, 1).toUpperCase(),
+                    style: const TextStyle(fontWeight: FontWeight.w800),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        name,
+                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                              fontWeight: FontWeight.w800,
+                            ),
+                      ),
+                      if (phone.isNotEmpty)
+                        Text(
+                          phone,
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            if (address.isNotEmpty || city.isNotEmpty || state.isNotEmpty) ...[
+              const Divider(height: 24),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Icon(Icons.location_on_outlined, size: 19),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      [address, city, state]
+                          .where((x) => x.isNotEmpty)
+                          .join(', '),
+                      style: Theme.of(context).textTheme.bodyMedium,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+            const SizedBox(height: 14),
+            Wrap(
+              spacing: 7,
+              runSpacing: 7,
+              children: [
+                _pill(
+                  context,
+                  '${s['order_status'] ?? 'New'}',
+                  icon: Icons.local_shipping_outlined,
+                ),
+                _pill(
+                  context,
+                  '${s['payment_status'] ?? 'Pending'}',
+                  icon: Icons.payments_outlined,
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _itemCard(BuildContext context, Map<String, dynamic> item) {
+    final qty = int.tryParse('${item['qty'] ?? 0}') ?? 0;
+    final price = double.tryParse('${item['unit_price'] ?? 0}') ?? 0;
+    final total = qty * price;
+    final variant = '${item['variant_note'] ?? ''}'.trim();
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.all(13),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surfaceContainerHighest.withOpacity(.45),
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 44,
+            height: 44,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(11),
+              color: Theme.of(context).colorScheme.primary.withOpacity(.09),
+            ),
+            child: Icon(
+              Icons.inventory_2_outlined,
+              color: Theme.of(context).colorScheme.primary,
+            ),
+          ),
+          const SizedBox(width: 11),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '${item['product_name'] ?? 'Product #${item['product_id']}'}',
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontWeight: FontWeight.w700),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  'Qty $qty × ₦${_money(price)}',
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+                if (variant.isNotEmpty)
+                  Text(
+                    variant,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          fontStyle: FontStyle.italic,
+                        ),
+                  ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          Text(
+            '₦${_money(total)}',
+            style: const TextStyle(fontWeight: FontWeight.w800),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _totalCard(BuildContext context, Map<String, dynamic> s) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    'Order total',
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                ),
+                Text(
+                  '₦${_money(s['total_amount'])}',
+                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                        fontWeight: FontWeight.w900,
+                      ),
+                ),
+              ],
+            ),
+            if (s['estimated_shipping_cost'] != null) ...[
+              const SizedBox(height: 7),
+              Align(
+                alignment: Alignment.centerRight,
+                child: Text(
+                  'Est. shipping: ₦${_money(s['estimated_shipping_cost'])}',
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _actionSection(BuildContext context, Map<String, dynamic> s) {
+    final currentOrder = '${s['order_status'] ?? 'New'}';
+    final currentPayment = '${s['payment_status'] ?? 'Pending'}';
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _sectionTitle(context, 'Order actions'),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            for (final x in const ['Packed', 'Shipped', 'Delivered', 'Cancelled'])
+              OutlinedButton(
+                onPressed: currentOrder == 'Cancelled' || currentOrder == x
+                    ? null
+                    : () => status(x),
+                child: Text(x),
+              ),
+          ],
+        ),
+        const SizedBox(height: 14),
+        _sectionTitle(context, 'Payment'),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            for (final x in const ['Paid', 'Pending', 'Refunded'])
+              OutlinedButton.icon(
+                onPressed: currentPayment == x ? null : () => payment(x),
+                icon: Icon(
+                  x == 'Paid'
+                      ? Icons.check_circle_outline
+                      : x == 'Refunded'
+                          ? Icons.undo_outlined
+                          : Icons.schedule_outlined,
+                  size: 17,
+                ),
+                label: Text(x),
+              ),
+          ],
+        ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    if (sale == null) {
+    if (loading) {
       return const Scaffold(
+        body: Center(child: BrandLoader(label: 'Loading sale…')),
+      );
+    }
+
+    if (sale == null) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('Sale')),
         body: Center(
-          child: BrandLoader(label: 'Loading…'),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.receipt_long_outlined, size: 48),
+              const SizedBox(height: 12),
+              const Text('Sale not found on this device.'),
+              const SizedBox(height: 12),
+              OutlinedButton(
+                onPressed: load,
+                child: const Text('Retry'),
+              ),
+            ],
+          ),
         ),
       );
     }
 
     final s = sale!;
+    final orderId = '${s['order_id'] ?? 'Sale #${widget.saleId}'}';
+    final saleDate = '${s['sale_date'] ?? ''}'.split('T').first;
 
     return Scaffold(
       appBar: AppBar(
-        title: Text('${s['order_id'] ?? 'Sale'}'),
+        title: Text(orderId),
         actions: [
           PopupMenuButton<String>(
+            tooltip: 'Invoice',
             onSelected: (value) {
               if (value == 'share_invoice') shareInvoice();
               if (value == 'print_invoice') printInvoice();
@@ -1815,129 +2111,93 @@ class _SaleDetailPageState extends State<SaleDetailPage> {
       body: RefreshIndicator(
         onRefresh: load,
         child: ListView(
-          padding: const EdgeInsets.all(16),
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: const EdgeInsets.fromLTRB(14, 8, 14, 28),
           children: [
             Card(
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment:
-                      CrossAxisAlignment.start,
+              clipBehavior: Clip.antiAlias,
+              child: Container(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [
+                      Theme.of(context).colorScheme.primary.withOpacity(.12),
+                      Theme.of(context).colorScheme.surface,
+                    ],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                ),
+                padding: const EdgeInsets.all(17),
+                child: Row(
                   children: [
-                    Text(
-                      '${s['customer_name']}',
-                      style: Theme.of(context)
-                          .textTheme
-                          .titleLarge,
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'SALE',
+                            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                                  letterSpacing: 1.4,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            orderId,
+                            style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                                  fontWeight: FontWeight.w900,
+                                ),
+                          ),
+                          if (saleDate.isNotEmpty)
+                            Text(
+                              saleDate,
+                              style: Theme.of(context).textTheme.bodySmall,
+                            ),
+                        ],
+                      ),
                     ),
-                    Text('${s['customer_phone'] ?? ''}'),
-                    Text('${s['customer_address'] ?? ''}'),
-                    Text('${s['customer_state'] ?? ''}'),
-                    const SizedBox(height: 10),
-                    Wrap(
-                      spacing: 8,
-                      children: [
-                        Chip(
-                          label: Text(
-                            '${s['order_status']}',
-                          ),
-                        ),
-                        Chip(
-                          label: Text(
-                            '${s['payment_status']}',
-                          ),
-                        ),
-                      ],
+                    Icon(
+                      Icons.receipt_long_rounded,
+                      size: 42,
+                      color: Theme.of(context).colorScheme.primary,
                     ),
                   ],
                 ),
               ),
             ),
             const SizedBox(height: 12),
+            _customerCard(context, s),
+            const SizedBox(height: 16),
+            _sectionTitle(context, 'Order journey'),
             JourneyCard(api: widget.api, saleId: widget.saleId),
-            const SizedBox(height: 12),
-            Text(
-              'Items',
-              style:
-                  Theme.of(context).textTheme.titleLarge,
-            ),
-            ...items.map(
-              (i) => ListTile(
-                contentPadding: EdgeInsets.zero,
-                title: Text(
-                  '${i['product_name'] ?? 'Product #${i['product_id']}'}',
-                ),
-                subtitle: Text(
-                  'Qty ${i['qty']} • '
-                  '₦${_money(i['unit_price'])}',
-                ),
-                trailing: Text(
-                  i['variant_note']?.toString() ?? '',
-                ),
-              ),
-            ),
-            Card(
-              child: ListTile(
-                title: const Text('Total'),
-                trailing: Text(
-                  '₦${_money(s['total_amount'])}',
-                  style: const TextStyle(
-                    fontWeight: FontWeight.bold,
+            const SizedBox(height: 16),
+            _sectionTitle(context, 'Items', action: '${items.length} line${items.length == 1 ? '' : 's'}'),
+            if (items.isEmpty)
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(18),
+                  child: Text(
+                    'No items found for this sale.',
+                    style: Theme.of(context).textTheme.bodyMedium,
                   ),
                 ),
+              )
+            else
+              ...items.map((item) => _itemCard(context, item)),
+            const SizedBox(height: 8),
+            _totalCard(context, s),
+            if ('${s['notes'] ?? ''}'.trim().isNotEmpty) ...[
+              const SizedBox(height: 16),
+              _sectionTitle(context, 'Order note'),
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(15),
+                  child: Text('${s['notes']}'),
+                ),
               ),
-            ),
-            const SizedBox(height: 12),
-            Text(
-              'Update status',
-              style:
-                  Theme.of(context).textTheme.titleMedium,
-            ),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                'Packed',
-                'Shipped',
-                'Delivered',
-                'Cancelled',
-              ]
-                  .map(
-                    (x) => OutlinedButton(
-                      onPressed:
-                          s['order_status'] == 'Cancelled' ||
-                                  s['order_status'] == x
-                              ? null
-                              : () => status(x),
-                      child: Text(x),
-                    ),
-                  )
-                  .toList(),
-            ),
-            const SizedBox(height: 16),
-            Text(
-              'Payment status',
-              style:
-                  Theme.of(context).textTheme.titleMedium,
-            ),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                'Paid',
-                'Pending',
-                'Refunded',
-              ]
-                  .map(
-                    (x) => OutlinedButton(
-                      onPressed: s['payment_status'] == x
-                          ? null
-                          : () => payment(x),
-                      child: Text(x),
-                    ),
-                  )
-                  .toList(),
-            ),
+            ],
+            const SizedBox(height: 18),
+            _actionSection(context, s),
           ],
         ),
       ),
