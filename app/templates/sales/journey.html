@@ -14,13 +14,17 @@
     <div class="form-inline" style="margin-bottom:12px;">
       <select name="stage" class="form-control" required>
         <option value="" disabled selected>Move ticked orders to…</option>
-        <optgroup label="Preordered goods">
+        <optgroup label="Order milestones">
+          <option value="confirmed">Confirmed</option>
           <option value="fulfilled">Fulfilled</option>
           <option value="cn_transit">CN domestic transit</option>
           <option value="consolidation">Consolidation</option>
-        </optgroup>
-        <optgroup label="Stocked goods">
+          <option value="cross_border">On sea / On air (based on batch)</option>
+          <option value="awaiting_clearance">Awaiting customs clearance</option>
           <option value="packing">Packing</option>
+          <option value="ng_transit">Out for delivery</option>
+          <option value="delivered">Delivered</option>
+          <option value="returned">Returned</option>
         </optgroup>
       </select>
       <button type="submit" class="btn btn-primary">Move</button>
@@ -35,7 +39,7 @@
           <td><a href="{{ url_for('sales.sale_detail', sale_id=row.sale.id) }}">{{ row.sale.order_id }}</a></td>
           <td>{{ 'Stocked' if row.sale.is_stock_sale else 'Preorder' }}</td>
           <td>{{ row.sale.customer_name }}</td>
-          <td>{{ row.stage }}{% if not row.movable %} <small class="text-muted">(updates by itself now)</small>{% endif %}</td>
+          <td>{{ row.stage }}</td>
         </tr>
         {% else %}
         <tr><td colspan="5">No orders in progress.</td></tr>
