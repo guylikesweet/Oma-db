@@ -514,6 +514,23 @@ jobs:
               'android:label="oma_mobile"',
               'android:label="OmaSales Mobile"',
           )
+
+          # This is non-security branding metadata. It does NOT change the
+          # applicationId or signing configuration, and therefore does not
+          # affect update compatibility. Google Play uses the developer name
+          # configured in Play Console; this metadata also makes the intended
+          # developer identity explicit to APK/AAB inspectors.
+          if "com.oma.developer_name" not in s:
+              s = s.replace(
+                  "</application>",
+                  (
+                      '        <meta-data '
+                      'android:name="com.oma.developer_name" '
+                      'android:value="Oma Technologies" />\n'
+                      "    </application>"
+                  ),
+                  1,
+              )
           s = s.replace(
               'android:label="mobile"',
               'android:label="OmaSales Mobile"',
