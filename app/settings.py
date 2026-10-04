@@ -7,6 +7,8 @@ from app.access import admin_required
 from app.services.settings import get_settings, update_settings
 from app.services.labels import STATIC_LOGO_PATH
 from app.services.audit import record_audit
+from flask_login import current_user
+from werkzeug.security import check_password_hash
 import os
 
 settings_bp = Blueprint("settings", __name__, url_prefix="/settings", template_folder="templates/settings")
@@ -18,6 +20,10 @@ def edit():
     settings = get_settings()
 
     if request.method == "POST":
+        password = request.form.get("current_password", "")
+        if not check_password_hash(current_user.password_hash, password):
+            flash("Password verification failed. Settings were not changed.", "error")
+            return redirect(url_for("settings.edit"))
         try:
             width = int(request.form.get("label_width_mm", "").strip())
             height = int(request.form.get("label_height_mm", "").strip())
