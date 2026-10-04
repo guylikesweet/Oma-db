@@ -566,11 +566,60 @@ class _AppShellState extends State<AppShell> {
       ),
     ];
 
+    final wide = MediaQuery.sizeOf(context).width >= 1000;
+    final content = IndexedStack(
+      index: tab,
+      children: pages,
+    );
+
+    if (wide) {
+      return Scaffold(
+        body: Row(
+          children: [
+            NavigationRail(
+              selectedIndex: tab,
+              onDestinationSelected: (i) => setState(() => tab = i),
+              extended: MediaQuery.sizeOf(context).width >= 1200,
+              labelType: MediaQuery.sizeOf(context).width >= 1200
+                  ? NavigationRailLabelType.none
+                  : NavigationRailLabelType.all,
+              destinations: const [
+                NavigationRailDestination(
+                  icon: Icon(Icons.dashboard_outlined),
+                  selectedIcon: Icon(Icons.dashboard),
+                  label: Text('Home'),
+                ),
+                NavigationRailDestination(
+                  icon: Icon(Icons.receipt_long_outlined),
+                  selectedIcon: Icon(Icons.receipt_long),
+                  label: Text('Sales'),
+                ),
+                NavigationRailDestination(
+                  icon: Icon(Icons.inventory_2_outlined),
+                  selectedIcon: Icon(Icons.inventory_2),
+                  label: Text('Products'),
+                ),
+                NavigationRailDestination(
+                  icon: Icon(Icons.warehouse_outlined),
+                  selectedIcon: Icon(Icons.warehouse),
+                  label: Text('Stock'),
+                ),
+                NavigationRailDestination(
+                  icon: Icon(Icons.more_horiz),
+                  selectedIcon: Icon(Icons.more_horiz),
+                  label: Text('More'),
+                ),
+              ],
+            ),
+            const VerticalDivider(width: 1),
+            Expanded(child: content),
+          ],
+        ),
+      );
+    }
+
     return Scaffold(
-      body: IndexedStack(
-        index: tab,
-        children: pages,
-      ),
+      body: content,
       bottomNavigationBar: NavigationBar(
         selectedIndex: tab,
         onDestinationSelected: (i) => setState(() => tab = i),
