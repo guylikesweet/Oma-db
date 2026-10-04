@@ -1252,9 +1252,8 @@ class _BatchesPageState extends State<BatchesPage> {
           'This calculates the actual shipping cost for every sale in '
           'this batch using this month\'s rate for the way it travelled '
           '(Sea: CBM × the Sea rate. Air: volumetric kg × the Air rate), '
-          'plus each sale\'s weight × the packing rate, and locks the '
-          'batch to "Arrived — Awaiting Shipping Payment". '
-          'This cannot be undone.',
+          'plus each sale\'s weight × the packing rate. '
+          'An admin can undo an accidental arrival before any sale is settled.',
         ),
         actions: [
           TextButton(
@@ -1287,6 +1286,92 @@ class _BatchesPageState extends State<BatchesPage> {
           ),
         );
       }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('$e')),
+        );
+      }
+    }
+  }
+
+  Future<void> undoArrival(int id) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Undo batch arrival?'),
+        content: const Text(
+          'This returns every sale in the batch to its travel milestone '
+          '(On sea or On air), clears the arrival shipping calculation and '
+          'puts the batch back In Transit. It is only allowed before any '
+          'sale in the batch has settled shipping or entered a delivery.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Undo arrival'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+
+    if (!await BiometricGuard.require(
+      context,
+      reason: 'Verify your identity before undoing a shipment arrival.',
+    )) return;
+
+    try {
+      await widget.api.undoBatchArrival(id);
+      await load();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Batch returned to In Transit.')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('$e')),
+        );
+      }
+    }
+  }
+
+  Future<void> deleteBatch(int id, String name) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Delete shipment batch?'),
+        content: Text(
+          'Delete "$name"? Sales will not be deleted; they will be detached from this batch.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+
+    if (!await BiometricGuard.require(
+      context,
+      reason: 'Verify your identity before deleting this shipment batch.',
+    )) return;
+
+    try {
+      await widget.api.deleteBatch(id);
+      await load();
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -1397,23 +1482,38 @@ class _BatchesPageState extends State<BatchesPage> {
                         ' • $saleCount sales',
                       ),
                       onTap: () => manageBatch(batch),
-                      trailing:
-                          batch['status'] == 'In Transit' && widget.isAdmin
-                              ? TextButton.icon(
-                                  icon: const Icon(
-                                    Icons.flight_land,
-                                  ),
-                                  label: const Text(
-                                    'Mark arrived',
-                                  ),
-                                  onPressed: () =>
-                                      arriveBatch(
+                      trailing: widget.isAdmin
+                          ? PopupMenuButton<String>(
+                              onSelected: (value) async {
+                                if (value == 'arrive') {
+                                  await arriveBatch(batch['id'] as int);
+                                } else if (value == 'undo') {
+                                  await undoArrival(batch['id'] as int);
+                                } else if (value == 'delete') {
+                                  await deleteBatch(
                                     batch['id'] as int,
+                                    '${batch['name'] ?? 'Batch'}',
+                                  );
+                                }
+                              },
+                              itemBuilder: (_) => [
+                                if (batch['status'] == 'In Transit')
+                                  const PopupMenuItem(
+                                    value: 'arrive',
+                                    child: Text('Mark arrived'),
                                   ),
-                                )
-                              : batch['status'] == 'In Transit'
-                                  ? const Chip(label: Text('Admins only'))
-                                  : null,
+                                if (batch['status'] == 'Arrived - Awaiting Shipping Payment')
+                                  const PopupMenuItem(
+                                    value: 'undo',
+                                    child: Text('Undo arrival'),
+                                  ),
+                                const PopupMenuItem(
+                                  value: 'delete',
+                                  child: Text('Delete batch'),
+                                ),
+                              ],
+                            )
+                          : null,
                     ),
                   );
                 },
