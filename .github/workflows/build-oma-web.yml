@@ -121,6 +121,24 @@ jobs:
       # separate, later decision — not automatic just because this
       # build succeeds.
       # ------------------------------------------------------------
+      - name: Configure Firebase web messaging worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > mobile/web/firebase-messaging-sw.js <<EOF
+          importScripts("https://www.gstatic.com/firebasejs/11.6.1/firebase-app-compat.js");
+          importScripts("https://www.gstatic.com/firebasejs/11.6.1/firebase-messaging-compat.js");
+
+          firebase.initializeApp({
+            apiKey: "${FCM_API_KEY}",
+            authDomain: "${FCM_AUTH_DOMAIN}",
+            projectId: "${FCM_PROJECT_ID}",
+            storageBucket: "${FCM_STORAGE_BUCKET}",
+            messagingSenderId: "${FCM_MESSAGING_SENDER_ID}",
+            appId: "${FCM_APP_ID}"
+          });
+          firebase.messaging();
+          EOF
       - name: Build web (release)
         env:
           API_URL: ${{ github.event.inputs.api_url || 'https://oma-db.onrender.com/api' }}
