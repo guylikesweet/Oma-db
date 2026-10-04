@@ -248,6 +248,25 @@ class ApiClient {
     );
   }
 
+  Future<Map<String, dynamic>> registerPushDevice(
+    String token,
+    String platform,
+  ) {
+    return _map(
+      'POST',
+      '/v1/notifications/register-device',
+      body: {'token': token, 'platform': platform},
+    );
+  }
+
+  Future<Map<String, dynamic>> unregisterPushDevice(String token) {
+    return _map(
+      'POST',
+      '/v1/notifications/unregister-device',
+      body: {'token': token},
+    );
+  }
+
   Future<Map<String, dynamic>> verifyPassword(String password) {
     return _map(
       'POST',
