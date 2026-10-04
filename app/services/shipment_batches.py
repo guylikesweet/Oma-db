@@ -15,7 +15,7 @@ from datetime import date, datetime
 from decimal import Decimal
 
 from app import db
-from app.models import ShipmentBatch, Sale
+from app.models import ShipmentBatch, Sale, SaleJourneyEvent
 from app.services.rates import get_volume_rate, get_rate_per_kg, RateMissingError
 from app.services.sales import shipping_cost_for_items
 from app.services.push_notifications import queue_batch_arrival, flush_outbox
@@ -42,6 +42,13 @@ def create_batch(name, notes=None, transport_mode=ShipmentBatch.MODE_SEA):
         transport_mode=normalize_mode(transport_mode),
     )
     db.session.add(batch)
+    db.session.flush()
+    record_audit(
+        "batch.create",
+        target_type="shipment_batch",
+        target_id=batch.id,
+        details={"name": batch.name, "transport_mode": batch.transport_mode},
+    )
     db.session.commit()
     return batch
 
@@ -135,7 +142,7 @@ def mark_arrived(batch_id):
     return batch
 
 
-def mark_unarrived(batch_id):
+def mark_unarrived(batch_id, user_id=None):
     """Undo an accidental arrival before any sale has been financially settled."""
     batch = ShipmentBatch.query.get(batch_id)
     if not batch:
@@ -158,6 +165,16 @@ def mark_unarrived(batch_id):
         sale.total_amount = sale.subtotal_amount or Decimal("0")
         sale.shipping_payment_settled = False
         sale.shipping_payment_settled_at = None
+        # The automatic arrival milestone must be reversible too. Recording
+        # the current batch mode as a fresh journey event makes the downgrade
+        # visible immediately on every client.
+        db.session.add(
+            SaleJourneyEvent(
+                sale_id=sale.id,
+                stage="cross_border",
+                user_id=user_id,
+            )
+        )
 
     previous_arrival = batch.arrived_at
     batch.arrived_at = None

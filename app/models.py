@@ -22,6 +22,9 @@ class User(db.Model, UserMixin):
     # Used by the mobile app to authenticate against /api/* — a long random
     # string, not a password. See `flask api-token` CLI command.
     api_token = db.Column(db.String(64), unique=True, nullable=True)
+    biometric_credential_hash = db.Column(db.String(255), nullable=True)
+    api_last_activity_at = db.Column(db.DateTime, nullable=True)
+    is_active = db.Column(db.Boolean, nullable=False, default=True, server_default="true")
 
     # "admin" can edit company settings, manage users, mark shipment batches
     # arrived, edit monthly shipping rates, and other sensitive actions.

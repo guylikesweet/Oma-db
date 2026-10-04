@@ -333,7 +333,13 @@ class _LoginPageState extends State<LoginPage> {
       }
 
       await widget.api.saveToken(token);
-      await widget.api.saveBiometricCredential(username.text.trim(), token);
+      final biometricCredential = result['biometric_credential']?.toString();
+      if (biometricCredential != null && biometricCredential.isNotEmpty) {
+        await widget.api.saveBiometricCredential(
+          username.text.trim(),
+          biometricCredential,
+        );
+      }
       await AppSession.refresh(widget.api);
 
       if (mounted) {
@@ -378,7 +384,13 @@ class _LoginPageState extends State<LoginPage> {
       }
 
       await widget.api.saveToken(token);
-      await widget.api.saveBiometricCredential(username.text.trim(), token);
+      final biometricCredential = result['biometric_credential']?.toString();
+      if (biometricCredential != null && biometricCredential.isNotEmpty) {
+        await widget.api.saveBiometricCredential(
+          username.text.trim(),
+          biometricCredential,
+        );
+      }
       await AppSession.refresh(widget.api);
 
       if (mounted) {
@@ -568,6 +580,7 @@ class _AppShellState extends State<AppShell> {
       (_) => _checkInactivity(),
     );
 
+    _validateServerSession();
     AppSession.refresh(widget.api);
 
     connectivity = Connectivity()
@@ -575,6 +588,27 @@ class _AppShellState extends State<AppShell> {
         .listen((_) => sync(silent: true));
 
     sync(silent: true);
+  }
+
+  Future<void> _validateServerSession() async {
+    try {
+      await widget.api.me();
+    } on ApiException catch (e) {
+      if (e.statusCode != 401 || !mounted) return;
+      await widget.api.clearToken();
+      AppSession.reset();
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(builder: (_) => LoginPage(api: widget.api)),
+        (_) => false,
+      );
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Your session expired. Sign in again or use biometrics.'),
+        ),
+      );
+    } catch (_) {
+      // A temporary network failure is not a logout.
+    }
   }
 
   Future<void> sync({bool silent = false}) async {
@@ -3571,11 +3605,11 @@ class _ChangePasswordDialogState
   String? error;
 
   Future<void> save() async {
-    if (next.text.length < 6 ||
+    if (next.text.length < 8 ||
         next.text != confirm.text) {
       setState(
         () => error =
-            'New passwords must match and be at least 6 characters.',
+            'New passwords must match and be at least 8 characters.',
       );
       return;
     }
@@ -3583,10 +3617,15 @@ class _ChangePasswordDialogState
     setState(() => busy = true);
 
     try {
-      await widget.api.changePassword(
+      final result = await widget.api.changePassword(
         current.text,
         next.text,
       );
+      final token = result['token']?.toString();
+      if (token != null && token.isNotEmpty) {
+        await widget.api.saveToken(token);
+      }
+      await widget.api.clearBiometricCredential();
 
       if (mounted) {
         Navigator.pop(context);

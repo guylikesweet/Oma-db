@@ -173,8 +173,9 @@ jobs:
           )
 
           merge = versions / "final_mobile_merge.py"
+          security = versions / "oma20261004_mobile_session_security.py"
 
-          for required in (d4, e71, merge):
+          for required in (d4, e71, merge, security):
               if not required.exists():
                   raise SystemExit(
                       f"Required migration missing: {required}"
@@ -183,6 +184,7 @@ jobs:
           d4_text = d4.read_text(encoding="utf-8")
           e71_text = e71.read_text(encoding="utf-8")
           merge_text = merge.read_text(encoding="utf-8")
+          security_text = security.read_text(encoding="utf-8")
 
           if (
               'revision = "d4f2c7a91e60"' not in d4_text
@@ -209,6 +211,15 @@ jobs:
           ):
               raise SystemExit(
                   "Final mobile migration merge is invalid."
+              )
+
+          if (
+              'revision = "oma20261004"' not in security_text
+              or
+              'down_revision = "f7a1c9e4b210"' not in security_text
+          ):
+              raise SystemExit(
+                  "Mobile security migration is not attached to the current Alembic head."
               )
 
           print("Mobile migration chain: OK")
@@ -503,6 +514,23 @@ jobs:
               'android:label="oma_mobile"',
               'android:label="OmaSales Mobile"',
           )
+
+          # This is non-security branding metadata. It does NOT change the
+          # applicationId or signing configuration, and therefore does not
+          # affect update compatibility. Google Play uses the developer name
+          # configured in Play Console; this metadata also makes the intended
+          # developer identity explicit to APK/AAB inspectors.
+          if "com.oma.developer_name" not in s:
+              s = s.replace(
+                  "</application>",
+                  (
+                      '        <meta-data '
+                      'android:name="com.oma.developer_name" '
+                      'android:value="Oma Technologies" />\n'
+                      "    </application>"
+                  ),
+                  1,
+              )
           s = s.replace(
               'android:label="mobile"',
               'android:label="OmaSales Mobile"',
@@ -991,15 +1019,21 @@ jobs:
           echo "build/app/outputs/bundle/release/app-release.aab"
 
       # ------------------------------------------------------------
-      # 12. UPLOAD BUILD ARTIFACTS
+      # 12. UPLOAD APK
       # ------------------------------------------------------------
-      - name: Upload APK and AAB
+      - name: Upload APK
         uses: actions/upload-artifact@v7
         with:
-          name: OmaSales-Mobile-${{ github.run_number }}
-
+          name: OmaSales-APK-${{ github.run_number }}
           if-no-files-found: error
+          path: mobile/build/app/outputs/flutter-apk/app-release.apk
 
-          path: |
-            mobile/build/app/outputs/flutter-apk/app-release.apk
-            mobile/build/app/outputs/bundle/release/app-release.aab
+      # ------------------------------------------------------------
+      # 13. UPLOAD AAB
+      # ------------------------------------------------------------
+      - name: Upload AAB
+        uses: actions/upload-artifact@v7
+        with:
+          name: OmaSales-AAB-${{ github.run_number }}
+          if-no-files-found: error
+          path: mobile/build/app/outputs/bundle/release/app-release.aab

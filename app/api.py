@@ -11,7 +11,7 @@ New mobile development should use /api/v1/*.
 """
 import json
 import secrets
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from decimal import Decimal, InvalidOperation
 from functools import wraps
 
@@ -26,7 +26,7 @@ from app.models import (
     CourierRate, MonthlyShippingRate, MonthlyAirRate, StockLog, MobileOperation, MobileChange, AuditLog, PushDevice,
 )
 from app.services.sales import create_sale, SaleValidationError, shipping_cost_for_items
-from app.services.rates import get_rate_for_month, get_volume_rate, get_rate_per_kg
+from app.services.rates import get_rate_for_month, get_volume_rate, get_rate_per_kg, RateMissingError
 from app.services.delivery import check_consolidation, find_consolidation_groups
 from app.services.audit import record_audit
 from app.services.push_notifications import queue_batch_arrival, flush_outbox
@@ -48,9 +48,27 @@ def require_api_token(f):
 
         token = auth_header[len("Bearer "):].strip()
         user = User.query.filter_by(api_token=token).first() if token else None
-        if not user:
-            return jsonify({"error": "Invalid API token."}), 401
+        if not user or not user.is_active:
+            return jsonify({"error": "This user account is inactive or the session is invalid."}), 401
 
+        now = datetime.utcnow()
+        last = user.api_last_activity_at
+        if last is not None and now - last >= timedelta(minutes=30):
+            record_audit(
+                "logout.timeout",
+                target_type="user",
+                target_id=user.id,
+                outcome="success",
+                details={"source": "api", "timeout_minutes": 30},
+                user=user,
+            )
+            user.api_token = None
+            user.api_last_activity_at = None
+            db.session.commit()
+            return jsonify({"error": "Your session expired after 30 minutes of inactivity. Please sign in again."}), 401
+
+        user.api_last_activity_at = now
+        db.session.commit()
         g.api_user = user
         return f(*args, **kwargs)
     return wrapper
@@ -104,10 +122,14 @@ def api_login():
         return jsonify({"error": "Username and password are required."}), 400
 
     user = User.query.filter_by(username=username).first()
-    if not user or not check_password_hash(user.password_hash, password):
+    if not user or not user.is_active or not check_password_hash(user.password_hash, password):
         return jsonify({"error": "Invalid username or password."}), 401
 
-    token = _ensure_api_token(user)
+    token = secrets.token_hex(32)
+    biometric_credential = secrets.token_urlsafe(48)
+    user.api_token = token
+    user.biometric_credential_hash = generate_password_hash(biometric_credential)
+    user.api_last_activity_at = datetime.utcnow()
     record_audit(
         "login",
         target_type="user",
@@ -122,7 +144,9 @@ def api_login():
             "id": user.id, "username": user.username,
             "role": user.role, "is_admin": user.is_admin,
             "is_primary_admin": user.is_primary_admin,
+            "is_active": user.is_active,
         },
+        "biometric_credential": biometric_credential,
     })
 
 
@@ -163,9 +187,18 @@ def api_biometric_login():
     if not username or not credential:
         return jsonify({"error": "Username and biometric credential are required."}), 400
 
-    user = User.query.filter_by(username=username, api_token=credential).first()
-    if not user:
+    user = User.query.filter_by(username=username).first()
+    if (
+        not user
+        or not user.is_active
+        or not user.biometric_credential_hash
+        or not check_password_hash(user.biometric_credential_hash, credential)
+    ):
         return jsonify({"error": "This username does not have a valid biometric login on this device."}), 401
+
+    token = secrets.token_hex(32)
+    user.api_token = token
+    user.api_last_activity_at = datetime.utcnow()
 
     record_audit(
         "login.biometric",
@@ -176,7 +209,7 @@ def api_biometric_login():
     )
     db.session.commit()
     return jsonify({
-        "token": user.api_token,
+        "token": token,
         "user": {
             "id": user.id,
             "username": user.username,
@@ -592,6 +625,7 @@ def mobile_change_password():
         return jsonify({"error": "New password must be at least 8 characters."}), 400
     g.api_user.password_hash = generate_password_hash(new)
     g.api_user.api_token = secrets.token_hex(32)
+    g.api_user.biometric_credential_hash = None
     record_audit(
         "password.change",
         target_type="user",
@@ -673,6 +707,17 @@ def unregister_push_device():
 @api_bp.route("/v1/auth/logout", methods=("POST",))
 @require_api_token
 def mobile_logout():
+    user = g.api_user
+    record_audit(
+        "logout",
+        target_type="user",
+        target_id=user.id,
+        details={"source": "api"},
+        user=user,
+    )
+    user.api_token = None
+    user.api_last_activity_at = None
+    db.session.commit()
     return jsonify({"ok": True})
 
 
@@ -895,6 +940,13 @@ def mobile_create_batch():
             transport_mode=transport_mode,
         )
         db.session.add(b); db.session.flush()
+        record_audit(
+            "batch.create",
+            target_type="shipment_batch",
+            target_id=b.id,
+            details={"name": b.name, "transport_mode": b.transport_mode, "source": "api"},
+            user=g.api_user,
+        )
         return _mobile_finish(op, "create_batch", 201, _batch_json(b))
     except ValueError as e:
         db.session.rollback(); return jsonify({"error": str(e)}), 400
@@ -912,11 +964,27 @@ def mobile_batch_sale(batch_id, sale_id):
         if action == "remove":
             if s.batch_id != b.id: raise ValueError("Sale is not in this batch.")
             s.batch_id = None
+            s.batch_assigned_at = None
+            record_audit(
+                "batch.remove_sale",
+                target_type="sale",
+                target_id=s.id,
+                details={"batch_id": b.id, "source": "api"},
+                user=g.api_user,
+            )
         else:
             if s.is_stock_sale: raise ValueError("Stocked sales are not shipped in batches.")
             if b.status != ShipmentBatch.STATUS_IN_TRANSIT: raise ValueError("Batch is no longer in transit.")
             if s.order_status == "Cancelled": raise ValueError("Cancelled sales cannot be added.")
             s.batch_id = b.id
+            s.batch_assigned_at = datetime.utcnow()
+            record_audit(
+                "batch.add_sale",
+                target_type="sale",
+                target_id=s.id,
+                details={"batch_id": b.id, "transport_mode": b.transport_mode, "source": "api"},
+                user=g.api_user,
+            )
         return _mobile_finish(op, "batch_sale", 200, _batch_json(b))
     except ValueError as e:
         db.session.rollback(); return jsonify({"error": str(e)}), 400
@@ -956,7 +1024,7 @@ def mobile_batch_arrive(batch_id):
         except Exception:
             pass
         return result
-    except ValueError as e:
+    except (ValueError, RateMissingError) as e:
         db.session.rollback(); return jsonify({"error": str(e)}), 400
 
 
@@ -969,7 +1037,7 @@ def mobile_batch_undo_arrival(batch_id):
         op, existing = _mobile_operation(data)
         if existing:
             return _mobile_replay(existing)
-        batch = mark_unarrived(batch_id)
+        batch = mark_unarrived(batch_id, user_id=g.api_user.id)
         payload = _batch_json(batch)
         return _mobile_finish(op, "batch_undo_arrival", 200, payload)
     except BatchValidationError as e:
@@ -1039,7 +1107,8 @@ def mobile_delivery_status(delivery_id):
         op,existing=_mobile_operation(data)
         if existing:return _mobile_replay(existing)
         d=Delivery.query.get_or_404(delivery_id); status=str(data.get("status") or "")
-        if status not in {Delivery.STATUS_PENDING,Delivery.STATUS_OUT_FOR_DELIVERY,Delivery.STATUS_DELIVERED}:raise ValueError("Invalid delivery status.")
+        if status not in {Delivery.STATUS_PENDING,Delivery.STATUS_OUT_FOR_DELIVERY,Delivery.STATUS_DELIVERED,Delivery.STATUS_RETURNED}:raise ValueError("Invalid delivery status.")
+        old_status = d.status
         d.status=status
         if status==Delivery.STATUS_OUT_FOR_DELIVERY and not d.shipped_at:d.shipped_at=datetime.utcnow()
         if status==Delivery.STATUS_DELIVERED:
@@ -1096,14 +1165,29 @@ def mobile_update_journey():
         if existing:
             return _mobile_replay(existing)
         ids = [int(x) for x in (data.get("sale_ids") or [])]
+        if not ids:
+            raise ValueError("Select at least one sale.")
         stage = str(data.get("stage") or "").strip()
-        sales = Sale.query.filter(Sale.id.in_(ids)).all() if ids else []
+        sales = Sale.query.filter(Sale.id.in_(ids)).all()
+        found_ids = {sale.id for sale in sales}
+        missing_ids = [sale_id for sale_id in ids if sale_id not in found_ids]
+        if missing_ids:
+            raise ValueError(
+                "One or more selected sales were not found: "
+                + ", ".join(str(x) for x in missing_ids)
+                + "."
+            )
         updated, unchanged, skipped = set_manual_stage_bulk(sales, stage, user_id=g.api_user.id)
         if updated:
+            changed_ids = [
+                sale.id
+                for sale in sales
+                if sale.id in found_ids
+            ]
             record_audit(
                 "journey.update",
                 target_type="sale",
-                target_id=",".join(str(x.id) for x in sales),
+                target_id=",".join(str(x) for x in changed_ids),
                 details={"stage": stage, "sale_ids": [x.id for x in sales], "updated": updated},
                 user=g.api_user,
             )
@@ -1324,6 +1408,7 @@ def mobile_users():
     return jsonify([{
         'id': u.id, 'username': u.username, 'role': u.role,
         'is_admin': u.is_admin, 'is_primary_admin': u.is_primary_admin,
+        'is_active': u.is_active,
         'created_at': u.created_at.isoformat() if u.created_at else None,
     } for u in User.query.order_by(User.username).all()])
 
@@ -1348,7 +1433,7 @@ def mobile_create_user():
             details={"username": u.username, "role": u.role, "source": "api"},
             user=g.api_user,
         )
-        return _mobile_finish(op,'create_user',201,{'id':u.id,'username':u.username,'role':u.role,'is_admin':u.is_admin,'is_primary_admin':u.is_primary_admin,'created_at':u.created_at.isoformat() if u.created_at else None})
+        return _mobile_finish(op,'create_user',201,{'id':u.id,'username':u.username,'role':u.role,'is_admin':u.is_admin,'is_primary_admin':u.is_primary_admin,'is_active':u.is_active,'created_at':u.created_at.isoformat() if u.created_at else None})
     except ValueError as e:db.session.rollback();return jsonify({'error':str(e)}),400
 
 @api_bp.route("/v1/users/<int:user_id>", methods=("PUT","PATCH"))
@@ -1371,6 +1456,16 @@ def mobile_update_user(user_id):
         if data.get('password'):
             if len(str(data['password']))<8:raise ValueError('Password must be at least 8 characters.')
             u.password_hash=generate_password_hash(str(data['password']))
+            u.biometric_credential_hash = None
+            u.api_token = None
+            u.api_last_activity_at = None
+        if 'is_active' in data and g.api_user.is_admin:
+            if u.is_primary_admin and not bool(data['is_active']):
+                raise ValueError('The original admin cannot be deactivated.')
+            u.is_active = bool(data['is_active'])
+            if not u.is_active:
+                u.api_token = None
+                u.api_last_activity_at = None
         if data.get('role') and g.api_user.is_admin:
             role = str(data['role']).strip().lower()
             if role not in (User.ROLE_ADMIN, User.ROLE_STAFF):raise ValueError('Role must be admin or staff.')
@@ -1383,7 +1478,7 @@ def mobile_update_user(user_id):
             details={"source": "api"},
             user=g.api_user,
         )
-        return _mobile_finish(op,'update_user',200,{'id':u.id,'username':u.username,'role':u.role,'is_admin':u.is_admin,'is_primary_admin':u.is_primary_admin,'created_at':u.created_at.isoformat() if u.created_at else None})
+        return _mobile_finish(op,'update_user',200,{'id':u.id,'username':u.username,'role':u.role,'is_admin':u.is_admin,'is_primary_admin':u.is_primary_admin,'is_active':u.is_active,'created_at':u.created_at.isoformat() if u.created_at else None})
     except ValueError as e:db.session.rollback();return jsonify({'error':str(e)}),400
     except PermissionError as e:db.session.rollback();return jsonify({'error':str(e)}),403
 
@@ -1396,13 +1491,16 @@ def mobile_delete_user(user_id):
         return jsonify({'error':'The original admin account cannot be removed.'}),400
     if u.id==g.api_user.id:
         return jsonify({'error':'You cannot remove your own account.'}),400
+    if u.is_admin and not g.api_user.is_primary_admin:
+        return jsonify({'error':'Only the original admin can remove another admin account.'}),403
     record_audit(
         "user.delete",
         target_type="user",
         target_id=u.id,
-        details={"username": u.username, "source": "api"},
+        details={"username": u.username, "role": u.role, "source": "api"},
         user=g.api_user,
     )
+    AuditLog.query.filter_by(user_id=u.id).update({"user_id": None}, synchronize_session=False)
     db.session.delete(u)
     db.session.commit()
     return jsonify({'ok':True,'id':user_id})
@@ -1451,6 +1549,10 @@ def mobile_delete_sale(sale_id):
 @require_admin_api
 def mobile_delete_batch(batch_id):
     batch = ShipmentBatch.query.get_or_404(batch_id)
+    if batch.status != ShipmentBatch.STATUS_IN_TRANSIT:
+        return jsonify({"error": "Only an In Transit shipment batch can be deleted. Undo its arrival first."}), 400
+    if any(s.shipping_payment_settled or s.delivery_id for s in batch.sales):
+        return jsonify({"error": "This batch contains sales that are already settled or assigned to delivery."}), 400
     sale_ids = [sale.id for sale in batch.sales]
     for sale in batch.sales:
         sale.batch_id = None

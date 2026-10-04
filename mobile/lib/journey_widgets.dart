@@ -83,10 +83,7 @@ class _JourneyCardState extends State<JourneyCard> {
         ],
       );
     } else {
-      final rawJourney = detail!['journey'];
-      final journey = rawJourney is Map
-          ? Map<String, dynamic>.from(rawJourney)
-          : <String, dynamic>{};
+      final journey = Map<String, dynamic>.from(detail!);
       final current = '${journey['current_label'] ?? 'Order received'}';
 
       content = Row(
@@ -351,7 +348,6 @@ class _JourneyPageState extends State<JourneyPage> {
                                     child: Text(id?.toString() ?? ''),
                                   ),
                                 ],
-                              )
                               ),
                               title: Text(
                                 order,
@@ -417,11 +413,7 @@ class _JourneyEditorState extends State<_JourneyEditor> {
   }
 
   String get currentLabel {
-    final raw = widget.detail['journey'];
-    if (raw is Map) {
-      return '${raw['current_label'] ?? 'Order received'}';
-    }
-    return 'Order received';
+    return widget.detail['current_label']?.toString() ?? 'Order received';
   }
 
   Future<void> save() async {
