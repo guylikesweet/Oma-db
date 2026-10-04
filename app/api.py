@@ -199,6 +199,10 @@ def _sale_json(s):
         "customer_city": s.customer_city,
         "customer_state": s.customer_state,
         "order_status": s.order_status,
+        "journey_key": journey_public(s)["current"],
+        "journey_label": journey_public(s)["current_label"],
+        "journey_description": journey_public(s)["current_description"],
+        "journey_mode": journey_public(s)["mode"],
         "payment_status": s.payment_status,
         "subtotal_amount": float(s.subtotal_amount) if s.subtotal_amount is not None else None,
         "estimated_shipping_cost": float(s.estimated_shipping_cost) if s.estimated_shipping_cost is not None else None,
@@ -814,7 +818,15 @@ def mobile_create_batch():
         if existing: return _mobile_replay(existing)
         name = str(data.get("name") or "").strip()
         if not name: raise ValueError("Batch needs a name.")
-        b = ShipmentBatch(name=name, notes=str(data.get("notes") or "").strip() or None, status=ShipmentBatch.STATUS_IN_TRANSIT)
+        transport_mode = str(data.get("transport_mode") or ShipmentBatch.MODE_SEA).strip().lower()
+        if transport_mode not in ShipmentBatch.MODES:
+            raise ValueError("Choose how this batch travels: Air or Sea.")
+        b = ShipmentBatch(
+            name=name,
+            notes=str(data.get("notes") or "").strip() or None,
+            status=ShipmentBatch.STATUS_IN_TRANSIT,
+            transport_mode=transport_mode,
+        )
         db.session.add(b); db.session.flush()
         return _mobile_finish(op, "create_batch", 201, _batch_json(b))
     except ValueError as e:
