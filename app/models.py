@@ -40,6 +40,28 @@ class User(db.Model, UserMixin):
 
 
 # ---------------------------------------------------------------------------
+# APP SETTINGS (Restored for invoice generation)
+# ---------------------------------------------------------------------------
+class AppSettings(db.Model):
+    __tablename__ = "app_settings"
+
+    id = db.Column(db.Integer, primary_key=True)
+    company_name = db.Column(db.String(255), default="OmaBuy")
+    company_address = db.Column(db.Text)
+    company_phone = db.Column(db.String(50))
+    company_email = db.Column(db.String(100))
+    invoice_footer_notes = db.Column(db.Text)
+    
+    # Store dynamic key/value pairs if your system uses them, 
+    # ensuring compatibility regardless of how settings are queried.
+    setting_key = db.Column(db.String(100), unique=True, nullable=True)
+    setting_value = db.Column(db.Text, nullable=True)
+
+    def __repr__(self):
+        return f"<AppSettings {self.id}>"
+
+
+# ---------------------------------------------------------------------------
 # 2. PRODUCTS
 # ---------------------------------------------------------------------------
 class Product(db.Model):
