@@ -8,7 +8,7 @@ customer's document. Only what a customer needs to check an invoice is shown
 import base64
 import re
 
-from flask import Blueprint, render_template_string, request
+from flask import Blueprint, render_template_string, request, redirect
 
 from app.models import Sale
 from app.services.invoices import signature_matches
