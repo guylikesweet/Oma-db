@@ -142,7 +142,7 @@ def mark_arrived(batch_id):
     return batch
 
 
-def mark_unarrived(batch_id):
+def mark_unarrived(batch_id, user_id=None):
     """Undo an accidental arrival before any sale has been financially settled."""
     batch = ShipmentBatch.query.get(batch_id)
     if not batch:
@@ -172,7 +172,7 @@ def mark_unarrived(batch_id):
             SaleJourneyEvent(
                 sale_id=sale.id,
                 stage="cross_border",
-                user_id=None,
+                user_id=user_id,
             )
         )
 
