@@ -12,6 +12,9 @@ import json
 import os
 from datetime import datetime
 
+from flask import g
+from flask_login import current_user
+
 from app import db
 from app.models import NotificationOutbox, PushDevice, User, ShipmentBatch
 
@@ -46,6 +49,15 @@ def _firebase():
 
 
 def _push_recipient_user_ids(exclude_user_id=None):
+    if exclude_user_id is None:
+        try:
+            if current_user.is_authenticated:
+                exclude_user_id = current_user.id
+            else:
+                exclude_user_id = getattr(getattr(g, "api_user", None), "id", None)
+        except Exception:
+            exclude_user_id = None
+
     query = PushDevice.query.filter_by(enabled=True)
     if exclude_user_id is not None:
         query = query.filter(PushDevice.user_id != exclude_user_id)
