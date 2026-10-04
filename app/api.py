@@ -938,6 +938,13 @@ def mobile_create_batch():
             transport_mode=transport_mode,
         )
         db.session.add(b); db.session.flush()
+        record_audit(
+            "batch.create",
+            target_type="shipment_batch",
+            target_id=b.id,
+            details={"name": b.name, "transport_mode": b.transport_mode, "source": "api"},
+            user=g.api_user,
+        )
         return _mobile_finish(op, "create_batch", 201, _batch_json(b))
     except ValueError as e:
         db.session.rollback(); return jsonify({"error": str(e)}), 400
