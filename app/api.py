@@ -19,7 +19,7 @@ from flask import Blueprint, request, jsonify, g
 from werkzeug.security import check_password_hash, generate_password_hash
 
 from app import db
-from app.services.journey import journey_public, manual_stages_for, stage_label, set_manual_stage_bulk, JourneyError
+from app.services.journey import journey_public, flow_for, manual_stages_for, stage_label, set_manual_stage_bulk, JourneyError
 from app.access import require_admin_api
 from app.models import (
     User, Product, Sale, SaleItem, Shipping, Delivery, ShipmentBatch,
@@ -31,6 +31,7 @@ from app.services.delivery import check_consolidation, find_consolidation_groups
 from app.services.audit import record_audit
 from app.services.push_notifications import queue_batch_arrival, flush_outbox
 from app.services.dashboard import get_kpis, get_sales_last_30_days
+from app.services.shipment_batches import mark_unarrived, BatchValidationError
 
 api_bp = Blueprint("api", __name__, url_prefix="/api")
 
@@ -151,6 +152,39 @@ def verify_password():
     )
     db.session.commit()
     return jsonify({"verified": True})
+
+
+@api_bp.route("/v1/auth/biometric-login", methods=("POST",))
+def api_biometric_login():
+    """Exchange a previously authenticated device token after local biometric verification."""
+    data = request.get_json(silent=True) or {}
+    username = str(data.get("username") or "").strip()
+    credential = str(data.get("credential") or "").strip()
+    if not username or not credential:
+        return jsonify({"error": "Username and biometric credential are required."}), 400
+
+    user = User.query.filter_by(username=username, api_token=credential).first()
+    if not user:
+        return jsonify({"error": "This username does not have a valid biometric login on this device."}), 401
+
+    record_audit(
+        "login.biometric",
+        target_type="user",
+        target_id=user.id,
+        details={"source": "mobile_biometric"},
+        user=user,
+    )
+    db.session.commit()
+    return jsonify({
+        "token": user.api_token,
+        "user": {
+            "id": user.id,
+            "username": user.username,
+            "role": user.role,
+            "is_admin": user.is_admin,
+            "is_primary_admin": user.is_primary_admin,
+        },
+    })
 
 
 @api_bp.route("/v1/auth/me", methods=("GET",))
@@ -557,8 +591,16 @@ def mobile_change_password():
     if len(new) < 8:
         return jsonify({"error": "New password must be at least 8 characters."}), 400
     g.api_user.password_hash = generate_password_hash(new)
+    g.api_user.api_token = secrets.token_hex(32)
+    record_audit(
+        "password.change",
+        target_type="user",
+        target_id=g.api_user.id,
+        details={"source": "api"},
+        user=g.api_user,
+    )
     db.session.commit()
-    return jsonify({"ok": True})
+    return jsonify({"ok": True, "token": g.api_user.api_token})
 
 
 @api_bp.route("/v1/auth/change-username", methods=("POST",))
@@ -570,7 +612,15 @@ def mobile_change_username():
         return jsonify({"error": "Enter a new username."}), 400
     if User.query.filter(User.username == new_username, User.id != g.api_user.id).first():
         return jsonify({"error": "Username already exists."}), 400
+    old_username = g.api_user.username
     g.api_user.username = new_username
+    record_audit(
+        "username.change",
+        target_type="user",
+        target_id=g.api_user.id,
+        details={"from": old_username, "to": new_username, "source": "api"},
+        user=g.api_user,
+    )
     db.session.commit()
     return jsonify({"id": g.api_user.id, "username": g.api_user.username})
 
@@ -719,7 +769,7 @@ def mobile_sale_journey(sale_id):
     data = _journey_json(sale)
     data["manual_stages"] = [
         {"key": key, "label": stage_label(key)}
-        for key in manual_stages_for(sale)
+        for key in flow_for(sale)
     ]
     data["estimated_shipping_sea"] = float(sale.estimated_shipping_sea) if sale.estimated_shipping_sea is not None else None
     data["estimated_shipping_air"] = float(sale.estimated_shipping_air) if sale.estimated_shipping_air is not None else None
@@ -748,11 +798,27 @@ def mobile_sale_status(sale_id):
                     if product:
                         product.stock += item.qty
                         db.session.add(StockLog(product_id=product.id, change_qty=item.qty, reason=f"Sale #{sale.id} Cancelled"))
+            old_status = sale.order_status
             sale.order_status = status
+            record_audit(
+                "sale.status",
+                target_type="sale",
+                target_id=sale.id,
+                details={"from": old_status, "to": status, "source": "api"},
+                user=g.api_user,
+            )
         if payment_status is not None:
             payment_status = str(payment_status)
             if payment_status not in {"Paid", "Pending", "Refunded"}: raise ValueError("Invalid payment status.")
+            old_payment = sale.payment_status
             sale.payment_status = payment_status
+            record_audit(
+                "sale.payment_status",
+                target_type="sale",
+                target_id=sale.id,
+                details={"from": old_payment, "to": payment_status, "source": "api"},
+                user=g.api_user,
+            )
         return _mobile_finish(op, "sale_status", 200, _sale_json(sale))
     except ValueError as e:
         db.session.rollback(); return jsonify({"error": str(e)}), 400
@@ -894,6 +960,23 @@ def mobile_batch_arrive(batch_id):
         db.session.rollback(); return jsonify({"error": str(e)}), 400
 
 
+@api_bp.route("/v1/batches/<int:batch_id>/undo-arrival", methods=("POST",))
+@require_api_token
+@require_admin_api
+def mobile_batch_undo_arrival(batch_id):
+    data = request.get_json(silent=True) or {}
+    try:
+        op, existing = _mobile_operation(data)
+        if existing:
+            return _mobile_replay(existing)
+        batch = mark_unarrived(batch_id)
+        payload = _batch_json(batch)
+        return _mobile_finish(op, "batch_undo_arrival", 200, payload)
+    except BatchValidationError as e:
+        db.session.rollback()
+        return jsonify({"error": str(e)}), 400
+
+
 @api_bp.route("/v1/deliveries", methods=("GET",))
 @require_api_token
 def mobile_deliveries():
@@ -936,6 +1019,13 @@ def mobile_create_delivery():
         d=Delivery(method=method,status=Delivery.STATUS_PENDING,is_consolidated=len(sales)>1,consolidation_type=consolidation_type,delivery_address=str(data.get("delivery_address") or "").strip() or sales[0].customer_address,notes=str(data.get("notes") or "").strip() or None)
         db.session.add(d); db.session.flush()
         for s in sales: s.delivery_id=d.id
+        record_audit(
+            "delivery.create",
+            target_type="delivery",
+            target_id=d.id,
+            details={"sale_ids": [s.id for s in sales], "method": method, "source": "api"},
+            user=g.api_user,
+        )
         return _mobile_finish(op,"create_delivery",201,_delivery_json(d))
     except ValueError as e:
         db.session.rollback(); return jsonify({"error":str(e)}),400
@@ -955,6 +1045,13 @@ def mobile_delivery_status(delivery_id):
         if status==Delivery.STATUS_DELIVERED:
             d.delivered_at=datetime.utcnow()
             for s in d.sales:s.order_status="Delivered"
+        record_audit(
+            "delivery.status",
+            target_type="delivery",
+            target_id=d.id,
+            details={"from": old_status, "to": status, "sale_ids": [s.id for s in d.sales], "source": "api"},
+            user=g.api_user,
+        )
         return _mobile_finish(op,"delivery_status",200,_delivery_json(d))
     except ValueError as e:
         db.session.rollback();return jsonify({"error":str(e)}),400
@@ -1002,6 +1099,14 @@ def mobile_update_journey():
         stage = str(data.get("stage") or "").strip()
         sales = Sale.query.filter(Sale.id.in_(ids)).all() if ids else []
         updated, unchanged, skipped = set_manual_stage_bulk(sales, stage, user_id=g.api_user.id)
+        if updated:
+            record_audit(
+                "journey.update",
+                target_type="sale",
+                target_id=",".join(str(x.id) for x in sales),
+                details={"stage": stage, "sale_ids": [x.id for x in sales], "updated": updated},
+                user=g.api_user,
+            )
         payload = {"updated": updated, "unchanged": unchanged, "skipped": skipped, "sales": [_journey_json(s) for s in sales]}
         return _mobile_finish(op, "update_journey", 200, payload)
     except (ValueError, JourneyError) as e:
@@ -1201,6 +1306,13 @@ def mobile_settings_update():
         if data.get('logo_base64'):
             import base64
             s.logo_data=base64.b64decode(data['logo_base64']);s.logo_mimetype=str(data.get('logo_mimetype') or 'image/png')
+        record_audit(
+            "settings.update",
+            target_type="app_settings",
+            target_id=s.id,
+            details={"source": "api"},
+            user=g.api_user,
+        )
         payload=_settings_json(s)
         return _mobile_finish(op,'update_settings',200,payload)
     except (ValueError,TypeError) as e:db.session.rollback();return jsonify({'error':str(e)}),400
@@ -1229,6 +1341,13 @@ def mobile_create_user():
         if not username or len(password)<8:raise ValueError('Username and password (8+ characters) are required.')
         if User.query.filter_by(username=username).first():raise ValueError('Username already exists.')
         u=User(username=username,password_hash=generate_password_hash(password),role=role);db.session.add(u);db.session.flush()
+        record_audit(
+            "user.create",
+            target_type="user",
+            target_id=u.id,
+            details={"username": u.username, "role": u.role, "source": "api"},
+            user=g.api_user,
+        )
         return _mobile_finish(op,'create_user',201,{'id':u.id,'username':u.username,'role':u.role,'is_admin':u.is_admin,'is_primary_admin':u.is_primary_admin,'created_at':u.created_at.isoformat() if u.created_at else None})
     except ValueError as e:db.session.rollback();return jsonify({'error':str(e)}),400
 
@@ -1257,6 +1376,13 @@ def mobile_update_user(user_id):
             if role not in (User.ROLE_ADMIN, User.ROLE_STAFF):raise ValueError('Role must be admin or staff.')
             if u.is_primary_admin and role != User.ROLE_ADMIN:raise ValueError('The original admin cannot be demoted.')
             u.role=role
+        record_audit(
+            "user.update",
+            target_type="user",
+            target_id=u.id,
+            details={"source": "api"},
+            user=g.api_user,
+        )
         return _mobile_finish(op,'update_user',200,{'id':u.id,'username':u.username,'role':u.role,'is_admin':u.is_admin,'is_primary_admin':u.is_primary_admin,'created_at':u.created_at.isoformat() if u.created_at else None})
     except ValueError as e:db.session.rollback();return jsonify({'error':str(e)}),400
     except PermissionError as e:db.session.rollback();return jsonify({'error':str(e)}),403
@@ -1270,9 +1396,75 @@ def mobile_delete_user(user_id):
         return jsonify({'error':'The original admin account cannot be removed.'}),400
     if u.id==g.api_user.id:
         return jsonify({'error':'You cannot remove your own account.'}),400
+    record_audit(
+        "user.delete",
+        target_type="user",
+        target_id=u.id,
+        details={"username": u.username, "source": "api"},
+        user=g.api_user,
+    )
     db.session.delete(u)
     db.session.commit()
     return jsonify({'ok':True,'id':user_id})
+
+
+@api_bp.route("/v1/admin/sales/<int:sale_id>", methods=("DELETE",))
+@require_api_token
+@require_admin_api
+def mobile_delete_sale(sale_id):
+    sale = Sale.query.get_or_404(sale_id)
+    if sale.delivery_id:
+        return jsonify({"error": "Remove the sale from its delivery before deleting it."}), 400
+    if sale.shipping_payment_settled:
+        return jsonify({"error": "A sale with settled shipping cannot be deleted."}), 400
+
+    try:
+        if sale.is_stock_sale:
+            for item in sale.items:
+                product = Product.query.get(item.product_id)
+                if product:
+                    product.stock += item.qty
+                    db.session.add(
+                        StockLog(
+                            product_id=product.id,
+                            change_qty=item.qty,
+                            reason=f"Deleted sale #{sale.id}",
+                        )
+                    )
+        record_audit(
+            "sale.delete",
+            target_type="sale",
+            target_id=sale.id,
+            details={"order_id": sale.order_id, "sale_type": sale.sale_type},
+            user=g.api_user,
+        )
+        db.session.delete(sale)
+        db.session.commit()
+        return jsonify({"ok": True, "id": sale_id})
+    except Exception:
+        db.session.rollback()
+        raise
+
+
+@api_bp.route("/v1/admin/batches/<int:batch_id>", methods=("DELETE",))
+@require_api_token
+@require_admin_api
+def mobile_delete_batch(batch_id):
+    batch = ShipmentBatch.query.get_or_404(batch_id)
+    sale_ids = [sale.id for sale in batch.sales]
+    for sale in batch.sales:
+        sale.batch_id = None
+        sale.batch_assigned_at = None
+    record_audit(
+        "batch.delete",
+        target_type="shipment_batch",
+        target_id=batch.id,
+        details={"name": batch.name, "sale_ids": sale_ids},
+        user=g.api_user,
+    )
+    db.session.delete(batch)
+    db.session.commit()
+    return jsonify({"ok": True, "id": batch_id, "detached_sale_ids": sale_ids})
 
 
 @api_bp.route("/v1/reports/sales", methods=("GET",))

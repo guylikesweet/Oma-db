@@ -177,6 +177,14 @@ class _WebsiteFeaturesPageState extends State<WebsiteFeaturesPage> {
             locked: !isAdmin,
           ),
 
+          if (isAdmin)
+            _tile(
+              Icons.history,
+              'Audit log',
+              'Who changed what across the system',
+              () => open(AuditLogPage(api: widget.api)),
+            ),
+
           _tile(
             Icons.delete_sweep,
             'Clear test data',
@@ -1252,9 +1260,8 @@ class _BatchesPageState extends State<BatchesPage> {
           'This calculates the actual shipping cost for every sale in '
           'this batch using this month\'s rate for the way it travelled '
           '(Sea: CBM × the Sea rate. Air: volumetric kg × the Air rate), '
-          'plus each sale\'s weight × the packing rate, and locks the '
-          'batch to "Arrived — Awaiting Shipping Payment". '
-          'This cannot be undone.',
+          'plus each sale\'s weight × the packing rate. '
+          'An admin can undo an accidental arrival before any sale is settled.',
         ),
         actions: [
           TextButton(
@@ -1287,6 +1294,92 @@ class _BatchesPageState extends State<BatchesPage> {
           ),
         );
       }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('$e')),
+        );
+      }
+    }
+  }
+
+  Future<void> undoArrival(int id) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Undo batch arrival?'),
+        content: const Text(
+          'This returns every sale in the batch to its travel milestone '
+          '(On sea or On air), clears the arrival shipping calculation and '
+          'puts the batch back In Transit. It is only allowed before any '
+          'sale in the batch has settled shipping or entered a delivery.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Undo arrival'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+
+    if (!await BiometricGuard.require(
+      context,
+      reason: 'Verify your identity before undoing a shipment arrival.',
+    )) return;
+
+    try {
+      await widget.api.undoBatchArrival(id);
+      await load();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Batch returned to In Transit.')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('$e')),
+        );
+      }
+    }
+  }
+
+  Future<void> deleteBatch(int id, String name) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Delete shipment batch?'),
+        content: Text(
+          'Delete "$name"? Sales will not be deleted; they will be detached from this batch.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+
+    if (!await BiometricGuard.require(
+      context,
+      reason: 'Verify your identity before deleting this shipment batch.',
+    )) return;
+
+    try {
+      await widget.api.deleteBatch(id);
+      await load();
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -1397,23 +1490,38 @@ class _BatchesPageState extends State<BatchesPage> {
                         ' • $saleCount sales',
                       ),
                       onTap: () => manageBatch(batch),
-                      trailing:
-                          batch['status'] == 'In Transit' && widget.isAdmin
-                              ? TextButton.icon(
-                                  icon: const Icon(
-                                    Icons.flight_land,
-                                  ),
-                                  label: const Text(
-                                    'Mark arrived',
-                                  ),
-                                  onPressed: () =>
-                                      arriveBatch(
+                      trailing: widget.isAdmin
+                          ? PopupMenuButton<String>(
+                              onSelected: (value) async {
+                                if (value == 'arrive') {
+                                  await arriveBatch(batch['id'] as int);
+                                } else if (value == 'undo') {
+                                  await undoArrival(batch['id'] as int);
+                                } else if (value == 'delete') {
+                                  await deleteBatch(
                                     batch['id'] as int,
+                                    '${batch['name'] ?? 'Batch'}',
+                                  );
+                                }
+                              },
+                              itemBuilder: (_) => [
+                                if (batch['status'] == 'In Transit')
+                                  const PopupMenuItem(
+                                    value: 'arrive',
+                                    child: Text('Mark arrived'),
                                   ),
-                                )
-                              : batch['status'] == 'In Transit'
-                                  ? const Chip(label: Text('Admins only'))
-                                  : null,
+                                if (batch['status'] == 'Arrived - Awaiting Shipping Payment')
+                                  const PopupMenuItem(
+                                    value: 'undo',
+                                    child: Text('Undo arrival'),
+                                  ),
+                                const PopupMenuItem(
+                                  value: 'delete',
+                                  child: Text('Delete batch'),
+                                ),
+                              ],
+                            )
+                          : null,
                     ),
                   );
                 },
@@ -3463,6 +3571,128 @@ class _SettingsPageState
     }
   }
 
+  Future<void> deleteSelectedSale() async {
+    final sales = await widget.api.sales();
+    if (!mounted) return;
+    int? selected;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setState) => AlertDialog(
+          title: const Text('Delete selected sale'),
+          content: DropdownButtonFormField<int>(
+            value: selected,
+            decoration: const InputDecoration(labelText: 'Sale'),
+            items: sales.whereType<Map>().map((raw) {
+              final sale = Map<String, dynamic>.from(raw);
+              return DropdownMenuItem<int>(
+                value: (sale['id'] as num).toInt(),
+                child: Text(
+                  '${sale['order_id'] ?? '#${sale['id']}'} • ${sale['customer_name'] ?? 'Customer'}',
+                  overflow: TextOverflow.ellipsis,
+                ),
+              );
+            }).toList(),
+            onChanged: (value) => setState(() => selected = value),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: selected == null
+                  ? null
+                  : () => Navigator.pop(dialogContext, true),
+              child: const Text('Delete'),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    if (confirmed != true || selected == null) return;
+    if (!await BiometricGuard.require(
+      context,
+      reason: 'Verify your identity before deleting a sale.',
+    )) return;
+
+    try {
+      await widget.api.deleteSale(selected!);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Sale deleted.')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+      }
+    }
+  }
+
+  Future<void> deleteSelectedBatch() async {
+    final batches = await widget.api.batches();
+    if (!mounted) return;
+    int? selected;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setState) => AlertDialog(
+          title: const Text('Delete selected shipment batch'),
+          content: DropdownButtonFormField<int>(
+            value: selected,
+            decoration: const InputDecoration(labelText: 'Shipment batch'),
+            items: batches.whereType<Map>().map((raw) {
+              final batch = Map<String, dynamic>.from(raw);
+              return DropdownMenuItem<int>(
+                value: (batch['id'] as num).toInt(),
+                child: Text(
+                  '${batch['name'] ?? 'Batch'} • ${batch['transport_mode'] == 'air' ? 'Air' : 'Sea'} • ${batch['status'] ?? ''}',
+                  overflow: TextOverflow.ellipsis,
+                ),
+              );
+            }).toList(),
+            onChanged: (value) => setState(() => selected = value),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: selected == null
+                  ? null
+                  : () => Navigator.pop(dialogContext, true),
+              child: const Text('Delete'),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    if (confirmed != true || selected == null) return;
+    if (!await BiometricGuard.require(
+      context,
+      reason: 'Verify your identity before deleting a shipment batch.',
+    )) return;
+
+    try {
+      await widget.api.deleteBatch(selected!);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Shipment batch deleted.')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+      }
+    }
+  }
+
   @override
   void dispose() {
     name.dispose();
@@ -3587,6 +3817,26 @@ class _SettingsPageState
                   decoration: const InputDecoration(
                     labelText: 'Account name',
                   ),
+                ),
+                const SizedBox(height: 24),
+                Text(
+                  'Selected data management',
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+                const SizedBox(height: 4),
+                const Text(
+                  'Use these controls to remove one live sale or one shipment batch without clearing the rest of the database. Sales are protected when shipping has already been settled or a delivery has been created.',
+                ),
+                const SizedBox(height: 8),
+                OutlinedButton.icon(
+                  onPressed: deleteSelectedSale,
+                  icon: const Icon(Icons.delete_outline),
+                  label: const Text('Delete selected sale'),
+                ),
+                OutlinedButton.icon(
+                  onPressed: deleteSelectedBatch,
+                  icon: const Icon(Icons.delete_sweep_outlined),
+                  label: const Text('Delete selected shipment batch'),
                 ),
                 const SizedBox(height: 20),
                 FilledButton.icon(
@@ -4175,6 +4425,83 @@ class _PasswordFieldState
           },
         ),
       ),
+    );
+  }
+}
+class AuditLogPage extends StatefulWidget {
+  const AuditLogPage({super.key, required this.api});
+  final ApiClient api;
+  @override
+  State<AuditLogPage> createState() => _AuditLogPageState();
+}
+
+class _AuditLogPageState extends State<AuditLogPage> {
+  List<dynamic> rows = [];
+  bool busy = true;
+  String? error;
+
+  @override
+  void initState() {
+    super.initState();
+    load();
+  }
+
+  Future<void> load() async {
+    try {
+      final result = await widget.api.auditLog();
+      if (mounted) setState(() { rows = result; error = null; });
+    } catch (e) {
+      if (mounted) setState(() => error = e.toString());
+    } finally {
+      if (mounted) setState(() => busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Audit log'),
+        actions: [
+          IconButton(onPressed: load, icon: const Icon(Icons.refresh)),
+        ],
+      ),
+      body: busy
+          ? const Center(child: BrandLoader())
+          : error != null
+              ? Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: Text(error!, textAlign: TextAlign.center),
+                  ),
+                )
+              : rows.isEmpty
+                  ? const Center(child: Text('No audit entries yet.'))
+                  : RefreshIndicator(
+                      onRefresh: load,
+                      child: ListView.separated(
+                        padding: const EdgeInsets.all(12),
+                        itemCount: rows.length,
+                        separatorBuilder: (_, __) => const Divider(height: 1),
+                        itemBuilder: (_, index) {
+                          final row = Map<String, dynamic>.from(rows[index] as Map);
+                          final detail = row['details'];
+                          final subtitle = [
+                            (row['username'] ?? 'System').toString(),
+                            (row['target_type']?.toString() ?? '') +
+                                ' #' +
+                                (row['target_id']?.toString() ?? ''),
+                            (row['created_at'] ?? '').toString(),
+                            if (detail != null) detail.toString(),
+                          ].join(' • ');
+                          return ListTile(
+                            leading: const Icon(Icons.history),
+                            title: Text(row['action']?.toString() ?? 'Action'),
+                            subtitle: Text(subtitle),
+                          );
+                        },
+                      ),
+                    ),
     );
   }
 }

@@ -87,7 +87,7 @@ def journey_board():
         rows.append({
             "sale": sale,
             "stage": journey["current_label"],
-            "movable": bool(manual_stages_for(sale)) and journey["current"] in ("confirmed", "fulfilled", "cn_transit", "packing"),
+            "movable": sale.order_status != "Cancelled",
         })
     return render_template("sales/journey.html", rows=rows)
 

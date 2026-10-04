@@ -2,6 +2,7 @@ from flask import Blueprint, render_template, redirect, url_for, request, flash,
 from flask_login import login_user, logout_user, login_required, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
 import time
+import secrets
 
 from app import login_manager
 from app.models import User
@@ -28,6 +29,8 @@ def login():
         user = User.query.filter_by(username=username).first()
         if user and check_password_hash(user.password_hash, password):
             login_user(user)
+            session.permanent = True
+            session["last_activity"] = time.time()
             record_audit(
                 "login",
                 target_type="user",
@@ -94,6 +97,14 @@ def change_password():
         else:
             from app import db
             current_user.password_hash = generate_password_hash(new_password)
+            current_user.api_token = secrets.token_hex(32)
+            record_audit(
+                "password.change",
+                target_type="user",
+                target_id=current_user.id,
+                details={"source": "classic"},
+                user=current_user,
+            )
             db.session.commit()
             flash("Password updated successfully.", "success")
             return redirect(url_for("classic_home"))

@@ -159,6 +159,7 @@ class JourneyPage extends StatefulWidget {
 
 class _JourneyPageState extends State<JourneyPage> {
   List<Map<String, dynamic>> sales = [];
+  final Set<int> selectedIds = <int>{};
   bool loading = true;
   String? error;
 
@@ -198,6 +199,64 @@ class _JourneyPageState extends State<JourneyPage> {
     }
   }
 
+  Future<void> updateSelected() async {
+    if (selectedIds.isEmpty) return;
+    try {
+      final detail = await widget.api.saleJourney(selectedIds.first);
+      if (!mounted) return;
+      final raw = detail['manual_stages'];
+      final stages = raw is List
+          ? raw.whereType<Map>().map((x) => Map<String, dynamic>.from(x)).toList()
+          : <Map<String, dynamic>>[];
+      String? selectedStage;
+      final result = await showDialog<String>(
+        context: context,
+        builder: (dialogContext) => StatefulBuilder(
+          builder: (context, setDialogState) => AlertDialog(
+            title: Text('Move ' + selectedIds.length.toString() + ' selected sale(s)'),
+            content: DropdownButtonFormField<String>(
+              value: selectedStage,
+              decoration: const InputDecoration(labelText: 'Milestone'),
+              items: stages.map((stage) => DropdownMenuItem<String>(
+                value: stage['key']?.toString(),
+                child: Text(stage['label']?.toString() ?? stage['key'].toString()),
+              )).toList(),
+              onChanged: (value) => setDialogState(() => selectedStage = value),
+            ),
+            actions: [
+              TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('Cancel')),
+              FilledButton(
+                onPressed: selectedStage == null
+                    ? null
+                    : () => Navigator.pop(dialogContext, selectedStage),
+                child: const Text('Update'),
+              ),
+            ],
+          ),
+        ),
+      );
+      if (result == null) return;
+      final response = await widget.api.setJourneyStage(selectedIds.toList(), result);
+      final updated = (response['updated'] as num?)?.toInt() ?? 0;
+      final skipped = response['skipped'];
+      if (!mounted) return;
+      setState(() => selectedIds.clear());
+      await load();
+      final suffix = skipped is List && skipped.isNotEmpty
+          ? ' ' + skipped.length.toString() + ' could not be changed.'
+          : '';
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(updated.toString() + ' sale(s) updated.' + suffix)),
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not update selected journeys: ' + e.toString())),
+        );
+      }
+    }
+  }
+
   Future<void> openSale(Map<String, dynamic> sale) async {
     final saleId = (sale['id'] as num?)?.toInt();
     if (saleId == null) return;
@@ -232,8 +291,14 @@ class _JourneyPageState extends State<JourneyPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Order journey'),
+        title: Text(selectedIds.isEmpty ? 'Order journey' : selectedIds.length.toString() + ' selected'),
         actions: [
+          if (selectedIds.isNotEmpty)
+            IconButton(
+              tooltip: 'Update selected',
+              onPressed: loading ? null : updateSelected,
+              icon: const Icon(Icons.update),
+            ),
           IconButton(
             tooltip: 'Refresh',
             onPressed: loading ? null : load,
@@ -265,8 +330,28 @@ class _JourneyPageState extends State<JourneyPage> {
 
                           return Card(
                             child: ListTile(
-                              leading: CircleAvatar(
-                                child: Text('${id ?? ''}'),
+                              leading: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Checkbox(
+                                    value: id != null && selectedIds.contains(id),
+                                    onChanged: id == null
+                                        ? null
+                                        : (checked) {
+                                            setState(() {
+                                              if (checked == true) {
+                                                selectedIds.add(id);
+                                              } else {
+                                                selectedIds.remove(id);
+                                              }
+                                            });
+                                          },
+                                  ),
+                                  CircleAvatar(
+                                    child: Text(id?.toString() ?? ''),
+                                  ),
+                                ],
+                              )
                               ),
                               title: Text(
                                 order,
@@ -280,7 +365,18 @@ class _JourneyPageState extends State<JourneyPage> {
                               ),
                               isThreeLine: true,
                               trailing: const Icon(Icons.chevron_right),
-                              onTap: () => openSale(sale),
+                              onTap: selectedIds.isNotEmpty
+                                  ? () {
+                                      if (id == null) return;
+                                      setState(() {
+                                        if (selectedIds.contains(id)) {
+                                          selectedIds.remove(id);
+                                        } else {
+                                          selectedIds.add(id);
+                                        }
+                                      });
+                                    }
+                                  : () => openSale(sale),
                             ),
                           );
                         },

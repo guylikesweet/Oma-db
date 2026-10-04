@@ -41,6 +41,24 @@ class ApiClient {
     return _storage.delete(key: 'api_token');
   }
 
+  Future<String?> biometricCredential() {
+    return _storage.read(key: 'biometric_credential');
+  }
+
+  Future<String?> biometricUsername() {
+    return _storage.read(key: 'biometric_username');
+  }
+
+  Future<void> saveBiometricCredential(String username, String credential) async {
+    await _storage.write(key: 'biometric_username', value: username);
+    await _storage.write(key: 'biometric_credential', value: credential);
+  }
+
+  Future<void> clearBiometricCredential() async {
+    await _storage.delete(key: 'biometric_username');
+    await _storage.delete(key: 'biometric_credential');
+  }
+
   Future<dynamic> _request(
     String method,
     String path, {
@@ -241,6 +259,20 @@ class ApiClient {
     );
   }
 
+  Future<Map<String, dynamic>> biometricLogin(
+    String username,
+    String credential,
+  ) {
+    return _map(
+      'POST',
+      '/v1/auth/biometric-login',
+      body: {
+        'username': username,
+        'credential': credential,
+      },
+    );
+  }
+
   Future<void> logout() async {
     await _request(
       'POST',
@@ -329,6 +361,14 @@ class ApiClient {
   // ============================================================
   // DASHBOARD
   // ============================================================
+
+  Future<List<dynamic>> auditLog({int limit = 200}) {
+    return _list(
+      'GET',
+      '/v1/audit',
+      query: {'limit': '$limit'},
+    );
+  }
 
   Future<Map<String, dynamic>> dashboard() {
     return _map(
@@ -593,6 +633,30 @@ class ApiClient {
       'POST',
       '/v1/batches/$id/arrive',
       body: payload ?? <String, dynamic>{},
+    );
+  }
+
+  Future<Map<String, dynamic>> undoBatchArrival(int id) {
+    return _map(
+      'POST',
+      '/v1/batches/$id/undo-arrival',
+      body: <String, dynamic>{},
+    );
+  }
+
+  Future<Map<String, dynamic>> deleteSale(int id) {
+    return _map(
+      'DELETE',
+      '/v1/admin/sales/$id',
+      body: <String, dynamic>{},
+    );
+  }
+
+  Future<Map<String, dynamic>> deleteBatch(int id) {
+    return _map(
+      'DELETE',
+      '/v1/admin/batches/$id',
+      body: <String, dynamic>{},
     );
   }
 

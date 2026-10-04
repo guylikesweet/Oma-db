@@ -4,7 +4,7 @@ from flask_login import login_required
 from app.access import admin_required, password_required
 from app.models import ShipmentBatch, Sale
 from app.services.shipment_batches import (
-    add_sale_to_batch, remove_sale_from_batch, mark_arrived, settle_sale_shipping, BatchValidationError,
+    add_sale_to_batch, remove_sale_from_batch, mark_arrived, mark_unarrived, settle_sale_shipping, BatchValidationError,
 )
 
 batches_bp = Blueprint("batches", __name__, url_prefix="/batches", template_folder="templates/batches")
@@ -55,6 +55,22 @@ def mark_arrived_route(batch_id):
     try:
         batch = mark_arrived(batch_id)
         flash(f"Batch '{batch.name}' marked arrived. Actual shipping cost calculated for {len(batch.sales)} sale(s). Settle each order's payment below.", "success")
+    except BatchValidationError as e:
+        flash(str(e), "error")
+    return redirect(url_for("batches.batch_detail", batch_id=batch_id))
+
+
+@batches_bp.route("/<int:batch_id>/undo-arrival", methods=("POST",))
+@admin_required
+@password_required
+def undo_arrival_route(batch_id):
+    try:
+        batch = mark_unarrived(batch_id)
+        flash(
+            f"Batch '{batch.name}' returned to In Transit. "
+            f"Sales are back on {batch.mode_label.lower()} tracking.",
+            "success",
+        )
     except BatchValidationError as e:
         flash(str(e), "error")
     return redirect(url_for("batches.batch_detail", batch_id=batch_id))

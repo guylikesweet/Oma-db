@@ -1,8 +1,10 @@
-from flask import Flask, redirect, url_for, render_template
+from flask import Flask, redirect, url_for, render_template, session, request, flash
 from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
 from flask_login import LoginManager, login_required
 from flask_cors import CORS
+from datetime import timedelta
+import time
 
 db = SQLAlchemy()
 migrate = Migrate()
@@ -12,11 +14,39 @@ login_manager = LoginManager()
 def create_app(config_object="config.Config"):
     app = Flask(__name__)
     app.config.from_object(config_object)
+    app.permanent_session_lifetime = timedelta(minutes=30)
 
     db.init_app(app)
     migrate.init_app(app, db)
     login_manager.init_app(app)
     login_manager.login_view = "auth.login"
+    @app.before_request
+    def enforce_classic_inactivity_timeout():
+        # Flask-Login sessions are separate from the mobile bearer-token API.
+        # Refresh the activity timestamp on every authenticated browser request.
+        if not request.path.startswith("/api/"):
+            from flask_login import current_user, logout_user
+            if current_user.is_authenticated:
+                now = time.time()
+                last = session.get("last_activity")
+                if last is not None and now - float(last) >= 30 * 60:
+                    user = current_user
+                    from app.services.audit import record_audit
+                    record_audit(
+                        "logout.timeout",
+                        target_type="user",
+                        target_id=user.id,
+                        details={"source": "classic", "timeout_minutes": 30},
+                        user=user,
+                    )
+                    db.session.commit()
+                    logout_user()
+                    session.clear()
+                    flash("You were logged out after 30 minutes of inactivity.", "error")
+                    return redirect(url_for("auth.login", next=request.url))
+                session["last_activity"] = now
+                session.permanent = True
+
 
     # /api/* is called from the mobile app (no browser, no CORS involved)
     # and now also from the Flutter Web build — browsers enforce CORS on

@@ -30,6 +30,7 @@ void main() async {
   }
   await LocalDatabase.instance.db;
   await OmaThemeController.initialize(LocalDatabase.instance);
+  await OmaPushNotifications.requestInitialPermissions(LocalDatabase.instance);
   runApp(const OmaMobileApp());
 }
 
@@ -275,6 +276,83 @@ class _LoginPageState extends State<LoginPage> {
   bool busy = false;
   bool obscure = true;
   String? error;
+  bool biometricAvailable = false;
+  String? savedBiometricUsername;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadBiometricLogin();
+  }
+
+  Future<void> _loadBiometricLogin() async {
+    final username = await widget.api.biometricUsername();
+    final available = await BiometricGuard.canUseBiometrics();
+    if (!mounted) return;
+    setState(() {
+      savedBiometricUsername = username;
+      biometricAvailable = available;
+      if (username != null && username.isNotEmpty) {
+        this.username.text = username;
+      }
+    });
+  }
+
+  Future<void> biometricLogin() async {
+    final entered = username.text.trim();
+    final savedUser = savedBiometricUsername;
+    final credential = await widget.api.biometricCredential();
+
+    if (!biometricAvailable ||
+        entered.isEmpty ||
+        savedUser == null ||
+        credential == null ||
+        entered.toLowerCase() != savedUser.toLowerCase()) {
+      setState(() => error = 'Enter the username registered for biometric login.');
+      return;
+    }
+
+    final authenticated = await BiometricGuard.authenticateForLogin(
+      reason: 'Use your fingerprint or device biometric to sign in to OmaSales.',
+    );
+    if (!authenticated) return;
+
+    setState(() {
+      busy = true;
+      error = null;
+    });
+
+    try {
+      final result = await widget.api.biometricLogin(
+        entered,
+        credential,
+      );
+      final token = result['token']?.toString();
+      if (token == null || token.isEmpty) {
+        throw Exception('Biometric login did not return a valid session.');
+      }
+
+      await widget.api.saveToken(token);
+      await widget.api.saveBiometricCredential(username.text.trim(), token);
+      await AppSession.refresh(widget.api);
+
+      if (mounted) {
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(builder: (_) => AppShell(api: widget.api)),
+        );
+      }
+    } catch (e) {
+      await widget.api.clearBiometricCredential();
+      if (mounted) {
+        setState(() {
+          savedBiometricUsername = null;
+          error = 'Biometric login expired. Sign in with your password once to re-enable it.';
+        });
+      }
+    } finally {
+      if (mounted) setState(() => busy = false);
+    }
+  }
 
   Future<void> login() async {
     if (username.text.trim().isEmpty || password.text.isEmpty) {
@@ -300,6 +378,7 @@ class _LoginPageState extends State<LoginPage> {
       }
 
       await widget.api.saveToken(token);
+      await widget.api.saveBiometricCredential(username.text.trim(), token);
       await AppSession.refresh(widget.api);
 
       if (mounted) {
@@ -369,6 +448,7 @@ class _LoginPageState extends State<LoginPage> {
                             border: OutlineInputBorder(),
                             prefixIcon: Icon(Icons.person_outline),
                           ),
+                          onChanged: (_) => setState(() {}),
                         ),
                         const SizedBox(height: 12),
                         TextField(
@@ -400,6 +480,19 @@ class _LoginPageState extends State<LoginPage> {
                             textAlign: TextAlign.center,
                           ),
                         ],
+                        const SizedBox(height: 10),
+                        if (biometricAvailable &&
+                            savedBiometricUsername != null &&
+                            username.text.trim().toLowerCase() ==
+                                savedBiometricUsername!.toLowerCase())
+                          SizedBox(
+                            width: double.infinity,
+                            child: OutlinedButton.icon(
+                              onPressed: busy ? null : biometricLogin,
+                              icon: const Icon(Icons.fingerprint),
+                              label: const Text('Use biometrics'),
+                            ),
+                          ),
                         const SizedBox(height: 20),
                         SizedBox(
                           width: double.infinity,
@@ -447,6 +540,8 @@ class _AppShellState extends State<AppShell> {
   bool syncing = false;
   String syncText = 'Ready';
   int refreshKey = 0;
+  Timer? inactivityTimer;
+  DateTime _lastActivity = DateTime.now();
 
   @override
   void initState() {
@@ -466,6 +561,12 @@ class _AppShellState extends State<AppShell> {
     // Register push notifications on every authenticated entry path,
     // including a fresh login that bypasses _AuthenticatedShell.
     OmaPushNotifications.initialize(widget.api);
+
+    _lastActivity = DateTime.now();
+    inactivityTimer = Timer.periodic(
+      const Duration(minutes: 1),
+      (_) => _checkInactivity(),
+    );
 
     AppSession.refresh(widget.api);
 
@@ -515,8 +616,33 @@ class _AppShellState extends State<AppShell> {
     }
   }
 
+  void _touchActivity() {
+    _lastActivity = DateTime.now();
+  }
+
+  Future<void> _checkInactivity() async {
+    if (DateTime.now().difference(_lastActivity) < const Duration(minutes: 30)) {
+      return;
+    }
+
+    await widget.api.clearToken();
+    AppSession.reset();
+
+    if (!mounted) return;
+
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute(builder: (_) => LoginPage(api: widget.api)),
+      (_) => false,
+    );
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('You were logged out after 30 minutes of inactivity.')),
+    );
+  }
+
   Future<void> logout() async {
     await widget.api.clearToken();
+    await widget.api.clearBiometricCredential();
     AppSession.reset();
 
     if (!mounted) return;
@@ -532,6 +658,7 @@ class _AppShellState extends State<AppShell> {
   @override
   void dispose() {
     connectivity?.cancel();
+    inactivityTimer?.cancel();
     if (BiometricGuard.passwordVerifier != null) {
       BiometricGuard.passwordVerifier = null;
     }
@@ -579,9 +706,15 @@ class _AppShellState extends State<AppShell> {
     ];
 
     final wide = MediaQuery.sizeOf(context).width >= 1000;
-    final content = IndexedStack(
-      index: tab,
-      children: pages,
+    final content = Listener(
+      behavior: HitTestBehavior.translucent,
+      onPointerDown: (_) => _touchActivity(),
+      onPointerMove: (_) => _touchActivity(),
+      onPointerSignal: (_) => _touchActivity(),
+      child: IndexedStack(
+        index: tab,
+        children: pages,
+      ),
     );
 
     if (wide) {

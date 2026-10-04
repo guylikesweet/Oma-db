@@ -63,6 +63,12 @@ def add_sale_to_batch(batch_id, sale_id):
 
     sale.batch_id = batch.id
     sale.batch_assigned_at = datetime.utcnow()
+    record_audit(
+        "batch.add_sale",
+        target_type="sale",
+        target_id=sale.id,
+        details={"batch_id": batch.id, "transport_mode": batch.transport_mode},
+    )
     db.session.commit()
     return batch
 
@@ -71,8 +77,15 @@ def remove_sale_from_batch(sale_id):
     sale = Sale.query.get(sale_id)
     if not sale:
         raise BatchValidationError("Sale not found.")
+    batch_id = sale.batch_id
     sale.batch_id = None
     sale.batch_assigned_at = None
+    record_audit(
+        "batch.remove_sale",
+        target_type="sale",
+        target_id=sale.id,
+        details={"batch_id": batch_id},
+    )
     db.session.commit()
 
 
@@ -119,6 +132,49 @@ def mark_arrived(batch_id):
     except Exception:
         # The outbox remains committed and can be delivered on a later flush.
         pass
+    return batch
+
+
+def mark_unarrived(batch_id):
+    """Undo an accidental arrival before any sale has been financially settled."""
+    batch = ShipmentBatch.query.get(batch_id)
+    if not batch:
+        raise BatchValidationError("Batch not found.")
+    if batch.status != ShipmentBatch.STATUS_ARRIVED:
+        raise BatchValidationError(
+            f"Batch must be 'Arrived' to undo arrival (currently '{batch.status}')."
+        )
+    if any(s.shipping_payment_settled for s in batch.sales):
+        raise BatchValidationError(
+            "Arrival cannot be undone after shipping payment has been settled for a sale in this batch."
+        )
+    if any(s.delivery_id for s in batch.sales):
+        raise BatchValidationError(
+            "Arrival cannot be undone after a sale in this batch has been assigned to a delivery."
+        )
+
+    for sale in batch.sales:
+        sale.actual_shipping_cost = None
+        sale.total_amount = sale.subtotal_amount or Decimal("0")
+        sale.shipping_payment_settled = False
+        sale.shipping_payment_settled_at = None
+
+    previous_arrival = batch.arrived_at
+    batch.arrived_at = None
+    batch.status = ShipmentBatch.STATUS_IN_TRANSIT
+
+    record_audit(
+        "batch.undo_arrival",
+        target_type="shipment_batch",
+        target_id=batch.id,
+        details={
+            "transport_mode": batch.transport_mode,
+            "sale_count": len(batch.sales),
+            "previous_arrived_at": previous_arrival.isoformat() if previous_arrival else None,
+        },
+    )
+
+    db.session.commit()
     return batch
 
 
