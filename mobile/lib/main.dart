@@ -429,8 +429,25 @@ class _LoginPageState extends State<LoginPage> {
   }
 
   Future<void> login() async {
-    if (username.text.trim().isEmpty || password.text.isEmpty) {
-      setState(() => error = 'Enter your username and password.');
+    if (username.text.trim().isEmpty) {
+      setState(() => error = 'Enter your username.');
+      return;
+    }
+
+    // When this device has a saved biometric account and the password field
+    // is empty, the normal Sign in button should launch the phone biometric
+    // prompt instead of demanding the password.
+    if (password.text.isEmpty &&
+        biometricAvailable &&
+        savedBiometricUsername != null &&
+        savedBiometricUsername!.toLowerCase() == username.text.trim().toLowerCase() &&
+        await widget.api.biometricCredential() != null) {
+      await biometricLogin();
+      return;
+    }
+
+    if (password.text.isEmpty) {
+      setState(() => error = 'Enter your password or use biometrics.');
       return;
     }
 
