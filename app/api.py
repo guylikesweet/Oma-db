@@ -19,7 +19,7 @@ from flask import Blueprint, request, jsonify, g
 from werkzeug.security import check_password_hash, generate_password_hash
 
 from app import db
-from app.services.journey import journey_public, manual_stages_for, stage_label, set_manual_stage_bulk, JourneyError
+from app.services.journey import journey_public, flow_for, manual_stages_for, stage_label, set_manual_stage_bulk, JourneyError
 from app.access import require_admin_api
 from app.models import (
     User, Product, Sale, SaleItem, Shipping, Delivery, ShipmentBatch,
@@ -769,7 +769,7 @@ def mobile_sale_journey(sale_id):
     data = _journey_json(sale)
     data["manual_stages"] = [
         {"key": key, "label": stage_label(key)}
-        for key in manual_stages_for(sale)
+        for key in flow_for(sale)
     ]
     data["estimated_shipping_sea"] = float(sale.estimated_shipping_sea) if sale.estimated_shipping_sea is not None else None
     data["estimated_shipping_air"] = float(sale.estimated_shipping_air) if sale.estimated_shipping_air is not None else None
