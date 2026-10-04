@@ -18,6 +18,7 @@ import string
 from app import db
 from app.models import Sale, SaleItem, Product, StockLog, ShipmentBatch
 from app.services.rates import get_rate_for_month, get_air_rate_for_month, get_rate_per_kg
+from app.services.audit import record_audit
 
 ORDER_ID_ALPHABET = string.ascii_uppercase + string.digits
 
@@ -220,6 +221,13 @@ def create_sale(customer_name, customer_phone, customer_address, customer_state,
         sale.estimated_shipping_air = estimated_air if air_rate is not None else None
     sale.total_amount = subtotal  # goods only; actual shipping added once the batch arrives
 
+    record_audit(
+        "sale.create",
+        target_type="sale",
+        target_id=sale.id,
+        details={"order_id": sale.order_id, "sale_type": sale.sale_type},
+    )
+
     if commit:
         db.session.commit()
     else:
@@ -250,7 +258,14 @@ def update_sale_status(sale_id, new_status):
                     product_id=product.id, change_qty=item.qty, reason=f"Sale #{sale.id} Cancelled"
                 ))
 
+    old_status = sale.order_status
     sale.order_status = new_status
+    record_audit(
+        "sale.status",
+        target_type="sale",
+        target_id=sale.id,
+        details={"from": old_status, "to": new_status},
+    )
     db.session.commit()
     return sale
 
@@ -266,6 +281,13 @@ def update_sale_payment_status(sale_id, new_payment_status):
         raise SaleValidationError("Sale not found.")
     if new_payment_status not in VALID_PAYMENT_STATUSES:
         raise SaleValidationError(f"Invalid payment status '{new_payment_status}'.")
+    old_status = sale.payment_status
     sale.payment_status = new_payment_status
+    record_audit(
+        "sale.payment_status",
+        target_type="sale",
+        target_id=sale.id,
+        details={"from": old_status, "to": new_payment_status},
+    )
     db.session.commit()
     return sale
