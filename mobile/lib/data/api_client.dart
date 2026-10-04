@@ -248,6 +248,14 @@ class ApiClient {
     );
   }
 
+  Future<Map<String, dynamic>> verifyPassword(String password) {
+    return _map(
+      'POST',
+      '/v1/auth/verify-password',
+      body: {'password': password},
+    );
+  }
+
   Future<Map<String, dynamic>> changePassword(
     String currentPassword,
     String newPassword,
