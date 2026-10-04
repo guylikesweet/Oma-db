@@ -69,6 +69,15 @@ def journey_board():
         try:
             updated, unchanged, skipped = set_manual_stage_bulk(sales, stage, user_id=current_user.id)
             from app import db
+            from app.services.audit import record_audit
+            if updated:
+                record_audit(
+                    "journey.update",
+                    target_type="sale",
+                    target_id=",".join(str(x.id) for x in sales),
+                    details={"stage": stage, "sale_ids": [x.id for x in sales], "updated": updated, "source": "classic"},
+                    user=current_user,
+                )
             db.session.commit()
             message = f"{updated} order(s) moved"
             if unchanged: message += f", {unchanged} already there"
