@@ -1505,6 +1505,10 @@ def mobile_delete_sale(sale_id):
 @require_admin_api
 def mobile_delete_batch(batch_id):
     batch = ShipmentBatch.query.get_or_404(batch_id)
+    if batch.status != ShipmentBatch.STATUS_IN_TRANSIT:
+        return jsonify({"error": "Only an In Transit shipment batch can be deleted. Undo its arrival first."}), 400
+    if any(s.shipping_payment_settled or s.delivery_id for s in batch.sales):
+        return jsonify({"error": "This batch contains sales that are already settled or assigned to delivery."}), 400
     sale_ids = [sale.id for sale in batch.sales]
     for sale in batch.sales:
         sale.batch_id = None
