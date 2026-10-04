@@ -603,12 +603,44 @@ def _mobile_operation(data):
     return op, existing
 
 
+_MOBILE_CHANGE_NOTIFICATIONS = {
+    "create_product": ("Product created", "A new product was created."),
+    "update_product": ("Product updated", "Product details were changed."),
+    "delete_product": ("Product deleted", "A product was deleted."),
+    "shipping_create": ("Shipping record created", "A shipping record was created."),
+    "shipping_update": ("Shipping updated", "A shipping record was updated."),
+    "settle_shipping": ("Shipping payment settled", "A sale's shipping payment was settled."),
+    "courier_rate_create": ("Courier rate updated", "A courier shipping rate was created."),
+    "courier_rate_update": ("Courier rate updated", "A courier shipping rate was changed."),
+    "courier_rate_delete": ("Courier rate removed", "A courier shipping rate was removed."),
+    "monthly_rate_create": ("Shipping rate updated", "A monthly shipping rate was created."),
+    "monthly_rate_update": ("Shipping rate updated", "A monthly shipping rate was changed."),
+    "monthly_rate_delete": ("Shipping rate removed", "A monthly shipping rate was removed."),
+    "monthly_air_rate_create": ("Air shipping rate updated", "A monthly air shipping rate was created."),
+    "monthly_air_rate_update": ("Air shipping rate updated", "A monthly air shipping rate was changed."),
+    "monthly_air_rate_delete": ("Air shipping rate removed", "A monthly air shipping rate was removed."),
+    "label_prepare": ("Delivery label updated", "Delivery label information was updated."),
+}
+
+
 def _mobile_finish(op, kind, status, payload):
     # Offline-first writes carry this marker from the mobile queue. Once the
     # server successfully commits the queued operation, notify that same user
     # so they know the offline change has reached the server.
     request_data = request.get_json(silent=True) or {}
     offline_origin = bool(request_data.get("offline_origin"))
+
+    notification = _MOBILE_CHANGE_NOTIFICATIONS.get(kind) if status < 400 else None
+    if notification:
+        from app.services.push_notifications import queue_change_notification
+        title, body = notification
+        queue_change_notification(
+            g.api_user.id,
+            event_type=kind,
+            title=title,
+            body=body,
+            data={"type": "business_change", "action": kind, "operation_id": op},
+        )
 
     db.session.add(MobileOperation(
         user_id=g.api_user.id,
