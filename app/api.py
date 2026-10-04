@@ -53,19 +53,19 @@ def require_api_token(f):
 
         now = datetime.utcnow()
         last = user.api_last_activity_at
-        if last is not None and now - last >= timedelta(minutes=30):
+        if last is not None and now - last >= timedelta(hours=6):
             record_audit(
                 "logout.timeout",
                 target_type="user",
                 target_id=user.id,
                 outcome="success",
-                details={"source": "api", "timeout_minutes": 30},
+                details={"source": "api", "timeout_minutes": 360},
                 user=user,
             )
             user.api_token = None
             user.api_last_activity_at = None
             db.session.commit()
-            return jsonify({"error": "Your session expired after 30 minutes of inactivity. Please sign in again."}), 401
+            return jsonify({"error": "Your session expired after 6 hours of inactivity. Please sign in again."}), 401
 
         user.api_last_activity_at = now
         db.session.commit()
@@ -1047,10 +1047,10 @@ def mobile_batch_arrive(batch_id):
         b.status = ShipmentBatch.STATUS_ARRIVED
         record_audit(
             'batch.arrive', target_type='shipment_batch', target_id=b.id,
-            details={'transport_mode': b.transport_mode, 'sale_count': len(b.sales), 'source': 'api'},
+            details={'transport_mode': b.transport_mode, 'sale_count': len(b.sales), 'name': b.name, 'source': 'api'},
             user=g.api_user,
         )
-        queue_batch_arrival(b)
+        queue_batch_arrival(b, exclude_user_id=g.api_user.id)
         result = _mobile_finish(op, "batch_arrive", 200, _batch_json(b))
         db.session.flush()
         db.session.commit()
