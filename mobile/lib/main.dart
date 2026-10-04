@@ -256,12 +256,6 @@ class _AuthenticatedShell extends StatefulWidget {
 
 class _AuthenticatedShellState extends State<_AuthenticatedShell> {
   @override
-  void initState() {
-    super.initState();
-    OmaPushNotifications.initialize(widget.api);
-  }
-
-  @override
   Widget build(BuildContext context) => AppShell(api: widget.api);
 }
 
@@ -458,6 +452,21 @@ class _AppShellState extends State<AppShell> {
   void initState() {
     super.initState();
 
+    // LoginPage enters AppShell directly, so the SessionGate verifier must
+    // also be installed here for biometric-protected settings and actions.
+    BiometricGuard.passwordVerifier = (password) async {
+      try {
+        final result = await widget.api.verifyPassword(password);
+        return result['verified'] == true;
+      } catch (_) {
+        return false;
+      }
+    };
+
+    // Register push notifications on every authenticated entry path,
+    // including a fresh login that bypasses _AuthenticatedShell.
+    OmaPushNotifications.initialize(widget.api);
+
     AppSession.refresh(widget.api);
 
     connectivity = Connectivity()
@@ -523,6 +532,9 @@ class _AppShellState extends State<AppShell> {
   @override
   void dispose() {
     connectivity?.cancel();
+    if (BiometricGuard.passwordVerifier != null) {
+      BiometricGuard.passwordVerifier = null;
+    }
     super.dispose();
   }
 

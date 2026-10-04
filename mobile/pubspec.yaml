@@ -17,6 +17,7 @@ dependencies:
   local_auth: ^2.3.0
   firebase_core: ^4.2.1
   firebase_messaging: ^16.0.3
+  flutter_local_notifications: ^17.2.4
   connectivity_plus: ^6.1.0
   location: ^7.0.1
   solar_calculator: ^1.0.3

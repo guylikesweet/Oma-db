@@ -354,9 +354,9 @@ jobs:
                       // generated R class: R lives in the Gradle namespace package,
                       // which is not guaranteed to match com.example.oma_mobile.
                       val channels = listOf(
-                          Triple("oma_scanner", "Oma scanner", "scanner_beep"),
-                          Triple("oma_arrival_sea", "Sea shipment arrivals", "ship_horn"),
-                          Triple("oma_arrival_air", "Air shipment arrivals", "airport_arrival"),
+                          Triple("oma_scanner_v2", "Oma scanner", "scanner_beep"),
+                          Triple("oma_arrival_sea_v2", "Sea shipment arrivals", "ship_horn"),
+                          Triple("oma_arrival_air_v2", "Air shipment arrivals", "airport_arrival"),
                       )
 
                       val manager = getSystemService(NotificationManager::class.java)
@@ -455,6 +455,20 @@ jobs:
                       '"android.permission.ACCESS_FINE_LOCATION" />\n'
                       '    <uses-permission android:name="android.permission.USE_BIOMETRIC" />\n'
                       "    <application"
+                  ),
+                  1,
+              )
+
+          # Android 13+ requires runtime notification permission.
+          # Firebase requests it at runtime; declare it explicitly so the
+          # generated release manifest contains the permission.
+          if "android.permission.POST_NOTIFICATIONS" not in s:
+              s = s.replace(
+                  "<application",
+                  (
+                      '    <uses-permission '
+                      'android:name="android.permission.POST_NOTIFICATIONS" />\n'
+                      '    <application'
                   ),
                   1,
               )
@@ -925,7 +939,14 @@ jobs:
 
           flutter build appbundle \
             --release \
-            --dart-define=API_BASE_URL="$API_URL"
+            --dart-define=API_BASE_URL="$API_URL" \
+            --dart-define=FCM_API_KEY="$FCM_API_KEY" \
+            --dart-define=FCM_APP_ID="$FCM_APP_ID" \
+            --dart-define=FCM_MESSAGING_SENDER_ID="$FCM_MESSAGING_SENDER_ID" \
+            --dart-define=FCM_PROJECT_ID="$FCM_PROJECT_ID" \
+            --dart-define=FCM_AUTH_DOMAIN="$FCM_AUTH_DOMAIN" \
+            --dart-define=FCM_STORAGE_BUCKET="$FCM_STORAGE_BUCKET" \
+            --dart-define=FCM_WEB_VAPID_KEY="$FCM_WEB_VAPID_KEY"
 
           # --------------------------------------------------------
           # Verify artifacts
