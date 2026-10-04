@@ -68,7 +68,8 @@ def verify_url(sale):
         host = request.host.split(":")[0]
         if host not in ("localhost", "127.0.0.1") and base.startswith("http://"):
             base = "https://" + base[len("http://"):]
-    return f"{base}/verify/{sale.order_id or sale.id}/{invoice_signature(sale)}"
+    code = sale.public_tracking_code or sale.order_id or str(sale.id)
+    return f"{base}/track/{code}?sig={invoice_signature(sale)}"
 
 
 def _money(value):
