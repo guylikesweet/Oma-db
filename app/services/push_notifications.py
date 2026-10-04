@@ -123,7 +123,7 @@ def flush_outbox(limit=100):
                     android=messaging.AndroidConfig(
                         priority="high",
                         notification=messaging.AndroidNotification(
-                            sound=f"{sound}.wav",
+                            sound=sound,
                             channel_id=channel_id,
                         ),
                     ),
