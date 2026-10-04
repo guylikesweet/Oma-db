@@ -68,6 +68,7 @@ def require_api_token(f):
             return jsonify({"error": "Your session expired after 30 minutes of inactivity. Please sign in again."}), 401
 
         user.api_last_activity_at = now
+        db.session.commit()
         g.api_user = user
         return f(*args, **kwargs)
     return wrapper
