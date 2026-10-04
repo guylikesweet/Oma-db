@@ -42,6 +42,13 @@ def create_batch(name, notes=None, transport_mode=ShipmentBatch.MODE_SEA):
         transport_mode=normalize_mode(transport_mode),
     )
     db.session.add(batch)
+    db.session.flush()
+    record_audit(
+        "batch.create",
+        target_type="shipment_batch",
+        target_id=batch.id,
+        details={"name": batch.name, "transport_mode": batch.transport_mode},
+    )
     db.session.commit()
     return batch
 
