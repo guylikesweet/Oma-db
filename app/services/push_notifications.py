@@ -15,7 +15,6 @@ from datetime import datetime
 from app import db
 from app.models import NotificationOutbox, PushDevice, User, ShipmentBatch
 
-
 _firebase_app = None
 
 
@@ -47,12 +46,7 @@ def _firebase():
 
 
 def queue_batch_arrival(batch):
-    """Queue one arrival notification for every active user/device.
-
-    The actual business change is committed by the caller. The outbox rows are
-    committed in the same transaction, so notification intent cannot disappear
-    independently of the batch arrival.
-    """
+    """Queue one arrival notification for every active user/device."""
     mode = "air" if batch.transport_mode == ShipmentBatch.MODE_AIR else "sea"
     sound = "airport_arrival" if mode == "air" else "ship_horn"
     title = "Air shipment arrived" if mode == "air" else "Sea shipment arrived"
@@ -60,25 +54,48 @@ def queue_batch_arrival(batch):
 
     users = User.query.all()
     for user in users:
-        db.session.add(NotificationOutbox(
+        queue_user_notification(
+            user.id,
             event_type="batch_arrival",
-            target_user_id=user.id,
             title=title,
             body=body,
-            data_json={
+            data={
                 "type": "batch_arrival",
                 "batch_id": str(batch.id),
                 "transport_mode": mode,
                 "sound": sound,
             },
-        ))
+        )
+
+
+def queue_user_notification(
+    user_id,
+    *,
+    event_type,
+    title,
+    body,
+    data=None,
+):
+    """Queue a notification for one user in the same DB transaction."""
+    payload = dict(data or {})
+    payload.setdefault("type", event_type)
+    db.session.add(
+        NotificationOutbox(
+            event_type=event_type,
+            target_user_id=user_id,
+            title=title,
+            body=body,
+            data_json=payload,
+        )
+    )
 
 
 def flush_outbox(limit=100):
     """Best-effort delivery of pending notifications.
 
-    A deployment without Firebase credentials remains safe: rows stay pending
-    until credentials are supplied and the next flush runs.
+    FCM messages are intentionally data-only. That lets the Flutter client
+    display them itself both in the foreground and from the Android background
+    isolate, where it can also schedule the two-hour reminder.
     """
     app = _firebase()
     if app is None:
@@ -100,32 +117,39 @@ def flush_outbox(limit=100):
             user_id=row.target_user_id,
             enabled=True,
         ).all()
+
         if not devices:
             row.status = "sent"
             row.sent_at = datetime.utcnow()
             continue
 
-        data = {str(k): str(v) for k, v in (row.data_json or {}).items()}
+        data = {
+            str(k): str(v)
+            for k, v in (row.data_json or {}).items()
+        }
+        data["title"] = row.title
+        data["body"] = row.body
+        data["notification_id"] = str(row.id)
+
         sound = data.get("sound", "scanner_beep")
-        channel_id = "oma_arrival_air_v2" if sound == "airport_arrival" else "oma_arrival_sea_v2" if sound == "ship_horn" else "oma_scanner_v2"
+        channel_id = (
+            "oma_arrival_air_v2"
+            if sound == "airport_arrival"
+            else "oma_arrival_sea_v2"
+            if sound == "ship_horn"
+            else "oma_scanner_v2"
+        )
 
         successful = 0
         failures = 0
+
         for device in devices:
             try:
                 message = messaging.Message(
                     token=device.token,
-                    notification=messaging.Notification(
-                        title=row.title,
-                        body=row.body,
-                    ),
                     data=data,
                     android=messaging.AndroidConfig(
                         priority="high",
-                        notification=messaging.AndroidNotification(
-                            sound=sound,
-                            channel_id=channel_id,
-                        ),
                     ),
                 )
                 messaging.send(message, app=app)
@@ -140,8 +164,6 @@ def flush_outbox(limit=100):
         if successful and not failures:
             row.status = "sent"
             row.sent_at = datetime.utcnow()
-        elif successful:
-            row.status = "pending"
         else:
             row.status = "pending"
 
