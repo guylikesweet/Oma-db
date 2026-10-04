@@ -25,14 +25,7 @@ Future<void> omaFirebaseMessagingBackgroundHandler(RemoteMessage message) async 
   await OmaPushNotifications.handleBackgroundMessage(message);
 }
 
-void main() async {
-  WidgetsFlutterBinding.ensureInitialized();
-
-  if (!kIsWeb) {
-    FirebaseMessaging.onBackgroundMessage(
-      omaFirebaseMessagingBackgroundHandler,
-    );
-  }
+Future<void> _initializeOma() async {
   if (kIsWeb) {
     // Plain sqflite has no browser implementation — this swaps in the
     // IndexedDB-backed factory so the exact same LocalDatabase/SyncRepository
@@ -40,14 +33,27 @@ void main() async {
     // on the web build too, instead of needing a separate web-only data layer.
     databaseFactory = databaseFactoryFfiWeb;
   }
+
   await LocalDatabase.instance.db;
   await OmaThemeController.initialize(LocalDatabase.instance);
   await OmaPushNotifications.requestInitialPermissions(LocalDatabase.instance);
-  runApp(const OmaMobileApp());
+}
+
+void main() {
+  WidgetsFlutterBinding.ensureInitialized();
+  if (!kIsWeb) {
+    FirebaseMessaging.onBackgroundMessage(
+      omaFirebaseMessagingBackgroundHandler,
+    );
+  }
+  runApp(OmaMobileApp(initialization: _initializeOma()));
 }
 
 class OmaMobileApp extends StatefulWidget {
-  const OmaMobileApp({super.key});
+  const OmaMobileApp({super.key, required this.initialization});
+
+  final Future<void> initialization;
+
   @override State<OmaMobileApp> createState() => _OmaMobileAppState();
 }
 
@@ -78,8 +84,6 @@ class _OmaMobileAppState extends State<OmaMobileApp> with WidgetsBindingObserver
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
-      // Opening/resuming the app counts as checking notifications and stops
-      // the repeating two-hour reminder.
       OmaPushNotifications.clearPendingReminders();
       OmaThemeController.refresh(
         systemBrightness:
@@ -105,7 +109,44 @@ class _OmaMobileAppState extends State<OmaMobileApp> with WidgetsBindingObserver
         themeMode: mode,
         theme: brandTheme(Brightness.light),
         darkTheme: brandTheme(Brightness.dark),
-        home: const SessionGate(),
+        home: FutureBuilder<void>(
+          future: widget.initialization,
+          builder: (context, snapshot) {
+            if (snapshot.connectionState != ConnectionState.done) {
+              return const Scaffold(
+                body: Center(child: BrandLoader()),
+              );
+            }
+
+            if (snapshot.hasError) {
+              return Scaffold(
+                body: Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const BrandLoader(size: 72, label: null),
+                        const SizedBox(height: 20),
+                        const Text(
+                          'Unable to start OmaSales.',
+                          textAlign: TextAlign.center,
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          snapshot.error.toString(),
+                          textAlign: TextAlign.center,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              );
+            }
+
+            return const SessionGate();
+          },
+        ),
       ),
     );
   }
@@ -262,7 +303,7 @@ class _SessionGateState extends State<SessionGate> {
         builder: (_, snapshot) {
           if (snapshot.connectionState != ConnectionState.done) {
             return const Scaffold(
-              body: Center(child: BrandLoader(label: 'Loading…')),
+              body: Center(child: BrandLoader()),
             );
           }
 
@@ -2464,7 +2505,7 @@ class _SaleDetailPageState extends State<SaleDetailPage> {
   Widget build(BuildContext context) {
     if (loading) {
       return const Scaffold(
-        body: Center(child: BrandLoader(label: 'Loading sale…')),
+        body: Center(child: BrandLoader()),
       );
     }
 
@@ -3017,6 +3058,7 @@ class _NewSalePageState extends State<NewSalePage> {
                                 'Sale ID starts with OMBSTK-.'
                             : 'Preorder goods: stock does not matter here. '
                                 'Enter the quantity the customer requested.',
+                        style: const TextStyle(color: Colors.black),
                       ),
                     ),
                   ),
