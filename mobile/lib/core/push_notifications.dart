@@ -178,7 +178,7 @@ class OmaPushNotifications {
       title,
       body,
       const Duration(hours: 2),
-      notificationDetails: notificationDetails,
+      notificationDetails,
       payload: data['batch_id']?.toString() ??
           '${data['operation_id'] ?? ''}',
       androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
