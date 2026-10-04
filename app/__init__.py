@@ -14,12 +14,21 @@ login_manager = LoginManager()
 def create_app(config_object="config.Config"):
     app = Flask(__name__)
     app.config.from_object(config_object)
-    app.permanent_session_lifetime = timedelta(minutes=30)
+    app.permanent_session_lifetime = timedelta(hours=6)
 
     db.init_app(app)
     migrate.init_app(app, db)
     login_manager.init_app(app)
     login_manager.login_view = "auth.login"
+    @app.after_request
+    def flush_mobile_notifications(response):
+        try:
+            from app.services.push_notifications import flush_outbox
+            flush_outbox()
+        except Exception:
+            pass
+        return response
+
     @app.before_request
     def enforce_classic_inactivity_timeout():
         # Flask-Login sessions are separate from the mobile bearer-token API.
@@ -29,20 +38,20 @@ def create_app(config_object="config.Config"):
             if current_user.is_authenticated:
                 now = time.time()
                 last = session.get("last_activity")
-                if last is not None and now - float(last) >= 30 * 60:
+                if last is not None and now - float(last) >= 6 * 60 * 60:
                     user = current_user
                     from app.services.audit import record_audit
                     record_audit(
                         "logout.timeout",
                         target_type="user",
                         target_id=user.id,
-                        details={"source": "classic", "timeout_minutes": 30},
+                        details={"source": "classic", "timeout_minutes": 360},
                         user=user,
                     )
                     db.session.commit()
                     logout_user()
                     session.clear()
-                    flash("You were logged out after 30 minutes of inactivity.", "error")
+                    flash("You were logged out after 6 hours of inactivity.", "error")
                     return redirect(url_for("auth.login", next=request.url))
                 session["last_activity"] = now
                 session.permanent = True
