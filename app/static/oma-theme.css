@@ -14,37 +14,37 @@ html[data-oma-theme] .table th,html[data-oma-theme] .table td{border-color:var(-
 html[data-oma-theme="dark"]{--oma-top:#0b0d10;--oma-link:#2BD196;--oma-tint:#2a1a14}
 body{background:#fff}
 html:not([data-oma-theme="dark"]) body{background:#fff!important}
-/* top bar + side menu: white with an orange accent in light mode */
-.topbar{background:var(--oma-top)!important;border-bottom:3px solid var(--oma-orange)}
-.topbar a.home-link,#navToggle{color:var(--oma-orange)!important}
+/* top bar + side menu: white with green as the primary UI accent */
+.topbar{background:var(--oma-top)!important;border-bottom:2px solid var(--oma-green)}
+.topbar a.home-link,#navToggle{color:var(--oma-green)!important}
 #sideNav{background:var(--oma-top)!important}
 #sideNav .sidenav-header{border-bottom:1px solid var(--oma-border,#e2e2e2)!important}
-#sideNav .sidenav-header a{color:var(--oma-orange)!important}
+#sideNav .sidenav-header a{color:var(--oma-green)!important}
 #sideNav a.nav-link-item{color:var(--oma-text,#212529)!important;border-bottom:1px solid var(--oma-border,#e2e2e2)!important}
-#sideNav a.nav-link-item:hover{background:var(--oma-tint)!important;color:var(--oma-orange)!important}
+#sideNav a.nav-link-item:hover{background:var(--oma-green-soft)!important;color:var(--oma-green-dark)!important}
 #sideNav .close-btn{color:var(--oma-muted,#666)!important}
 /* buttons and accents */
 a{color:var(--oma-link)}
 a:hover{color:var(--oma-green-dark)}
-.btn-primary,.action-btn.primary{background:var(--oma-orange)!important;border-color:var(--oma-orange)!important;color:#fff!important}
-.btn-primary:hover,.btn-primary:focus,.action-btn.primary:hover{background:var(--oma-orange-dark)!important;border-color:var(--oma-orange-dark)!important;color:#fff!important}
+ .btn-primary,.action-btn.primary{background:var(--oma-green)!important;border-color:var(--oma-green)!important;color:#fff!important}
+ .btn-primary:hover,.btn-primary:focus,.action-btn.primary:hover{background:var(--oma-green-dark)!important;border-color:var(--oma-green-dark)!important;color:#fff!important}
 .btn-success{background:var(--oma-green)!important;border-color:var(--oma-green)!important;color:#fff!important}
 .btn-success:hover{background:var(--oma-green-dark)!important;border-color:var(--oma-green-dark)!important}
 .btn-default,.btn-secondary,.btn-outline-primary{color:var(--oma-green)!important;border-color:var(--oma-green)!important;background:transparent}
 .btn-default:hover,.btn-secondary:hover{background:var(--oma-green)!important;color:#fff!important}
 .btn-link{color:var(--oma-green)!important}
-.action-btn:hover{border-color:var(--oma-orange)!important}
-.form-control:focus,input:focus,select:focus,textarea:focus{border-color:var(--oma-orange)!important;box-shadow:0 0 0 .15rem rgba(252,67,0,.18)!important;outline:none}
+ .action-btn:hover{border-color:var(--oma-green)!important}
+ .form-control:focus,input:focus,select:focus,textarea:focus{border-color:var(--oma-green)!important;box-shadow:0 0 0 .15rem rgba(3,150,100,.16)!important;outline:none}
 .label-info,.badge-info{background:var(--oma-green)!important;color:#fff!important}
 .label-success,.badge-success{background:var(--oma-green)!important;color:#fff!important}
 .label-warning,.badge-warning{background:var(--oma-orange)!important;color:#fff!important}
 .alert-success{background:#E6F6EF!important;border-color:#B6E4D1!important;color:#027A52!important}
-.nav-tabs .nav-link.active,.nav-pills .nav-link.active{background:var(--oma-orange)!important;border-color:var(--oma-orange)!important;color:#fff!important}
-.page-item.active .page-link{background:var(--oma-orange)!important;border-color:var(--oma-orange)!important}
+ .nav-tabs .nav-link.active,.nav-pills .nav-link.active{background:var(--oma-green)!important;border-color:var(--oma-green)!important;color:#fff!important}
+ .page-item.active .page-link{background:var(--oma-green)!important;border-color:var(--oma-green)!important}
 .page-link{color:var(--oma-green)}
-.navbar,.navbar-dark{background:var(--oma-top)!important;border-bottom:3px solid var(--oma-orange)}
-.navbar .navbar-brand,.navbar .nav-link{color:var(--oma-orange)!important}
-table.table thead th{border-bottom:2px solid var(--oma-orange)!important}
+.navbar,.navbar-dark{background:var(--oma-top)!important;border-bottom:2px solid var(--oma-green)}
+ .navbar .navbar-brand,.navbar .nav-link{color:var(--oma-green)!important}
+table.table thead th{border-bottom:2px solid var(--oma-green)!important}
 
 
 /* ===== Next-gen Omabuy surface system ===== */
@@ -74,7 +74,7 @@ body{
 }
 .btn-primary,.action-btn.primary{
   border-radius:12px!important;
-  box-shadow:0 5px 14px rgba(252,67,0,.18);
+  box-shadow:0 5px 14px rgba(3,150,100,.16);
 }
 .btn-success{
   border-radius:12px!important;
@@ -91,7 +91,7 @@ body{
 }
 .oma-brand-accent{
   border-left:4px solid var(--oma-green)!important;
-  box-shadow:inset 4px 0 0 var(--oma-orange);
+  box-shadow:none;
 }
 .oma-theme-control{
   display:flex;
