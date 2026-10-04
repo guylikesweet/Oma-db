@@ -7,7 +7,7 @@ batch-arrival costing never drift apart.
 """
 from decimal import Decimal
 
-from app.models import MonthlyShippingRate
+from app.models import MonthlyShippingRate, MonthlyAirRate
 
 DEFAULT_RATE_PER_CBM = Decimal("600000.00")  # fallback if no rate has been recorded at all
 
@@ -61,3 +61,60 @@ def get_rate_for_month(target_date):
         return most_recent_prior.rate_per_cbm
 
     return DEFAULT_RATE_PER_CBM
+
+
+class RateMissingError(ValueError):
+    """A rate needed for a calculation hasn't been set yet."""
+
+
+def get_air_rate_for_month(target_date):
+    """
+    The monthly AIR rate (NGN per volumetric kg) in effect for target_date's
+    month, matched by year + month like the sea rate. Falls back to the most
+    recent earlier month. Unlike the sea rate there is NO built-in default:
+    returns None if no air rate has ever been recorded, so callers can leave
+    an air figure out (estimates) or refuse to go ahead (batch arrival)
+    rather than quietly charge zero.
+    """
+    month_start = target_date.replace(day=1)
+    if month_start.month == 12:
+        next_month_start = month_start.replace(year=month_start.year + 1, month=1)
+    else:
+        next_month_start = month_start.replace(month=month_start.month + 1)
+
+    exact = (
+        MonthlyAirRate.query.filter(
+            MonthlyAirRate.month >= month_start,
+            MonthlyAirRate.month < next_month_start,
+        )
+        .order_by(MonthlyAirRate.month.desc())
+        .first()
+    )
+    if exact:
+        return exact.rate_per_kg
+
+    prior = (
+        MonthlyAirRate.query.filter(MonthlyAirRate.month < month_start)
+        .order_by(MonthlyAirRate.month.desc())
+        .first()
+    )
+    return prior.rate_per_kg if prior else None
+
+
+def require_air_rate_for_month(target_date):
+    rate = get_air_rate_for_month(target_date)
+    if rate is None:
+        raise RateMissingError(
+            "No Air rate has been set yet. Add it under Rates > Monthly > Air first."
+        )
+    return rate
+
+
+def get_volume_rate(mode, target_date):
+    """The rate for the VOLUME part of shipping for a batch's mode: the sea
+    rate (per CBM) or the air rate (per volumetric kg). Air must be set."""
+    from app.models import ShipmentBatch
+
+    if mode == ShipmentBatch.MODE_AIR:
+        return require_air_rate_for_month(target_date)
+    return get_rate_for_month(target_date)

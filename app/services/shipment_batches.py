@@ -2,9 +2,12 @@
 Shipment batch logic (simplified).
 
 A batch is an inbound consignment containing many customers' sales,
-arriving together. When it arrives, EVERY sale in it gets its
-actual_shipping_cost calculated at once, using that month's rate
-(the month of arrival). Settling a sale's shipping payment afterward is
+arriving together. It travels by SEA or AIR (chosen when it is created), and
+that decides how each sale's shipping is priced when it arrives:
+  sea: (CBM x monthly sea rate)          + (actual kg x packing rate)
+  air: (volumetric kg x monthly air rate) + (actual kg x packing rate)
+When it arrives, EVERY sale in it gets its actual_shipping_cost calculated
+at once, using that month's rate (the month of arrival). Settling a sale's shipping payment afterward is
 just a confirmation flag — it doesn't recalculate anything — and it's
 what individually unlocks that one sale for delivery, not the whole batch.
 """
@@ -13,7 +16,7 @@ from decimal import Decimal
 
 from app import db
 from app.models import ShipmentBatch, Sale
-from app.services.rates import get_rate_for_month, get_rate_per_kg
+from app.services.rates import get_volume_rate, get_rate_per_kg, RateMissingError
 from app.services.sales import shipping_cost_for_items
 
 
@@ -21,10 +24,21 @@ class BatchValidationError(Exception):
     pass
 
 
-def create_batch(name, notes=None):
+def normalize_mode(value):
+    """'air' / 'sea' (any case) -> the stored value; anything else is an error."""
+    mode = (value or "").strip().lower()
+    if mode not in ShipmentBatch.MODES:
+        raise BatchValidationError("Choose how this batch travels: Air or Sea.")
+    return mode
+
+
+def create_batch(name, notes=None, transport_mode=ShipmentBatch.MODE_SEA):
     if not name or not name.strip():
         raise BatchValidationError("Batch needs a name.")
-    batch = ShipmentBatch(name=name.strip(), notes=notes, status=ShipmentBatch.STATUS_IN_TRANSIT)
+    batch = ShipmentBatch(
+        name=name.strip(), notes=notes, status=ShipmentBatch.STATUS_IN_TRANSIT,
+        transport_mode=normalize_mode(transport_mode),
+    )
     db.session.add(batch)
     db.session.commit()
     return batch
@@ -46,6 +60,7 @@ def add_sale_to_batch(batch_id, sale_id):
         raise BatchValidationError("Stocked sales are not shipped in batches.")
 
     sale.batch_id = batch.id
+    sale.batch_assigned_at = datetime.utcnow()
     db.session.commit()
     return batch
 
@@ -55,6 +70,7 @@ def remove_sale_from_batch(sale_id):
     if not sale:
         raise BatchValidationError("Sale not found.")
     sale.batch_id = None
+    sale.batch_assigned_at = None
     db.session.commit()
 
 
@@ -71,12 +87,19 @@ def mark_arrived(batch_id):
     if not batch.sales:
         raise BatchValidationError("Batch has no sales assigned.")
 
-    rate = get_rate_for_month(date.today())
-    kg_rate = get_rate_per_kg()
+    # The batch's method decides the volume rate. An air batch can't arrive
+    # until this month's air rate has been set — never charged as zero.
+    try:
+        volume_rate = get_volume_rate(batch.transport_mode, date.today())
+    except RateMissingError as e:
+        raise BatchValidationError(str(e))
+    packing_rate = get_rate_per_kg()
 
     for sale in batch.sales:
-        # Each product line's (CBM x rate + kg x per-kg rate), added up.
-        sale.actual_shipping_cost = shipping_cost_for_items(sale.items, rate, kg_rate)
+        # Each product line by the batch's method, added up.
+        sale.actual_shipping_cost = shipping_cost_for_items(
+            sale.items, batch.transport_mode, volume_rate, packing_rate
+        )
         sale.total_amount = (sale.subtotal_amount or Decimal("0")) + sale.actual_shipping_cost
 
     batch.arrived_at = datetime.utcnow()

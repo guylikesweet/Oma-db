@@ -230,7 +230,12 @@ def generate_invoice_pdf(sale):
 
     invoice_meta = [
         Paragraph("<b>INVOICE / RECEIPT</b>", label_style),
-        Paragraph(f"Order ID: <b>{_safe(ctx['order_id'])}</b>", normal_style),
+        # The order ID is a link: tapping it opens the same page as the QR code
+        # (order tracking + invoice check).
+        Paragraph(
+            f"Order ID: <b><a href=\"{_safe(ctx['verify_url'])}\" color=\"#FC4300\">{_safe(ctx['order_id'])}</a></b>",
+            normal_style,
+        ),
         Paragraph(f"Date: {_safe(ctx['sale_date'])}", normal_style),
         Paragraph(f"Payment status: {_safe(ctx['payment_status'])}", normal_style),
         Paragraph(f"Order status: {_safe(ctx['order_status'])}", normal_style),
@@ -272,7 +277,7 @@ def generate_invoice_pdf(sale):
         repeatRows=1,
     )
     items_table.setStyle(TableStyle([
-        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#f0f0f0")),
+        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#FFF1EB")),
         ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
         ("FONTSIZE", (0, 0), (-1, -1), 9),
         ("ALIGN", (2, 0), (-1, -1), "RIGHT"),
@@ -367,11 +372,12 @@ def generate_invoice_pdf(sale):
     sig = ctx["signature"]
     sig_grouped = "-".join(sig[i:i + 5] for i in range(0, len(sig), 5))
     verify_text = [
-        Paragraph("<b>VERIFY THIS INVOICE</b>", normal_style),
+        Paragraph("<b>TRACK YOUR ORDER &amp; VERIFY THIS INVOICE</b>", normal_style),
         Paragraph(f"Verification code: <b>{sig_grouped}</b>", normal_style),
         Paragraph(
-            "Scan the QR code, or open the link below, to confirm this invoice "
-            "against our records. The page shows the real items and amount paid. "
+            "Scan the QR code, tap the order ID, or open the link below to see "
+            "where your order is right now and to confirm this invoice against "
+            "our records. The page shows the real items and amount paid. "
             "If it does not match this document, or says the code is invalid, "
             "the invoice has been altered and should not be trusted.",
             small_muted,
@@ -380,7 +386,7 @@ def generate_invoice_pdf(sale):
     ]
     verify_table = Table([[qr_drawing, verify_text]], colWidths=[32 * mm, 135 * mm])
     verify_table.setStyle(TableStyle([
-        ("BOX", (0, 0), (-1, -1), 0.75, colors.HexColor("#999999")),
+        ("BOX", (0, 0), (-1, -1), 1, colors.HexColor("#039664")),
         ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
         ("LEFTPADDING", (0, 0), (-1, -1), 6),
     ]))

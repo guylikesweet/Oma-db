@@ -20,7 +20,7 @@ the loop so mobile/webapp clients actually clear too.
 from app import db
 from app.models import (
     Sale, SaleItem, Shipping, StockLog, ShipmentBatch, Delivery,
-    CourierRate, MonthlyShippingRate,
+    CourierRate, MonthlyShippingRate, MonthlyAirRate,
 )
 
 # Tables wiped, and the order they must be deleted in (children before parents).
@@ -34,6 +34,7 @@ CLEARABLE_MODELS = [
     ("Deliveries", Delivery),
     ("Courier Rates", CourierRate),
     ("Monthly Shipping Rates", MonthlyShippingRate),
+    ("Monthly Air Rates", MonthlyAirRate),
 ]
 
 CONFIRMATION_PHRASE = "DELETE ALL TEST DATA"

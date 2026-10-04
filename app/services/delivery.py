@@ -212,7 +212,10 @@ def update_delivery_status(delivery_id, new_status):
     if not delivery:
         raise DeliveryValidationError("Delivery not found.")
 
-    valid_statuses = {Delivery.STATUS_PENDING, Delivery.STATUS_OUT_FOR_DELIVERY, Delivery.STATUS_DELIVERED}
+    valid_statuses = {
+        Delivery.STATUS_PENDING, Delivery.STATUS_OUT_FOR_DELIVERY,
+        Delivery.STATUS_DELIVERED, Delivery.STATUS_RETURNED,
+    }
     if new_status not in valid_statuses:
         raise DeliveryValidationError(f"Invalid delivery status '{new_status}'.")
 
@@ -223,6 +226,12 @@ def update_delivery_status(delivery_id, new_status):
         delivery.delivered_at = datetime.utcnow()
         for sale in delivery.sales:
             sale.order_status = "Delivered"
+    if new_status == Delivery.STATUS_RETURNED:
+        # Rejected by the customer.
+        delivery.returned_at = datetime.utcnow()
+        for sale in delivery.sales:
+            if sale.order_status == "Delivered":
+                sale.order_status = "Shipped"
 
     db.session.commit()
     return delivery
