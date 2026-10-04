@@ -16,6 +16,7 @@ from sqlalchemy import or_
 
 from app import db
 from app.models import Sale, Delivery
+from app.services.audit import record_audit
 
 
 class DeliveryValidationError(ValueError):
@@ -203,6 +204,12 @@ def create_delivery(sale_ids, method, consolidation_type=None, delivery_address=
     for sale in sales:
         sale.delivery_id = delivery.id
 
+    record_audit(
+        "delivery.create",
+        target_type="delivery",
+        target_id=delivery.id,
+        details={"sale_ids": [sale.id for sale in sales], "method": method.strip()},
+    )
     db.session.commit()
     return delivery
 
@@ -219,6 +226,7 @@ def update_delivery_status(delivery_id, new_status):
     if new_status not in valid_statuses:
         raise DeliveryValidationError(f"Invalid delivery status '{new_status}'.")
 
+    old_status = delivery.status
     delivery.status = new_status
     if new_status == Delivery.STATUS_OUT_FOR_DELIVERY and not delivery.shipped_at:
         delivery.shipped_at = datetime.utcnow()
@@ -233,5 +241,11 @@ def update_delivery_status(delivery_id, new_status):
             if sale.order_status == "Delivered":
                 sale.order_status = "Shipped"
 
+    record_audit(
+        "delivery.status",
+        target_type="delivery",
+        target_id=delivery.id,
+        details={"from": old_status, "to": new_status, "sale_ids": [sale.id for sale in delivery.sales]},
+    )
     db.session.commit()
     return delivery
