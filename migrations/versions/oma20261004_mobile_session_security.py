@@ -1,13 +1,13 @@
 """add mobile session timeout, biometric credential and active user state
 
 Revision ID: oma20261004
-Revises: f7a1c9e4b210, 15266d7fb5f3
+Revises: f7a1c9e4b210
 """
 from alembic import op
 import sqlalchemy as sa
 
 revision = "oma20261004"
-down_revision = ("f7a1c9e4b210", "15266d7fb5f3")
+down_revision = "f7a1c9e4b210"
 branch_labels = None
 depends_on = None
 
