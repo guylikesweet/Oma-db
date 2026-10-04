@@ -846,6 +846,71 @@ class ApiClient {
   }
 
   // ============================================================
+  // MONTHLY AIR RATES (NGN per volumetric kg) — the Sea rate is the
+  // monthly shipping rate above (NGN per CBM)
+  // ============================================================
+
+  Future<List<dynamic>> airRates() {
+    return _list(
+      'GET',
+      '/v1/monthly-air-rates',
+    );
+  }
+
+  Future<Map<String, dynamic>> createAirRate(
+    Map<String, dynamic> payload,
+  ) {
+    return _map(
+      'POST',
+      '/v1/monthly-air-rates',
+      body: payload,
+    );
+  }
+
+  Future<Map<String, dynamic>> updateAirRate(
+    int id,
+    Map<String, dynamic> payload,
+  ) {
+    return _map(
+      'PUT',
+      '/v1/monthly-air-rates/$id',
+      body: payload,
+    );
+  }
+
+  Future<Map<String, dynamic>> deleteAirRate(
+    int id, [
+    Map<String, dynamic>? payload,
+  ]) {
+    return _map(
+      'DELETE',
+      '/v1/monthly-air-rates/$id',
+      body: payload ?? <String, dynamic>{},
+    );
+  }
+
+  // ============================================================
+  // ORDER JOURNEY
+  // ============================================================
+
+  /// Moves several orders to a stage that is set by hand (fulfilled,
+  /// CN domestic transit, consolidation; packing for stocked goods).
+  /// Returns {updated, unchanged, skipped: [reasons]}.
+  Future<Map<String, dynamic>> setJourneyStage(
+    List<int> saleIds,
+    String stage,
+  ) {
+    return _map(
+      'POST',
+      '/v1/sales/journey',
+      body: {
+        'sale_ids': saleIds,
+        'stage': stage,
+      },
+    );
+  }
+
+  // ============================================================
   // SETTINGS
   // ============================================================
 
