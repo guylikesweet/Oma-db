@@ -104,7 +104,7 @@ ThemeData brandTheme(Brightness brightness) {
   final dark = brightness == Brightness.dark;
 
   final scheme = ColorScheme.fromSeed(
-    seedColor: brandOrange,
+    seedColor: brandGreen,
     brightness: brightness,
   ).copyWith(
     primary: brandGreen,
@@ -127,10 +127,10 @@ ThemeData brandTheme(Brightness brightness) {
     scaffoldBackgroundColor: scheme.surface,
     cardTheme: CardTheme(
       elevation: 0,
-      margin: const EdgeInsets.symmetric(vertical: 5),
+      margin: const EdgeInsets.symmetric(vertical: 8),
       surfaceTintColor: Colors.transparent,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(14),
         side: BorderSide(color: scheme.outline.withOpacity(.65)),
       ),
     ),
@@ -165,16 +165,17 @@ ThemeData brandTheme(Brightness brightness) {
     inputDecorationTheme: InputDecorationTheme(
       filled: true,
       fillColor: scheme.surfaceContainerHighest.withOpacity(.55),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
       border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(12),
         borderSide: BorderSide(color: scheme.outline),
       ),
       enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(12),
         borderSide: BorderSide(color: scheme.outline),
       ),
       focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(12),
         borderSide: const BorderSide(color: brandGreen, width: 2),
       ),
     ),
@@ -2705,10 +2706,6 @@ class _NewSalePageState extends State<NewSalePage> {
                     decoration: InputDecoration(
                       labelText: 'Unit price',
                       prefixText: '₦',
-                      helperText: line.suggestedPrice == null
-                          ? null
-                          : 'Suggested ₦${_naira(line.suggestedPrice!)} '
-                              '(cost + ${line.markup}%)',
                       border: const OutlineInputBorder(),
                     ),
                   ),
