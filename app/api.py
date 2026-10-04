@@ -722,6 +722,11 @@ def register_push_device():
         device.last_seen_at = datetime.utcnow()
 
     db.session.commit()
+    try:
+        from app.services.push_notifications import flush_outbox
+        flush_outbox()
+    except Exception:
+        pass
     return jsonify({"registered": True})
 
 
