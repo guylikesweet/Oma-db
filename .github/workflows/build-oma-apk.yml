@@ -216,12 +216,10 @@ jobs:
           if (
               'revision = "oma20261004"' not in security_text
               or
-              'f7a1c9e4b210' not in security_text
-              or
-              '15266d7fb5f3' not in security_text
+              'down_revision = "f7a1c9e4b210"' not in security_text
           ):
               raise SystemExit(
-                  "Mobile security migration must merge both current Alembic heads."
+                  "Mobile security migration is not attached to the current Alembic head."
               )
 
           print("Mobile migration chain: OK")
