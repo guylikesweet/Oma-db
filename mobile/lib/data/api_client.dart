@@ -248,15 +248,6 @@ class ApiClient {
     );
   }
 
-  Future<bool> verifyPassword(String password) async {
-    final result = await _map(
-      'POST',
-      '/v1/auth/verify-password',
-      body: {'password': password},
-    );
-    return result['verified'] == true;
-  }
-
   Future<Map<String, dynamic>> registerPushDevice(
     String token,
     String platform,
