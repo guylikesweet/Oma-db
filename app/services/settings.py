@@ -26,7 +26,7 @@ def update_settings(label_width_mm=None, label_height_mm=None, business_name=Non
                      business_phone=None, business_address=None,
                      logo_data=None, logo_mimetype=None,
                      bank_name=None, bank_account_number=None, bank_account_name=None,
-                     shipping_rate_per_kg=None):
+                     shipping_rate_per_kg=None, commit=True):
     settings = get_settings()
 
     if label_width_mm is not None:
@@ -51,5 +51,6 @@ def update_settings(label_width_mm=None, label_height_mm=None, business_name=Non
         settings.logo_data = logo_data
         settings.logo_mimetype = logo_mimetype or "image/png"
 
-    db.session.commit()
+    if commit:
+        db.session.commit()
     return settings
