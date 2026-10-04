@@ -6,6 +6,28 @@
   <title>{% block title %}Sales{% endblock %}</title>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/4.6.2/css/bootstrap.min.css">
   <style>
+    /* Critical first-paint loader: this is inline so it appears before the
+       external stylesheet or page scripts have finished loading. */
+    #oma-page-loader{
+      position:fixed;inset:0;z-index:2147483647;
+      display:flex;flex-direction:column;align-items:center;justify-content:center;
+      gap:14px;background:#fff;color:#212529;
+      font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif;
+    }
+    .oma-page-loader-spinner{
+      width:46px;height:46px;border:4px solid #dfeee8;border-top-color:#039664;
+      border-radius:50%;animation:oma-loader-spin .8s linear infinite;
+    }
+    .oma-page-loader-text{font-size:15px;font-weight:700;letter-spacing:.01em}
+    @keyframes oma-loader-spin{to{transform:rotate(360deg)}}
+    html[data-oma-theme="dark"] #oma-page-loader{
+      background:#fff;color:#212529;
+    }
+    body.oma-page-ready #oma-page-loader{
+      opacity:0;pointer-events:none;transition:opacity .16s ease;
+    }
+  </style>
+  <style>
     body { background:#f4f5f7; margin:0; }
 
     /* Top bar with hamburger toggle only */
@@ -41,6 +63,10 @@
   </style>
 </head>
 <body>
+  <div id="oma-page-loader" role="status" aria-live="polite" aria-label="Please wait">
+    <div class="oma-page-loader-spinner"></div>
+    <div class="oma-page-loader-text">Please wait</div>
+  </div>
   <div class="topbar">
     <button id="navToggle" aria-label="Open menu">&#9776;</button>
     <a class="home-link" href="{{ url_for('classic_home') }}">Home</a>
@@ -83,6 +109,28 @@
     document.getElementById('navToggle').addEventListener('click', openNav);
     document.getElementById('navClose').addEventListener('click', closeNav);
     backdrop.addEventListener('click', closeNav);
+  </script>
+  <script>
+    (function(){
+      function hideLoader(){
+        document.body.classList.add('oma-page-ready');
+      }
+      window.addEventListener('load', hideLoader);
+      document.addEventListener('DOMContentLoaded', function(){
+        document.querySelectorAll('a[href],button[type="submit"],input[type="submit"]').forEach(function(el){
+          el.addEventListener('click', function(){
+            var href = el.getAttribute('href') || '';
+            if (href && (href.charAt(0) === '#' || href.indexOf('javascript:') === 0)) return;
+            document.body.classList.remove('oma-page-ready');
+          });
+        });
+        document.querySelectorAll('form').forEach(function(form){
+          form.addEventListener('submit', function(){
+            document.body.classList.remove('oma-page-ready');
+          });
+        });
+      });
+    })();
   </script>
   <script src="{{ url_for('static', filename='oma-theme.js') }}"></script>
 </body>
