@@ -12,7 +12,6 @@
 
   {% if groups %}
   <h4>These orders could share one courier bag — consolidate?</h4>
-  <p class="text-muted" style="font-size:12px;">Optional. Orders with the same phone number, name, city or state can go in one bag with one label. Skip a group to keep its orders separate.</p>
   {% for g in groups %}
   <div class="well" style="background:#f8f9fa; padding:12px; border-radius:6px; margin-bottom:10px;">
     <strong>{{ g.label }}{% if g.value %}: {{ g.value }}{% endif %}</strong> — {{ g.sale_ids|length }} orders:
