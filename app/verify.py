@@ -155,4 +155,4 @@ def verify(order_id, sig):
         return render_template_string(PAGE, state="missing", **_brand_context()), 404
     if not signature_matches(sale, sig.replace("-", "")):
         return render_template_string(PAGE, state="changed", **_brand_context()), 200
-    return render_template_string(PAGE, state="valid", sale=sale, name=_mask(sale.customer_name), **_brand_context(sale))
+    return redirect(f"/track/{sale.public_tracking_code}?sig={sig}")
