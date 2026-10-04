@@ -15,6 +15,34 @@ class BiometricGuard {
   /// server verifies the user's current password.
   static Future<bool> Function(String password)? passwordVerifier;
 
+  static Future<bool> canUseBiometrics() async {
+    if (kIsWeb) return false;
+    try {
+      return await _auth.canCheckBiometrics && await _auth.isDeviceSupported();
+    } catch (_) {
+      return false;
+    }
+  }
+
+  static Future<bool> authenticateForLogin({
+    required String reason,
+  }) async {
+    if (!await canUseBiometrics()) return false;
+    try {
+      return await _auth.authenticate(
+        localizedReason: reason,
+        options: const AuthenticationOptions(
+          biometricOnly: true,
+          stickyAuth: true,
+          useErrorDialogs: true,
+          sensitiveTransaction: true,
+        ),
+      );
+    } catch (_) {
+      return false;
+    }
+  }
+
   static Future<bool> require(
     BuildContext context, {
     required String reason,
