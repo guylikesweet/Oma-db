@@ -11,7 +11,7 @@ New mobile development should use /api/v1/*.
 """
 import json
 import secrets
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from decimal import Decimal, InvalidOperation
 from functools import wraps
 
@@ -48,9 +48,26 @@ def require_api_token(f):
 
         token = auth_header[len("Bearer "):].strip()
         user = User.query.filter_by(api_token=token).first() if token else None
-        if not user:
-            return jsonify({"error": "Invalid API token."}), 401
+        if not user or not user.is_active:
+            return jsonify({"error": "This user account is inactive or the session is invalid."}), 401
 
+        now = datetime.utcnow()
+        last = user.api_last_activity_at
+        if last is not None and now - last >= timedelta(minutes=30):
+            record_audit(
+                "logout.timeout",
+                target_type="user",
+                target_id=user.id,
+                outcome="success",
+                details={"source": "api", "timeout_minutes": 30},
+                user=user,
+            )
+            user.api_token = None
+            user.api_last_activity_at = None
+            db.session.commit()
+            return jsonify({"error": "Your session expired after 30 minutes of inactivity. Please sign in again."}), 401
+
+        user.api_last_activity_at = now
         g.api_user = user
         return f(*args, **kwargs)
     return wrapper
@@ -104,10 +121,14 @@ def api_login():
         return jsonify({"error": "Username and password are required."}), 400
 
     user = User.query.filter_by(username=username).first()
-    if not user or not check_password_hash(user.password_hash, password):
+    if not user or not user.is_active or not check_password_hash(user.password_hash, password):
         return jsonify({"error": "Invalid username or password."}), 401
 
-    token = _ensure_api_token(user)
+    token = secrets.token_hex(32)
+    biometric_credential = secrets.token_urlsafe(48)
+    user.api_token = token
+    user.biometric_credential_hash = generate_password_hash(biometric_credential)
+    user.api_last_activity_at = datetime.utcnow()
     record_audit(
         "login",
         target_type="user",
@@ -122,7 +143,9 @@ def api_login():
             "id": user.id, "username": user.username,
             "role": user.role, "is_admin": user.is_admin,
             "is_primary_admin": user.is_primary_admin,
+            "is_active": user.is_active,
         },
+        "biometric_credential": biometric_credential,
     })
 
 
@@ -163,9 +186,18 @@ def api_biometric_login():
     if not username or not credential:
         return jsonify({"error": "Username and biometric credential are required."}), 400
 
-    user = User.query.filter_by(username=username, api_token=credential).first()
-    if not user:
+    user = User.query.filter_by(username=username).first()
+    if (
+        not user
+        or not user.is_active
+        or not user.biometric_credential_hash
+        or not check_password_hash(user.biometric_credential_hash, credential)
+    ):
         return jsonify({"error": "This username does not have a valid biometric login on this device."}), 401
+
+    token = secrets.token_hex(32)
+    user.api_token = token
+    user.api_last_activity_at = datetime.utcnow()
 
     record_audit(
         "login.biometric",
@@ -176,7 +208,7 @@ def api_biometric_login():
     )
     db.session.commit()
     return jsonify({
-        "token": user.api_token,
+        "token": token,
         "user": {
             "id": user.id,
             "username": user.username,
@@ -673,6 +705,17 @@ def unregister_push_device():
 @api_bp.route("/v1/auth/logout", methods=("POST",))
 @require_api_token
 def mobile_logout():
+    user = g.api_user
+    record_audit(
+        "logout",
+        target_type="user",
+        target_id=user.id,
+        details={"source": "api"},
+        user=user,
+    )
+    user.api_token = None
+    user.api_last_activity_at = None
+    db.session.commit()
     return jsonify({"ok": True})
 
 
