@@ -278,12 +278,14 @@ class _WebProductsPageState extends State<WebProductsPage> {
                     labelText: 'Name',
                   ),
                 ),
+                const SizedBox(height: 14),
                 TextField(
                   controller: sku,
                   decoration: const InputDecoration(
                     labelText: 'SKU',
                   ),
                 ),
+                const SizedBox(height: 14),
                 TextField(
                   controller: cost,
                   keyboardType: const TextInputType.numberWithOptions(
@@ -293,6 +295,7 @@ class _WebProductsPageState extends State<WebProductsPage> {
                     labelText: 'Cost',
                   ),
                 ),
+                if (old == null) const SizedBox(height: 14),
                 if (old == null)
                   TextField(
                     controller: stock,
@@ -1010,6 +1013,7 @@ class _BatchesPageState extends State<BatchesPage> {
                             'plus weight × the packing rate.',
                     style: const TextStyle(color: Colors.grey, fontSize: 12),
                   ),
+                  const SizedBox(height: 14),
                   TextField(
                     controller: notes,
                     decoration: const InputDecoration(
@@ -1638,12 +1642,14 @@ class _DeliveriesPageState
                           labelText: 'Method',
                         ),
                       ),
+                      const SizedBox(height: 14),
                       TextField(
                         controller: address,
                         decoration: const InputDecoration(
                           labelText: 'Delivery address',
                         ),
                       ),
+                      const SizedBox(height: 14),
                       TextField(
                         controller: notes,
                         decoration: const InputDecoration(
@@ -1808,12 +1814,14 @@ class _DeliveriesPageState
                   labelText: 'Weight kg',
                 ),
               ),
+              const SizedBox(height: 14),
               TextField(
                 controller: dimensions,
                 decoration: const InputDecoration(
                   labelText: 'Dimensions',
                 ),
               ),
+              const SizedBox(height: 14),
               TextField(
                 controller: remarks,
                 decoration: const InputDecoration(
@@ -2282,6 +2290,7 @@ class _DeliveryDetailPageState
                   labelText: 'Weight (kg)',
                 ),
               ),
+              const SizedBox(height: 14),
               TextField(
                 controller: dimensions,
                 decoration: const InputDecoration(
@@ -2289,6 +2298,7 @@ class _DeliveryDetailPageState
                   hintText: 'e.g. 30 x 20 x 15 cm',
                 ),
               ),
+              const SizedBox(height: 14),
               TextField(
                 controller: remarks,
                 decoration: const InputDecoration(
@@ -2733,6 +2743,7 @@ class _RateListState extends State<_RateList> {
                       : 'Month (YYYY-MM-DD)',
                 ),
               ),
+              const SizedBox(height: 14),
               TextField(
                 controller: rate,
                 keyboardType:
@@ -2845,6 +2856,7 @@ class _RateListState extends State<_RateList> {
                   labelText: 'State or month',
                 ),
               ),
+              const SizedBox(height: 14),
               TextField(
                 controller: rate,
                 keyboardType:
@@ -3737,12 +3749,14 @@ class _SettingsPageState
                     labelText: 'Business name',
                   ),
                 ),
+                const SizedBox(height: 14),
                 TextField(
                   controller: phone,
                   decoration: const InputDecoration(
                     labelText: 'Business phone',
                   ),
                 ),
+                const SizedBox(height: 14),
                 TextField(
                   controller: address,
                   maxLines: 2,
@@ -3750,6 +3764,7 @@ class _SettingsPageState
                     labelText: 'Business address',
                   ),
                 ),
+                const SizedBox(height: 14),
                 TextField(
                   controller: width,
                   keyboardType: TextInputType.number,
@@ -3757,6 +3772,7 @@ class _SettingsPageState
                     labelText: 'Label width (mm)',
                   ),
                 ),
+                const SizedBox(height: 14),
                 TextField(
                   controller: height,
                   keyboardType: TextInputType.number,
@@ -3778,6 +3794,7 @@ class _SettingsPageState
                   'it applies to new estimates and to batches that arrive '
                   'from now on.',
                 ),
+                const SizedBox(height: 14),
                 TextField(
                   controller: kgRate,
                   keyboardType: const TextInputType.numberWithOptions(
@@ -3799,12 +3816,14 @@ class _SettingsPageState
                   'together with the business name above. Change it here '
                   'whenever the account changes.',
                 ),
+                const SizedBox(height: 14),
                 TextField(
                   controller: bankName,
                   decoration: const InputDecoration(
                     labelText: 'Bank name',
                   ),
                 ),
+                const SizedBox(height: 14),
                 TextField(
                   controller: bankNumber,
                   keyboardType: TextInputType.number,
@@ -3812,6 +3831,7 @@ class _SettingsPageState
                     labelText: 'Account number',
                   ),
                 ),
+                const SizedBox(height: 14),
                 TextField(
                   controller: bankAccountName,
                   decoration: const InputDecoration(
@@ -4000,10 +4020,12 @@ class _ChangePasswordPageState
             controller: current,
             label: 'Current password',
           ),
+          const SizedBox(height: 14),
           PasswordField(
             controller: next,
             label: 'New password',
           ),
+          const SizedBox(height: 14),
           PasswordField(
             controller: confirm,
             label: 'Confirm password',
@@ -4072,6 +4094,7 @@ class _UsersPageState
                     labelText: 'Username',
                   ),
                 ),
+                const SizedBox(height: 14),
                 PasswordField(
                   controller: password,
                   label: 'Password',

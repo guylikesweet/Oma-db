@@ -1574,11 +1574,13 @@ class _ProductDialogState extends State<ProductDialog> {
                   decoration:
                       const InputDecoration(labelText: 'Name'),
                 ),
+                const SizedBox(height: 14),
                 TextField(
                   controller: sku,
                   decoration:
                       const InputDecoration(labelText: 'SKU'),
                 ),
+                const SizedBox(height: 14),
                 TextField(
                   controller: cost,
                   keyboardType:
@@ -1589,6 +1591,7 @@ class _ProductDialogState extends State<ProductDialog> {
                     labelText: 'Cost',
                   ),
                 ),
+                const SizedBox(height: 14),
                 Row(
                   children: [
                     Expanded(
@@ -1622,6 +1625,7 @@ class _ProductDialogState extends State<ProductDialog> {
                     ),
                   ],
                 ),
+                const SizedBox(height: 14),
                 TextField(
                   controller: weight,
                   keyboardType: TextInputType.number,
@@ -1629,6 +1633,7 @@ class _ProductDialogState extends State<ProductDialog> {
                     labelText: 'Actual weight kg',
                   ),
                 ),
+                if (widget.product == null) const SizedBox(height: 14),
                 if (widget.product == null)
                   TextField(
                     controller: stock,
@@ -3378,6 +3383,7 @@ class _StockPageState extends State<StockPage> {
             Text(
               'Current stock: ${p['stock']}',
             ),
+            const SizedBox(height: 14),
             TextField(
               controller: q,
               keyboardType:
@@ -3388,6 +3394,7 @@ class _StockPageState extends State<StockPage> {
                 labelText: 'Change quantity',
               ),
             ),
+            const SizedBox(height: 14),
             TextField(
               controller: reason,
               decoration: const InputDecoration(
@@ -3729,6 +3736,7 @@ class _ChangePasswordDialogState
                 labelText: 'Current password',
               ),
             ),
+            const SizedBox(height: 14),
             TextField(
               controller: next,
               obscureText: obscure,
@@ -3736,6 +3744,7 @@ class _ChangePasswordDialogState
                 labelText: 'New password',
               ),
             ),
+            const SizedBox(height: 14),
             TextField(
               controller: confirm,
               obscureText: obscure,
