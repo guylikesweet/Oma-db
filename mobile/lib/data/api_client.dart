@@ -403,6 +403,15 @@ class ApiClient {
     );
   }
 
+  Future<Map<String, dynamic>> saleJourney(
+    int id,
+  ) {
+    return _map(
+      'GET',
+      '/v1/sales/$id/journey',
+    );
+  }
+
   Future<Map<String, dynamic>> updateSaleStatus(
     int id,
     Map<String, dynamic> payload,
