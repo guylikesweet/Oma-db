@@ -351,7 +351,6 @@ class _JourneyPageState extends State<JourneyPage> {
                                     child: Text(id?.toString() ?? ''),
                                   ),
                                 ],
-                              )
                               ),
                               title: Text(
                                 order,
