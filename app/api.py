@@ -1106,7 +1106,8 @@ def mobile_delivery_status(delivery_id):
         op,existing=_mobile_operation(data)
         if existing:return _mobile_replay(existing)
         d=Delivery.query.get_or_404(delivery_id); status=str(data.get("status") or "")
-        if status not in {Delivery.STATUS_PENDING,Delivery.STATUS_OUT_FOR_DELIVERY,Delivery.STATUS_DELIVERED}:raise ValueError("Invalid delivery status.")
+        if status not in {Delivery.STATUS_PENDING,Delivery.STATUS_OUT_FOR_DELIVERY,Delivery.STATUS_DELIVERED,Delivery.STATUS_RETURNED}:raise ValueError("Invalid delivery status.")
+        old_status = d.status
         d.status=status
         if status==Delivery.STATUS_OUT_FOR_DELIVERY and not d.shipped_at:d.shipped_at=datetime.utcnow()
         if status==Delivery.STATUS_DELIVERED:
@@ -1474,13 +1475,16 @@ def mobile_delete_user(user_id):
         return jsonify({'error':'The original admin account cannot be removed.'}),400
     if u.id==g.api_user.id:
         return jsonify({'error':'You cannot remove your own account.'}),400
+    if u.is_admin and not g.api_user.is_primary_admin:
+        return jsonify({'error':'Only the original admin can remove another admin account.'}),403
     record_audit(
         "user.delete",
         target_type="user",
         target_id=u.id,
-        details={"username": u.username, "source": "api"},
+        details={"username": u.username, "role": u.role, "source": "api"},
         user=g.api_user,
     )
+    AuditLog.query.filter_by(user_id=u.id).update({"user_id": None}, synchronize_session=False)
     db.session.delete(u)
     db.session.commit()
     return jsonify({'ok':True,'id':user_id})
