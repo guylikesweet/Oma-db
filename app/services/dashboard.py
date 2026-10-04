@@ -7,7 +7,8 @@ from decimal import Decimal
 from sqlalchemy import func
 
 from app import db
-from app.models import Sale, Product, Shipping
+from app.models import Sale, Product, Shipping, ShipmentBatch, MobileOperation
+from app.services.journey import STAGES
 
 LOW_STOCK_THRESHOLD = 5
 
@@ -36,12 +37,41 @@ def get_kpis():
         .all()
     )
 
+    shipping_owed = (
+        db.session.query(func.coalesce(func.sum(Sale.actual_shipping_cost), 0))
+        .filter(
+            Sale.batch_id.isnot(None),
+            Sale.shipping_payment_settled.is_(False),
+            Sale.actual_shipping_cost.isnot(None),
+            Sale.batch.has(status=ShipmentBatch.STATUS_ARRIVED),
+            Sale.order_status != "Cancelled",
+        )
+        .scalar()
+        or Decimal("0")
+    )
+
+    journey_counts = {}
+    for key in STAGES:
+        journey_counts[key] = 0
+
+    for sale in Sale.query.filter(Sale.order_status != "Cancelled").all():
+        try:
+            from app.services.journey import current_stage_key
+            key = current_stage_key(sale)
+        except Exception:
+            key = "confirmed"
+        journey_counts[key] = journey_counts.get(key, 0) + 1
+
     return {
         "sales_today": sales_today_total,
         "profit_today": profit_today_total,
         "pending_shipments": pending_shipments,
+        "shipping_owed": shipping_owed,
         "low_stock_products": low_stock_products,
         "low_stock_count": len(low_stock_products),
+        "batches_in_transit": ShipmentBatch.query.filter_by(status=ShipmentBatch.STATUS_IN_TRANSIT).count(),
+        "sync_exceptions": MobileOperation.query.filter(MobileOperation.status == "failed").count(),
+        "journey_counts": journey_counts,
     }
 
 
