@@ -110,27 +110,89 @@ ThemeData brandTheme(Brightness brightness) {
     onPrimary: Colors.white,
     secondary: brandGreen,
     onSecondary: Colors.white,
-    surface: dark ? const Color(0xFF121212) : Colors.white,
-    onSurface: dark ? Colors.white : const Color(0xFF1F1F1F),
+    tertiary: brandGreen,
+    onTertiary: Colors.white,
+    surface: dark ? const Color(0xFF111513) : Colors.white,
+    surfaceContainer: dark ? const Color(0xFF18201C) : const Color(0xFFF7FAF8),
+    surfaceContainerHighest:
+        dark ? const Color(0xFF202A25) : const Color(0xFFEFF5F2),
+    onSurface: dark ? Colors.white : const Color(0xFF18201C),
+    outline: dark ? const Color(0xFF3A4841) : const Color(0xFFD6E2DC),
   );
 
   return ThemeData(
     useMaterial3: true,
     colorScheme: scheme,
     scaffoldBackgroundColor: scheme.surface,
+    cardTheme: CardThemeData(
+      elevation: 0,
+      margin: const EdgeInsets.symmetric(vertical: 5),
+      surfaceTintColor: Colors.transparent,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(18),
+        side: BorderSide(color: scheme.outline.withOpacity(.65)),
+      ),
+    ),
     appBarTheme: AppBarTheme(
       backgroundColor: scheme.surface,
-      foregroundColor: brandOrange,
+      foregroundColor: scheme.onSurface,
       surfaceTintColor: Colors.transparent,
       elevation: 0,
       scrolledUnderElevation: 0,
-      shape: const Border(
-        bottom: BorderSide(color: brandOrange, width: 3),
+      titleTextStyle: TextStyle(
+        color: scheme.onSurface,
+        fontSize: 20,
+        fontWeight: FontWeight.w800,
+      ),
+      shape: Border(
+        bottom: BorderSide(
+          color: brandOrange.withOpacity(.65),
+          width: 2,
+        ),
+      ),
+    ),
+    navigationBarTheme: NavigationBarThemeData(
+      backgroundColor: scheme.surface,
+      indicatorColor: brandGreen.withOpacity(.16),
+      labelTextStyle: WidgetStatePropertyAll(
+        TextStyle(
+          fontWeight: FontWeight.w700,
+          color: scheme.onSurface,
+        ),
+      ),
+    ),
+    inputDecorationTheme: InputDecorationTheme(
+      filled: true,
+      fillColor: scheme.surfaceContainerHighest.withOpacity(.55),
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(14),
+        borderSide: BorderSide(color: scheme.outline),
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(14),
+        borderSide: BorderSide(color: scheme.outline),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(14),
+        borderSide: const BorderSide(color: brandOrange, width: 2),
+      ),
+    ),
+    filledButtonTheme: FilledButtonThemeData(
+      style: FilledButton.styleFrom(
+        backgroundColor: brandOrange,
+        foregroundColor: Colors.white,
+        minimumSize: const Size(48, 48),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(14),
+        ),
       ),
     ),
     floatingActionButtonTheme: const FloatingActionButtonThemeData(
-      backgroundColor: brandOrange,
+      backgroundColor: brandGreen,
       foregroundColor: Colors.white,
+    ),
+    progressIndicatorTheme: ProgressIndicatorThemeData(
+      color: brandGreen,
     ),
   );
 }
