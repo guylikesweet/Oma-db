@@ -9,8 +9,9 @@ enforced, so the web app, /admin, and the JSON API (used by the mobile app
 and the compiled Flutter "webapp") all agree on it.
 """
 from functools import wraps
+import time
 
-from flask import redirect, url_for, flash, request, jsonify, g
+from flask import redirect, url_for, flash, request, jsonify, g, session
 from flask_login import current_user
 
 
@@ -38,3 +39,19 @@ def require_admin_api(f):
             return jsonify({"error": "That action is restricted to admins."}), 403
         return f(*args, **kwargs)
     return wrapper
+
+
+REAUTH_TTL_SECONDS = 10 * 60
+
+
+def password_recently_confirmed():
+    if not current_user.is_authenticated:
+        return False
+    try:
+        return time.time() - float(session.get("reauth_at", 0)) <= REAUTH_TTL_SECONDS
+    except (TypeError, ValueError):
+        return False
+
+
+def reauth_url(next_url):
+    return url_for("auth.reauthenticate", next=next_url)
