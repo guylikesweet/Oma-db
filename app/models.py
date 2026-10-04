@@ -117,6 +117,20 @@ class MonthlyShippingRate(db.Model):
 
 
 # ---------------------------------------------------------------------------
+# MONTHLY_AIR_RATES
+# ---------------------------------------------------------------------------
+class MonthlyAirRate(db.Model):
+    __tablename__ = "monthly_air_rates"
+
+    id = db.Column(db.Integer, primary_key=True)
+    month = db.Column(db.Date, nullable=False, unique=True)  # always stored as the 1st of the month
+    rate_per_kg = db.Column(db.Numeric(12, 2), nullable=False)
+
+    def __repr__(self):
+        return f"<MonthlyAirRate {self.month.strftime('%Y-%m')}: {self.rate_per_kg}>"
+
+
+# ---------------------------------------------------------------------------
 # SHIPMENT_BATCHES — Stage 6. An inbound consignment from the supplier
 # containing many customers' sales, arriving together (60-70 day window).
 # ---------------------------------------------------------------------------
@@ -408,6 +422,7 @@ _SYNC_MODELS = (
     Product,
     CourierRate,
     MonthlyShippingRate,
+    MonthlyAirRate,
     ShipmentBatch,
     Delivery,
     Sale,
@@ -469,7 +484,9 @@ def _record_mobile_sync_changes(session, flush_context):
                     "products": "product", "sales": "sale", "sale_items": "sale_item",
                     "shipment_batches": "shipment_batch", "deliveries": "delivery",
                     "shipping": "shipping", "courier_rates": "courier_rate",
-                    "monthly_shipping_rates": "monthly_shipping_rate", "stock_log": "stock_log",
+                    "monthly_shipping_rates": "monthly_shipping_rate",
+                    "monthly_air_rates": "monthly_air_rate",
+                    "stock_log": "stock_log",
                 }.get(obj.__tablename__, obj.__tablename__),
                 entity_id=str(entity_id),
                 operation="delete" if action == "deleted" else "upsert",
