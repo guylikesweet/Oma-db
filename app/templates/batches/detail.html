@@ -23,7 +23,7 @@
   <div style="margin-bottom:16px;">
     {% if batch.status == 'In Transit' %}
     <form method="post" action="{{ url_for('batches.mark_arrived_route', batch_id=batch.id) }}" style="display:inline-block;">
-      <button type="submit" class="btn btn-primary btn-sm">Mark Arrived (calculates actual shipping for everyone in this batch)</button>
+      <button type="submit" class="btn btn-primary btn-sm">Mark Arrived</button>
     </form>
     {% else %}
     <span class="text-muted">Batch has arrived — actual shipping cost is set below. Settle each order's payment individually; only settled orders become eligible for delivery.</span>
