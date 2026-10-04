@@ -6,7 +6,6 @@ import 'package:sqflite/sqflite.dart' show databaseFactory;
 import 'package:sqflite_common_ffi_web/sqflite_ffi_web.dart';
 import 'brand_loader.dart';
 import 'invoice_actions.dart';
-import 'journey_widgets.dart';
 import 'login_background.dart';
 import 'data/api_client.dart';
 import 'data/app_session.dart';
@@ -2167,9 +2166,6 @@ class _SaleDetailPageState extends State<SaleDetailPage> {
             ),
             const SizedBox(height: 12),
             _customerCard(context, s),
-            const SizedBox(height: 16),
-            _sectionTitle(context, 'Order journey'),
-            JourneyCard(api: widget.api, saleId: widget.saleId),
             const SizedBox(height: 16),
             _sectionTitle(context, 'Items', action: '${items.length} line${items.length == 1 ? '' : 's'}'),
             if (items.isEmpty)
