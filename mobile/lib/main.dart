@@ -12,7 +12,10 @@ import 'data/app_session.dart';
 import 'data/local_database.dart';
 import 'data/sale_kind.dart';
 import 'data/sync_repository.dart';
+import 'core/theme_controller.dart';
+import 'theme_settings_page.dart';
 import 'full_features.dart';
+import 'journey_widgets.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -24,6 +27,7 @@ void main() async {
     databaseFactory = databaseFactoryFfiWeb;
   }
   await LocalDatabase.instance.db;
+  await OmaThemeController.initialize(LocalDatabase.instance);
   runApp(const OmaMobileApp());
 }
 
@@ -34,29 +38,36 @@ class OmaMobileApp extends StatefulWidget {
 
 class _OmaMobileAppState extends State<OmaMobileApp> with WidgetsBindingObserver {
   Timer? _timer;
-  ThemeMode _theme = ThemeMode.light;
-
-  ThemeMode _themeForNow() {
-    final hour = DateTime.now().hour;
-    return hour >= 6 && hour < 18 ? ThemeMode.light : ThemeMode.dark;
-  }
-
-  void _refreshTheme() {
-    final next = _themeForNow();
-    if (mounted && next != _theme) setState(() => _theme = next);
-  }
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    _theme = _themeForNow();
-    _timer = Timer.periodic(const Duration(minutes: 1), (_) => _refreshTheme());
+    _timer = Timer.periodic(
+      const Duration(minutes: 1),
+      (_) => OmaThemeController.refresh(
+        systemBrightness:
+            WidgetsBinding.instance.platformDispatcher.platformBrightness,
+      ),
+    );
+  }
+
+  @override
+  void didChangePlatformBrightness() {
+    OmaThemeController.refresh(
+      systemBrightness:
+          WidgetsBinding.instance.platformDispatcher.platformBrightness,
+    );
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed) _refreshTheme();
+    if (state == AppLifecycleState.resumed) {
+      OmaThemeController.refresh(
+        systemBrightness:
+            WidgetsBinding.instance.platformDispatcher.platformBrightness,
+      );
+    }
   }
 
   @override
@@ -67,14 +78,19 @@ class _OmaMobileAppState extends State<OmaMobileApp> with WidgetsBindingObserver
   }
 
   @override
-  Widget build(BuildContext context) => MaterialApp(
+  Widget build(BuildContext context) {
+    return ValueListenableBuilder<ThemeMode>(
+      valueListenable: OmaThemeController.resolvedMode,
+      builder: (context, mode, _) => MaterialApp(
         title: 'Oma Mobile',
         debugShowCheckedModeBanner: false,
-        themeMode: _theme,
+        themeMode: mode,
         theme: brandTheme(Brightness.light),
         darkTheme: brandTheme(Brightness.dark),
         home: const SessionGate(),
-      );
+      ),
+    );
+  }
 }
 
 // The Omabuy brand: the orange and green are sampled straight from the logo.
@@ -94,27 +110,89 @@ ThemeData brandTheme(Brightness brightness) {
     onPrimary: Colors.white,
     secondary: brandGreen,
     onSecondary: Colors.white,
-    surface: dark ? const Color(0xFF121212) : Colors.white,
-    onSurface: dark ? Colors.white : const Color(0xFF1F1F1F),
+    tertiary: brandGreen,
+    onTertiary: Colors.white,
+    surface: dark ? const Color(0xFF111513) : Colors.white,
+    surfaceContainer: dark ? const Color(0xFF18201C) : const Color(0xFFF7FAF8),
+    surfaceContainerHighest:
+        dark ? const Color(0xFF202A25) : const Color(0xFFEFF5F2),
+    onSurface: dark ? Colors.white : const Color(0xFF18201C),
+    outline: dark ? const Color(0xFF3A4841) : const Color(0xFFD6E2DC),
   );
 
   return ThemeData(
     useMaterial3: true,
     colorScheme: scheme,
     scaffoldBackgroundColor: scheme.surface,
+    cardTheme: CardTheme(
+      elevation: 0,
+      margin: const EdgeInsets.symmetric(vertical: 5),
+      surfaceTintColor: Colors.transparent,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(18),
+        side: BorderSide(color: scheme.outline.withOpacity(.65)),
+      ),
+    ),
     appBarTheme: AppBarTheme(
       backgroundColor: scheme.surface,
-      foregroundColor: brandOrange,
+      foregroundColor: scheme.onSurface,
       surfaceTintColor: Colors.transparent,
       elevation: 0,
       scrolledUnderElevation: 0,
-      shape: const Border(
-        bottom: BorderSide(color: brandOrange, width: 3),
+      titleTextStyle: TextStyle(
+        color: scheme.onSurface,
+        fontSize: 20,
+        fontWeight: FontWeight.w800,
+      ),
+      shape: Border(
+        bottom: BorderSide(
+          color: brandOrange.withOpacity(.65),
+          width: 2,
+        ),
+      ),
+    ),
+    navigationBarTheme: NavigationBarThemeData(
+      backgroundColor: scheme.surface,
+      indicatorColor: brandGreen.withOpacity(.16),
+      labelTextStyle: WidgetStatePropertyAll(
+        TextStyle(
+          fontWeight: FontWeight.w700,
+          color: scheme.onSurface,
+        ),
+      ),
+    ),
+    inputDecorationTheme: InputDecorationTheme(
+      filled: true,
+      fillColor: scheme.surfaceContainerHighest.withOpacity(.55),
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(14),
+        borderSide: BorderSide(color: scheme.outline),
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(14),
+        borderSide: BorderSide(color: scheme.outline),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(14),
+        borderSide: const BorderSide(color: brandOrange, width: 2),
+      ),
+    ),
+    filledButtonTheme: FilledButtonThemeData(
+      style: FilledButton.styleFrom(
+        backgroundColor: brandOrange,
+        foregroundColor: Colors.white,
+        minimumSize: const Size(48, 48),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(14),
+        ),
       ),
     ),
     floatingActionButtonTheme: const FloatingActionButtonThemeData(
-      backgroundColor: brandOrange,
+      backgroundColor: brandGreen,
       foregroundColor: Colors.white,
+    ),
+    progressIndicatorTheme: ProgressIndicatorThemeData(
+      color: brandGreen,
     ),
   );
 }
@@ -2189,6 +2267,11 @@ class _SaleDetailPageState extends State<SaleDetailPage> {
             ),
             const SizedBox(height: 12),
             _customerCard(context, s),
+            const SizedBox(height: 12),
+            JourneyCard(
+              api: widget.api,
+              saleId: widget.saleId,
+            ),
             const SizedBox(height: 16),
             _sectionTitle(context, 'Items', action: '${items.length} line${items.length == 1 ? '' : 's'}'),
             if (items.isEmpty)
@@ -3104,6 +3187,22 @@ class MorePage extends StatelessWidget {
         body: ListView(
           padding: const EdgeInsets.all(16),
           children: [
+            Card(
+              child: ListTile(
+                leading: const Icon(Icons.palette_outlined),
+                title: const Text('Appearance'),
+                subtitle: const Text(
+                  'System, sunset to sunrise, light or dark',
+                ),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => const ThemeSettingsPage(),
+                  ),
+                ),
+              ),
+            ),
             Card(
               child: ListTile(
                 leading: const Icon(Icons.apps),
