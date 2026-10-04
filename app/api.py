@@ -766,6 +766,11 @@ def mobile_settle_shipping(sale_id):
         if sale.batch.status != ShipmentBatch.STATUS_ARRIVED: raise ValueError("Batch must be arrived first.")
         sale.shipping_payment_settled = True
         sale.shipping_payment_settled_at = datetime.utcnow()
+        record_audit(
+            'shipping.settle', target_type='sale', target_id=sale.id,
+            details={'shipping_amount': str(sale.actual_shipping_cost or 0), 'source': 'api'},
+            user=g.api_user,
+        )
         return _mobile_finish(op, "settle_shipping", 200, _sale_json(sale))
     except ValueError as e:
         db.session.rollback(); return jsonify({"error": str(e)}), 400
@@ -858,6 +863,11 @@ def mobile_batch_arrive(batch_id):
             s.total_amount = (s.subtotal_amount or Decimal("0")) + s.actual_shipping_cost
         b.arrived_at = datetime.utcnow()
         b.status = ShipmentBatch.STATUS_ARRIVED
+        record_audit(
+            'batch.arrive', target_type='shipment_batch', target_id=b.id,
+            details={'transport_mode': b.transport_mode, 'sale_count': len(b.sales), 'source': 'api'},
+            user=g.api_user,
+        )
         queue_batch_arrival(b)
         result = _mobile_finish(op, "batch_arrive", 200, _batch_json(b))
         db.session.flush()
