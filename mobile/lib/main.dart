@@ -333,7 +333,13 @@ class _LoginPageState extends State<LoginPage> {
       }
 
       await widget.api.saveToken(token);
-      await widget.api.saveBiometricCredential(username.text.trim(), token);
+      final biometricCredential = result['biometric_credential']?.toString();
+      if (biometricCredential != null && biometricCredential.isNotEmpty) {
+        await widget.api.saveBiometricCredential(
+          username.text.trim(),
+          biometricCredential,
+        );
+      }
       await AppSession.refresh(widget.api);
 
       if (mounted) {
@@ -378,7 +384,6 @@ class _LoginPageState extends State<LoginPage> {
       }
 
       await widget.api.saveToken(token);
-      await widget.api.saveBiometricCredential(username.text.trim(), token);
       await AppSession.refresh(widget.api);
 
       if (mounted) {
