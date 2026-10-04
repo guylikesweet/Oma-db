@@ -962,11 +962,27 @@ def mobile_batch_sale(batch_id, sale_id):
         if action == "remove":
             if s.batch_id != b.id: raise ValueError("Sale is not in this batch.")
             s.batch_id = None
+            s.batch_assigned_at = None
+            record_audit(
+                "batch.remove_sale",
+                target_type="sale",
+                target_id=s.id,
+                details={"batch_id": b.id, "source": "api"},
+                user=g.api_user,
+            )
         else:
             if s.is_stock_sale: raise ValueError("Stocked sales are not shipped in batches.")
             if b.status != ShipmentBatch.STATUS_IN_TRANSIT: raise ValueError("Batch is no longer in transit.")
             if s.order_status == "Cancelled": raise ValueError("Cancelled sales cannot be added.")
             s.batch_id = b.id
+            s.batch_assigned_at = datetime.utcnow()
+            record_audit(
+                "batch.add_sale",
+                target_type="sale",
+                target_id=s.id,
+                details={"batch_id": b.id, "transport_mode": b.transport_mode, "source": "api"},
+                user=g.api_user,
+            )
         return _mobile_finish(op, "batch_sale", 200, _batch_json(b))
     except ValueError as e:
         db.session.rollback(); return jsonify({"error": str(e)}), 400
