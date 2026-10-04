@@ -3563,6 +3563,128 @@ class _SettingsPageState
     }
   }
 
+  Future<void> deleteSelectedSale() async {
+    final sales = await widget.api.sales();
+    if (!mounted) return;
+    int? selected;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setState) => AlertDialog(
+          title: const Text('Delete selected sale'),
+          content: DropdownButtonFormField<int>(
+            value: selected,
+            decoration: const InputDecoration(labelText: 'Sale'),
+            items: sales.whereType<Map>().map((raw) {
+              final sale = Map<String, dynamic>.from(raw);
+              return DropdownMenuItem<int>(
+                value: (sale['id'] as num).toInt(),
+                child: Text(
+                  '${sale['order_id'] ?? '#${sale['id']}'} • ${sale['customer_name'] ?? 'Customer'}',
+                  overflow: TextOverflow.ellipsis,
+                ),
+              );
+            }).toList(),
+            onChanged: (value) => setState(() => selected = value),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: selected == null
+                  ? null
+                  : () => Navigator.pop(dialogContext, true),
+              child: const Text('Delete'),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    if (confirmed != true || selected == null) return;
+    if (!await BiometricGuard.require(
+      context,
+      reason: 'Verify your identity before deleting a sale.',
+    )) return;
+
+    try {
+      await widget.api.deleteSale(selected!);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Sale deleted.')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+      }
+    }
+  }
+
+  Future<void> deleteSelectedBatch() async {
+    final batches = await widget.api.batches();
+    if (!mounted) return;
+    int? selected;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setState) => AlertDialog(
+          title: const Text('Delete selected shipment batch'),
+          content: DropdownButtonFormField<int>(
+            value: selected,
+            decoration: const InputDecoration(labelText: 'Shipment batch'),
+            items: batches.whereType<Map>().map((raw) {
+              final batch = Map<String, dynamic>.from(raw);
+              return DropdownMenuItem<int>(
+                value: (batch['id'] as num).toInt(),
+                child: Text(
+                  '${batch['name'] ?? 'Batch'} • ${batch['transport_mode'] == 'air' ? 'Air' : 'Sea'} • ${batch['status'] ?? ''}',
+                  overflow: TextOverflow.ellipsis,
+                ),
+              );
+            }).toList(),
+            onChanged: (value) => setState(() => selected = value),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: selected == null
+                  ? null
+                  : () => Navigator.pop(dialogContext, true),
+              child: const Text('Delete'),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    if (confirmed != true || selected == null) return;
+    if (!await BiometricGuard.require(
+      context,
+      reason: 'Verify your identity before deleting a shipment batch.',
+    )) return;
+
+    try {
+      await widget.api.deleteBatch(selected!);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Shipment batch deleted.')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+      }
+    }
+  }
+
   @override
   void dispose() {
     name.dispose();
@@ -3687,6 +3809,26 @@ class _SettingsPageState
                   decoration: const InputDecoration(
                     labelText: 'Account name',
                   ),
+                ),
+                const SizedBox(height: 24),
+                Text(
+                  'Selected data management',
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+                const SizedBox(height: 4),
+                const Text(
+                  'Use these controls to remove one live sale or one shipment batch without clearing the rest of the database. Sales are protected when shipping has already been settled or a delivery has been created.',
+                ),
+                const SizedBox(height: 8),
+                OutlinedButton.icon(
+                  onPressed: deleteSelectedSale,
+                  icon: const Icon(Icons.delete_outline),
+                  label: const Text('Delete selected sale'),
+                ),
+                OutlinedButton.icon(
+                  onPressed: deleteSelectedBatch,
+                  icon: const Icon(Icons.delete_sweep_outlined),
+                  label: const Text('Delete selected shipment batch'),
                 ),
                 const SizedBox(height: 20),
                 FilledButton.icon(
