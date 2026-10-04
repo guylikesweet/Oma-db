@@ -1,6 +1,7 @@
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
 import '../data/api_client.dart';
 
@@ -8,6 +9,15 @@ class OmaPushNotifications {
   OmaPushNotifications._();
 
   static bool _ready = false;
+
+  static final FlutterLocalNotificationsPlugin _local =
+      FlutterLocalNotificationsPlugin();
+
+  static const AndroidInitializationSettings _androidInit =
+      AndroidInitializationSettings('@mipmap/ic_launcher');
+
+  static const InitializationSettings _initSettings =
+      InitializationSettings(android: _androidInit);
 
   static Future<void> initialize(ApiClient api) async {
     if (_ready) return;
@@ -18,6 +28,8 @@ class OmaPushNotifications {
     try {
       await Firebase.initializeApp(options: options);
       final messaging = FirebaseMessaging.instance;
+
+      await _local.initialize(_initSettings);
 
       final permission = await messaging.requestPermission(
         alert: true,
@@ -33,6 +45,7 @@ class OmaPushNotifications {
       final token = kIsWeb
           ? await messaging.getToken(vapidKey: vapid)
           : await messaging.getToken();
+
       if (token != null && token.isNotEmpty) {
         await api.registerPushDevice(
           token,
@@ -49,10 +62,47 @@ class OmaPushNotifications {
         }
       });
 
-      FirebaseMessaging.onMessage.listen((message) {
-        // Foreground messages are intentionally kept quiet here. The native
-        // system notification handles background delivery; foreground UI can
-        // surface the same event without producing duplicate alerts.
+      FirebaseMessaging.onMessage.listen((message) async {
+        if (kIsWeb) return;
+
+        final data = message.data;
+        final mode = '${data['transport_mode'] ?? ''}'.toLowerCase();
+        final soundName = mode == 'air'
+            ? 'airport_arrival'
+            : mode == 'sea'
+                ? 'ship_horn'
+                : '${data['sound'] ?? 'scanner_beep'}';
+
+        final channelId = mode == 'air'
+            ? 'oma_arrival_air_v2'
+            : mode == 'sea'
+                ? 'oma_arrival_sea_v2'
+                : 'oma_scanner_v2';
+
+        final channelName = mode == 'air'
+            ? 'Air shipment arrivals'
+            : mode == 'sea'
+                ? 'Sea shipment arrivals'
+                : 'Oma notifications';
+
+        final details = AndroidNotificationDetails(
+          channelId,
+          channelName,
+          channelDescription: 'OmaSales notifications',
+          importance: Importance.high,
+          priority: Priority.high,
+          playSound: true,
+          sound: RawResourceAndroidNotificationSound(soundName),
+          enableVibration: true,
+        );
+
+        await _local.show(
+          message.hashCode,
+          message.notification?.title ?? '${data['title'] ?? 'OmaSales'}',
+          message.notification?.body ?? '${data['body'] ?? ''}',
+          NotificationDetails(android: details),
+          payload: data['batch_id']?.toString(),
+        );
       });
 
       _ready = true;
