@@ -18,7 +18,6 @@ def get_settings():
             label_height_mm=DEFAULT_LABEL_HEIGHT_MM,
         )
         db.session.add(settings)
-        if commit:
         db.session.commit()
     return settings
 
@@ -52,5 +51,6 @@ def update_settings(label_width_mm=None, label_height_mm=None, business_name=Non
         settings.logo_data = logo_data
         settings.logo_mimetype = logo_mimetype or "image/png"
 
-    db.session.commit()
+    if commit:
+        db.session.commit()
     return settings
