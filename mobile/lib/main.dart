@@ -1682,11 +1682,34 @@ class _SaleDetailPageState extends State<SaleDetailPage> {
         return;
       }
 
-      final its = await db.query(
+      var its = await db.query(
         'sale_items',
         where: 'sale_id=?',
         whereArgs: [widget.saleId],
       );
+
+      // Older web/local databases can contain the sale header without its
+      // line items. If that happens, hydrate this sale from the server once
+      // and cache the complete response locally. This keeps the detail page
+      // useful without forcing a full database reset.
+      if (its.isEmpty) {
+        try {
+          final remote = await widget.api.saleDetail(widget.saleId);
+          if (remote['id'] != null) {
+            await widget.local.upsertSaleFromResponse(
+              Map<String, dynamic>.from(remote),
+            );
+            its = await db.query(
+              'sale_items',
+              where: 'sale_id=?',
+              whereArgs: [widget.saleId],
+            );
+          }
+        } catch (_) {
+          // Stay local-first when offline. The empty state below is only
+          // shown if the cached sale genuinely has no recoverable items.
+        }
+      }
 
       if (mounted) {
         setState(() {
