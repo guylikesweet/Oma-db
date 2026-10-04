@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:connectivity_plus/connectivity_plus.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:sqflite/sqflite.dart' show databaseFactory;
@@ -19,8 +20,19 @@ import 'theme_settings_page.dart';
 import 'full_features.dart';
 import 'journey_widgets.dart';
 
+@pragma('vm:entry-point')
+Future<void> omaFirebaseMessagingBackgroundHandler(RemoteMessage message) async {
+  await OmaPushNotifications.handleBackgroundMessage(message);
+}
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  if (!kIsWeb) {
+    FirebaseMessaging.onBackgroundMessage(
+      omaFirebaseMessagingBackgroundHandler,
+    );
+  }
   if (kIsWeb) {
     // Plain sqflite has no browser implementation — this swaps in the
     // IndexedDB-backed factory so the exact same LocalDatabase/SyncRepository
@@ -66,6 +78,9 @@ class _OmaMobileAppState extends State<OmaMobileApp> with WidgetsBindingObserver
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
+      // Opening/resuming the app counts as checking notifications and stops
+      // the repeating two-hour reminder.
+      OmaPushNotifications.clearPendingReminders();
       OmaThemeController.refresh(
         systemBrightness:
             WidgetsBinding.instance.platformDispatcher.platformBrightness,

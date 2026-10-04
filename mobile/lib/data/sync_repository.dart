@@ -26,6 +26,9 @@ class SyncRepository {
     payload = {
       ...payload,
       'operation_id': op,
+      // This marker is sent only by queued offline writes. The server uses it
+      // to send a confirmation push after the operation is committed.
+      'offline_origin': true,
     };
 
     final db = await local.db;
@@ -155,6 +158,7 @@ class SyncRepository {
       'product_id': productId,
       'change_qty': changeQty,
       'reason': reason.trim(),
+      'offline_origin': true,
     };
 
     final db = await local.db;
