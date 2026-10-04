@@ -47,7 +47,10 @@ class OmaPushNotifications {
   }
 
   static Future<void> initialize(ApiClient api) async {
-    if (_ready) return;
+    if (_ready) {
+      await _registerCurrentToken(api);
+      return;
+    }
 
     final options = _options();
     if (options == null) return;
@@ -74,18 +77,12 @@ class OmaPushNotifications {
           : await messaging.getToken();
 
       if (token != null && token.isNotEmpty) {
-        await api.registerPushDevice(
-          token,
-          kIsWeb ? 'web' : defaultTargetPlatform.name,
-        );
+        await _registerTokenWithApi(api, token);
       }
 
       messaging.onTokenRefresh.listen((next) async {
         if (next.isNotEmpty) {
-          await api.registerPushDevice(
-            next,
-            kIsWeb ? 'web' : defaultTargetPlatform.name,
-          );
+          await _registerTokenWithApi(api, next);
         }
       });
 
@@ -114,6 +111,32 @@ class OmaPushNotifications {
       await _showAndRepeat(message.data);
     } catch (_) {
       // A notification failure must never crash the background isolate.
+    }
+  }
+
+  static Future<void> _registerCurrentToken(ApiClient api) async {
+    try {
+      final token = await FirebaseMessaging.instance.getToken(
+        vapidKey: kIsWeb ? const String.fromEnvironment('FCM_WEB_VAPID_KEY') : null,
+      );
+      if (token != null && token.isNotEmpty) {
+        await _registerTokenWithApi(api, token);
+      }
+    } catch (_) {
+      // Token registration is retried on the next authenticated entry.
+    }
+  }
+
+  static Future<void> _registerTokenWithApi(ApiClient api, String token) async {
+    try {
+      final authToken = await api.token();
+      if (authToken == null || authToken.isEmpty) return;
+      await api.registerPushDevice(
+        token,
+        kIsWeb ? 'web' : defaultTargetPlatform.name,
+      );
+    } catch (_) {
+      // Firebase/registration failures must never block the app.
     }
   }
 
