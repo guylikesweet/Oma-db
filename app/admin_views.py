@@ -221,7 +221,8 @@ class ShipmentBatchView(SecureModelView):
     column_list = ("id", "name", "transport_mode", "status", "arrived_at", "batch_link")
     column_labels = {"batch_link": "Manage"}
     form_columns = ("name", "transport_mode", "notes")
-    form_args = {"transport_mode": {"choices": [("air", "Air"), ("sea", "Sea")]}}\n    can_edit = False
+    form_args = {"transport_mode": {"choices": [("air", "Air"), ("sea", "Sea")]}}
+    can_edit = False
     can_delete = False
 
     def _batch_link_formatter(view, context, model, name):
