@@ -3002,6 +3002,7 @@ class _NewSalePageState extends State<NewSalePage> {
                                 'Sale ID starts with OMBSTK-.'
                             : 'Preorder goods: stock does not matter here. '
                                 'Enter the quantity the customer requested.',
+                        style: const TextStyle(color: Colors.black),
                       ),
                     ),
                   ),
