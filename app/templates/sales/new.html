@@ -3,7 +3,7 @@
 {% block body %}
 <div class="container" style="max-width:900px; margin-top:20px;">
   <h2>{% if sale_type == 'stock' %}New Stock Sale (OMBSTK-){% else %}New Preorder Sale{% endif %}</h2>
-  <p class="text-muted">
+  <p class="text-muted sale-type-help">
     {% if sale_type == 'stock' %}
       Stocked goods: stock is checked and deducted. No shipping cost (delivery is settled off record).
       <a href="{{ url_for('sales.new_sale') }}">Switch to preorder</a>
