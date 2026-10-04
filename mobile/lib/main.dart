@@ -13,6 +13,7 @@ import 'data/local_database.dart';
 import 'data/sale_kind.dart';
 import 'data/sync_repository.dart';
 import 'core/theme_controller.dart';
+import 'core/biometric_guard.dart';
 import 'theme_settings_page.dart';
 import 'full_features.dart';
 import 'journey_widgets.dart';
@@ -97,8 +98,8 @@ class _OmaMobileAppState extends State<OmaMobileApp> with WidgetsBindingObserver
 const brandOrange = Color(0xFFFC4300);
 const brandGreen = Color(0xFF039664);
 
-/// One theme for the whole app: white surfaces, orange for primary actions,
-/// green for secondary accents (the logo's own colours).
+/// One theme for the whole app: white surfaces and green primary actions;
+/// orange is reserved for attention/warning accents.
 ThemeData brandTheme(Brightness brightness) {
   final dark = brightness == Brightness.dark;
 
@@ -106,9 +107,9 @@ ThemeData brandTheme(Brightness brightness) {
     seedColor: brandOrange,
     brightness: brightness,
   ).copyWith(
-    primary: brandOrange,
+    primary: brandGreen,
     onPrimary: Colors.white,
-    secondary: brandGreen,
+    secondary: brandOrange,
     onSecondary: Colors.white,
     tertiary: brandGreen,
     onTertiary: Colors.white,
@@ -146,7 +147,7 @@ ThemeData brandTheme(Brightness brightness) {
       ),
       shape: Border(
         bottom: BorderSide(
-          color: brandOrange.withOpacity(.65),
+          color: brandGreen.withOpacity(.55),
           width: 2,
         ),
       ),
@@ -174,12 +175,12 @@ ThemeData brandTheme(Brightness brightness) {
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(14),
-        borderSide: const BorderSide(color: brandOrange, width: 2),
+        borderSide: const BorderSide(color: brandGreen, width: 2),
       ),
     ),
     filledButtonTheme: FilledButtonThemeData(
       style: FilledButton.styleFrom(
-        backgroundColor: brandOrange,
+        backgroundColor: brandGreen,
         foregroundColor: Colors.white,
         minimumSize: const Size(48, 48),
         shape: RoundedRectangleBorder(
