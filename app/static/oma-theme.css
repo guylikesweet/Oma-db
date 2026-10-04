@@ -301,18 +301,22 @@ table.table{background:var(--oma-surface,#fff)}
 /* Keep stacked form controls visually separated even when the
    template does not wrap every field in .form-group. Inline/search forms
    remain compact. */
-form:not(.form-inline) .form-control,
-form:not(.form-inline) input,
-form:not(.form-inline) select,
-form:not(.form-inline) textarea {
-  margin-bottom: 12px;
+/* Create-Sale-style form spacing: the field wrapper owns vertical spacing.
+   Controls themselves do not add a second margin, preventing doubled or
+   inconsistent gaps between fields. */
+form:not(.form-inline) .form-group {
+  margin-bottom: var(--oma-space-4)!important;
 }
 
-form:not(.form-inline) .form-control:last-child,
-form:not(.form-inline) input:last-child,
-form:not(.form-inline) select:last-child,
-form:not(.form-inline) textarea:last-child {
-  margin-bottom: 0;
+form:not(.form-inline) .form-group:last-child {
+  margin-bottom: 0!important;
+}
+
+form:not(.form-inline) .form-group .form-control,
+form:not(.form-inline) .form-group input,
+form:not(.form-inline) .form-group select,
+form:not(.form-inline) .form-group textarea {
+  margin-bottom: 0!important;
 }
 
 form.form-inline .form-control,
@@ -322,13 +326,9 @@ form.form-inline textarea {
   margin-bottom: 0;
 }
 
-/* Directly stacked controls are separated even when a template has no
+/* Standalone controls are still separated when a template has no
    .form-group wrapper. Hidden CSRF/metadata inputs are excluded. */
 form:not(.form-inline) > :not([type="hidden"]) + :not([type="hidden"]) {
-  margin-top: 12px;
-}
-
-form:not(.form-inline) .form-group + .form-group {
   margin-top: 12px;
 }
 

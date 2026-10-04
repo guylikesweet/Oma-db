@@ -11,15 +11,17 @@
   {% endwith %}
 
   <form method="post">
-    <div class="form-group">
-      <label>Weight (kg)</label>
-      <input type="number" step="0.01" name="package_weight_kg" class="form-control"
-             value="{{ delivery.package_weight_kg or '' }}" required>
-    </div>
-    <div class="form-group">
-      <label>Dimensions</label>
-      <input type="text" name="package_dimensions" class="form-control" placeholder="e.g. 30 x 20 x 15 cm"
-             value="{{ delivery.package_dimensions or '' }}" required>
+    <div class="row">
+      <div class="col-md-4 form-group">
+        <label>Weight (kg)</label>
+        <input type="number" step="0.01" name="package_weight_kg" class="form-control"
+               value="{{ delivery.package_weight_kg or '' }}" required>
+      </div>
+      <div class="col-md-8 form-group">
+        <label>Dimensions</label>
+        <input type="text" name="package_dimensions" class="form-control" placeholder="e.g. 30 x 20 x 15 cm"
+               value="{{ delivery.package_dimensions or '' }}" required>
+      </div>
     </div>
     <div class="form-group">
       <label>Remarks (optional)</label>
