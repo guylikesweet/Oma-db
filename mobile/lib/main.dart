@@ -573,6 +573,7 @@ class _AppShellState extends State<AppShell> {
       (_) => _checkInactivity(),
     );
 
+    _validateServerSession();
     AppSession.refresh(widget.api);
 
     connectivity = Connectivity()
@@ -582,8 +583,30 @@ class _AppShellState extends State<AppShell> {
     sync(silent: true);
   }
 
+  Future<void> _validateServerSession() async {
+    try {
+      await widget.api.me();
+    } on ApiException catch (e) {
+      if (e.statusCode != 401 || !mounted) return;
+      await widget.api.clearToken();
+      AppSession.reset();
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(builder: (_) => LoginPage(api: widget.api)),
+        (_) => false,
+      );
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Your session expired. Sign in again or use biometrics.'),
+        ),
+      );
+    } catch (_) {
+      // A temporary network failure is not a logout.
+    }
+  }
+
   Future<void> sync({bool silent = false}) async {
     if (syncing) return;
+    _touchActivity();
 
     if (mounted) {
       setState(() => syncing = true);
