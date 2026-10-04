@@ -10,7 +10,8 @@ import 'package:location/location.dart';
 class OmaPushNotifications {
   OmaPushNotifications._();
 
-  static bool _ready = false;
+  static bool _firebaseReady = false;
+  static bool _tokenRefreshAttached = false;
 
   static final FlutterLocalNotificationsPlugin _local =
       FlutterLocalNotificationsPlugin();
@@ -47,13 +48,14 @@ class OmaPushNotifications {
   }
 
   static Future<void> initialize(ApiClient api) async {
-    if (_ready) return;
-
     final options = _options();
     if (options == null) return;
 
     try {
-      await Firebase.initializeApp(options: options);
+      if (!_firebaseReady) {
+        await Firebase.initializeApp(options: options);
+        _firebaseReady = true;
+      }
       final messaging = FirebaseMessaging.instance;
 
       await _local.initialize(_initSettings);
@@ -80,21 +82,26 @@ class OmaPushNotifications {
         );
       }
 
-      messaging.onTokenRefresh.listen((next) async {
-        if (next.isNotEmpty) {
-          await api.registerPushDevice(
-            next,
-            kIsWeb ? 'web' : defaultTargetPlatform.name,
-          );
-        }
-      });
+      if (!_tokenRefreshAttached) {
+        messaging.onTokenRefresh.listen((next) async {
+          if (next.isNotEmpty) {
+            try {
+              await api.registerPushDevice(
+                next,
+                kIsWeb ? 'web' : defaultTargetPlatform.name,
+              );
+            } catch (_) {
+              // The next authenticated entry will register the current token again.
+            }
+          }
+        });
+        _tokenRefreshAttached = true;
+      }
 
       FirebaseMessaging.onMessage.listen((message) async {
         if (kIsWeb) return;
         await _showAndRepeat(message.data);
       });
-
-      _ready = true;
     } catch (_) {
       // Notification setup must never prevent the sales app from opening.
     }
