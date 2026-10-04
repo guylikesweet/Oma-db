@@ -551,6 +551,51 @@ def mobile_change_username():
     return jsonify({"id": g.api_user.id, "username": g.api_user.username})
 
 
+@api_bp.route("/v1/notifications/register-device", methods=("POST",))
+@require_api_token
+def register_push_device():
+    data = request.get_json(silent=True) or {}
+    token = str(data.get("token") or "").strip()
+    platform = str(data.get("platform") or "android").strip().lower()
+    if not token:
+        return jsonify({"error": "Push token is required."}), 400
+    if platform not in {"android", "ios", "web"}:
+        return jsonify({"error": "Unsupported notification platform."}), 400
+
+    device = PushDevice.query.filter_by(token=token).first()
+    if device is None:
+        device = PushDevice(
+            user_id=g.api_user.id,
+            token=token,
+            platform=platform,
+            enabled=True,
+            last_seen_at=datetime.utcnow(),
+        )
+        db.session.add(device)
+    else:
+        device.user_id = g.api_user.id
+        device.platform = platform
+        device.enabled = True
+        device.last_seen_at = datetime.utcnow()
+
+    db.session.commit()
+    return jsonify({"registered": True})
+
+
+@api_bp.route("/v1/notifications/unregister-device", methods=("POST",))
+@require_api_token
+def unregister_push_device():
+    data = request.get_json(silent=True) or {}
+    token = str(data.get("token") or "").strip()
+    if token:
+        PushDevice.query.filter_by(
+            token=token,
+            user_id=g.api_user.id,
+        ).update({"enabled": False})
+        db.session.commit()
+    return jsonify({"registered": False})
+
+
 @api_bp.route("/v1/auth/logout", methods=("POST",))
 @require_api_token
 def mobile_logout():
