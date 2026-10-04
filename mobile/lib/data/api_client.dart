@@ -362,6 +362,14 @@ class ApiClient {
   // DASHBOARD
   // ============================================================
 
+  Future<List<dynamic>> auditLog({int limit = 200}) {
+    return _list(
+      'GET',
+      '/v1/audit',
+      query: {'limit': '$limit'},
+    );
+  }
+
   Future<Map<String, dynamic>> dashboard() {
     return _map(
       'GET',
