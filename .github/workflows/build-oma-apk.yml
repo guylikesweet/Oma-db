@@ -350,24 +350,29 @@ jobs:
                           .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
                           .build()
 
+                      // Resolve raw sounds by name at runtime instead of via the
+                      // generated R class: R lives in the Gradle namespace package,
+                      // which is not guaranteed to match com.example.oma_mobile.
                       val channels = listOf(
-                          Triple("oma_scanner", "Oma scanner", R.raw.scanner_beep),
-                          Triple("oma_arrival_sea", "Sea shipment arrivals", R.raw.ship_horn),
-                          Triple("oma_arrival_air", "Air shipment arrivals", R.raw.airport_arrival),
+                          Triple("oma_scanner", "Oma scanner", "scanner_beep"),
+                          Triple("oma_arrival_sea", "Sea shipment arrivals", "ship_horn"),
+                          Triple("oma_arrival_air", "Air shipment arrivals", "airport_arrival"),
                       )
 
                       val manager = getSystemService(NotificationManager::class.java)
-                      channels.forEach { (id, name, sound) ->
-                          val uri = android.net.Uri.parse(
-                              "android.resource://$packageName/${sound}"
-                          )
+                      for ((id, name, soundName) in channels) {
+                          val soundRes = resources.getIdentifier(soundName, "raw", packageName)
                           val channel = NotificationChannel(
                               id,
                               name,
                               NotificationManager.IMPORTANCE_HIGH
-                          ).apply {
-                              setSound(uri, audio)
-                              enableVibration(true)
+                          )
+                          channel.enableVibration(true)
+                          if (soundRes != 0) {
+                              val uri = android.net.Uri.parse(
+                                  "android.resource://" + packageName + "/" + soundRes
+                              )
+                              channel.setSound(uri, audio)
                           }
                           manager.createNotificationChannel(channel)
                       }
