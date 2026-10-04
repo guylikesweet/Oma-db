@@ -31,6 +31,7 @@ from app.services.delivery import check_consolidation, find_consolidation_groups
 from app.services.audit import record_audit
 from app.services.push_notifications import queue_batch_arrival, flush_outbox
 from app.services.dashboard import get_kpis, get_sales_last_30_days
+from app.services.shipment_batches import mark_unarrived, BatchValidationError
 
 api_bp = Blueprint("api", __name__, url_prefix="/api")
 
@@ -894,6 +895,23 @@ def mobile_batch_arrive(batch_id):
         db.session.rollback(); return jsonify({"error": str(e)}), 400
 
 
+@api_bp.route("/v1/batches/<int:batch_id>/undo-arrival", methods=("POST",))
+@require_api_token
+@require_admin_api
+def mobile_batch_undo_arrival(batch_id):
+    data = request.get_json(silent=True) or {}
+    try:
+        op, existing = _mobile_operation(data)
+        if existing:
+            return _mobile_replay(existing)
+        batch = mark_unarrived(batch_id)
+        payload = _batch_json(batch)
+        return _mobile_finish(op, "batch_undo_arrival", 200, payload)
+    except BatchValidationError as e:
+        db.session.rollback()
+        return jsonify({"error": str(e)}), 400
+
+
 @api_bp.route("/v1/deliveries", methods=("GET",))
 @require_api_token
 def mobile_deliveries():
@@ -1002,6 +1020,14 @@ def mobile_update_journey():
         stage = str(data.get("stage") or "").strip()
         sales = Sale.query.filter(Sale.id.in_(ids)).all() if ids else []
         updated, unchanged, skipped = set_manual_stage_bulk(sales, stage, user_id=g.api_user.id)
+        if updated:
+            record_audit(
+                "journey.update",
+                target_type="sale",
+                target_id=",".join(str(x.id) for x in sales),
+                details={"stage": stage, "sale_ids": [x.id for x in sales], "updated": updated},
+                user=g.api_user,
+            )
         payload = {"updated": updated, "unchanged": unchanged, "skipped": skipped, "sales": [_journey_json(s) for s in sales]}
         return _mobile_finish(op, "update_journey", 200, payload)
     except (ValueError, JourneyError) as e:
@@ -1273,6 +1299,65 @@ def mobile_delete_user(user_id):
     db.session.delete(u)
     db.session.commit()
     return jsonify({'ok':True,'id':user_id})
+
+
+@api_bp.route("/v1/admin/sales/<int:sale_id>", methods=("DELETE",))
+@require_api_token
+@require_admin_api
+def mobile_delete_sale(sale_id):
+    sale = Sale.query.get_or_404(sale_id)
+    if sale.delivery_id:
+        return jsonify({"error": "Remove the sale from its delivery before deleting it."}), 400
+    if sale.shipping_payment_settled:
+        return jsonify({"error": "A sale with settled shipping cannot be deleted."}), 400
+
+    try:
+        if sale.is_stock_sale:
+            for item in sale.items:
+                product = Product.query.get(item.product_id)
+                if product:
+                    product.stock += item.qty
+                    db.session.add(
+                        StockLog(
+                            product_id=product.id,
+                            change_qty=item.qty,
+                            reason=f"Deleted sale #{sale.id}",
+                        )
+                    )
+        record_audit(
+            "sale.delete",
+            target_type="sale",
+            target_id=sale.id,
+            details={"order_id": sale.order_id, "sale_type": sale.sale_type},
+            user=g.api_user,
+        )
+        db.session.delete(sale)
+        db.session.commit()
+        return jsonify({"ok": True, "id": sale_id})
+    except Exception:
+        db.session.rollback()
+        raise
+
+
+@api_bp.route("/v1/admin/batches/<int:batch_id>", methods=("DELETE",))
+@require_api_token
+@require_admin_api
+def mobile_delete_batch(batch_id):
+    batch = ShipmentBatch.query.get_or_404(batch_id)
+    sale_ids = [sale.id for sale in batch.sales]
+    for sale in batch.sales:
+        sale.batch_id = None
+        sale.batch_assigned_at = None
+    record_audit(
+        "batch.delete",
+        target_type="shipment_batch",
+        target_id=batch.id,
+        details={"name": batch.name, "sale_ids": sale_ids},
+        user=g.api_user,
+    )
+    db.session.delete(batch)
+    db.session.commit()
+    return jsonify({"ok": True, "id": batch_id, "detached_sale_ids": sale_ids})
 
 
 @api_bp.route("/v1/reports/sales", methods=("GET",))
