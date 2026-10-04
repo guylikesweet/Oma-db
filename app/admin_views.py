@@ -86,6 +86,17 @@ class UserView(AdminOnlyModelView):
         if not model.is_active:
             model.api_token = None
             model.api_last_activity_at = None
+        record_audit(
+            "user.create" if is_created else "user.update",
+            target_type="user",
+            target_id=model.id,
+            details={
+                "username": model.username,
+                "role": model.role,
+                "is_active": model.is_active,
+                "source": "admin",
+            },
+        )
         super().on_model_change(form, model, is_created)
 
     def on_model_delete(self, model):
