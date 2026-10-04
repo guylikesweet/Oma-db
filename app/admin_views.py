@@ -18,6 +18,7 @@ from app.models import (
     MonthlyAirRate,
     ShipmentBatch,
     Delivery,
+    AuditLog,
 )
 
 
@@ -181,6 +182,24 @@ class StockLogView(SecureModelView):
     can_delete = False
 
 
+class AuditLogView(AdminOnlyModelView):
+    column_list = (
+        "id",
+        "created_at",
+        "username",
+        "action",
+        "target_type",
+        "target_id",
+        "outcome",
+        "ip_address",
+    )
+    can_create = False
+    can_edit = False
+    can_delete = False
+    can_export = True
+    column_default_sort = ("created_at", True)
+
+
 # ---------------------------------------------------------------------------
 # MONTHLY SHIPPING RATES — admin records the flat rate each month, looked up
 # by app/services/rates.py for the sale-time estimate and the batch-arrival cost.
@@ -270,6 +289,7 @@ def init_admin(app):
     admin.add_link(MenuLink(name="Reports", url="/reports/"))
     admin.add_link(MenuLink(name="Clear Test Data", url="/data-tools/clear"))
     admin.add_view(StockLogView(StockLog, db.session, name="Stock Log"))
+    admin.add_view(AuditLogView(AuditLog, db.session, name="Audit Log"))
     admin.add_view(UserView(User, db.session, name="Admin Users"))
 
     return admin

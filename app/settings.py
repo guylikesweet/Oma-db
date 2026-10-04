@@ -1,10 +1,12 @@
 from decimal import Decimal, InvalidOperation
 from flask import Blueprint, render_template, request, redirect, url_for, flash, Response
 from flask_login import login_required
+from app import db
 
 from app.access import admin_required
 from app.services.settings import get_settings, update_settings
 from app.services.labels import STATIC_LOGO_PATH
+from app.services.audit import record_audit
 import os
 
 settings_bp = Blueprint("settings", __name__, url_prefix="/settings", template_folder="templates/settings")
@@ -43,6 +45,19 @@ def edit():
             logo_data = logo_file.read()
             logo_mimetype = logo_file.mimetype or "image/png"
 
+        old_snapshot = {
+            "label_width_mm": settings.label_width_mm,
+            "label_height_mm": settings.label_height_mm,
+            "business_name": settings.business_name,
+            "business_phone": settings.business_phone,
+            "business_address": settings.business_address,
+            "bank_name": settings.bank_name,
+            "bank_account_number": settings.bank_account_number,
+            "bank_account_name": settings.bank_account_name,
+            "shipping_rate_per_kg": str(settings.shipping_rate_per_kg) if settings.shipping_rate_per_kg is not None else None,
+            "logo_changed": bool(logo_data),
+        }
+
         update_settings(
             label_width_mm=width,
             label_height_mm=height,
@@ -55,7 +70,30 @@ def edit():
             shipping_rate_per_kg=kg_rate,
             logo_data=logo_data,
             logo_mimetype=logo_mimetype,
+            commit=False,
         )
+
+        new_snapshot = {
+            "label_width_mm": settings.label_width_mm,
+            "label_height_mm": settings.label_height_mm,
+            "business_name": settings.business_name,
+            "business_phone": settings.business_phone,
+            "business_address": settings.business_address,
+            "bank_name": settings.bank_name,
+            "bank_account_number": settings.bank_account_number,
+            "bank_account_name": settings.bank_account_name,
+            "shipping_rate_per_kg": str(settings.shipping_rate_per_kg) if settings.shipping_rate_per_kg is not None else None,
+            "logo_changed": bool(logo_data),
+        }
+
+        record_audit(
+            "settings.update",
+            target_type="app_settings",
+            target_id=1,
+            details={"before": old_snapshot, "after": new_snapshot},
+        )
+        db.session.commit()
+
         flash("Settings saved.", "success")
         return redirect(url_for("settings.edit"))
 

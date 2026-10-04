@@ -1,6 +1,14 @@
 name: Build OmaSales Mobile
 
 on:
+  pull_request:
+    paths:
+      - 'app/**'
+      - 'mobile/**'
+      - 'migrations/**'
+      - 'requirements.txt'
+      - '.github/workflows/build-oma-apk.yml'
+
   push:
     paths:
       - 'app/**'
@@ -352,6 +360,12 @@ jobs:
                       '    <uses-permission '
                       'android:name='
                       '"android.permission.ACCESS_NETWORK_STATE" />\n'
+                      '    <uses-permission '
+                      'android:name='
+                      '"android.permission.ACCESS_COARSE_LOCATION" />\n'
+                      '    <uses-permission '
+                      'android:name='
+                      '"android.permission.ACCESS_FINE_LOCATION" />\n'
                       "    <application"
                   ),
                   1,
