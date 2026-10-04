@@ -5,6 +5,8 @@ import time
 
 from app import login_manager
 from app.models import User
+from app import db
+from app.services.audit import record_audit
 
 auth_bp = Blueprint("auth", __name__, template_folder="templates/auth")
 
@@ -26,6 +28,14 @@ def login():
         user = User.query.filter_by(username=username).first()
         if user and check_password_hash(user.password_hash, password):
             login_user(user)
+            record_audit(
+                "login",
+                target_type="user",
+                target_id=user.id,
+                details={"source": "classic"},
+                user=user,
+            )
+            db.session.commit()
             next_page = request.args.get("next")
             return redirect(next_page or url_for("classic_home"))
 
@@ -37,6 +47,15 @@ def login():
 @auth_bp.route("/logout")
 @login_required
 def logout():
+    user = current_user
+    record_audit(
+        "logout",
+        target_type="user",
+        target_id=user.id,
+        details={"source": "classic"},
+        user=user,
+    )
+    db.session.commit()
     logout_user()
     return redirect(url_for("auth.login"))
 
