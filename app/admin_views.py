@@ -104,6 +104,17 @@ class UserView(AdminOnlyModelView):
             raise Exception("The original admin account cannot be removed.")
         if model.id == current_user.id:
             raise Exception("You cannot remove your own account.")
+        if model.is_admin and not current_user.is_primary_admin:
+            raise Exception("Only the original admin can remove another admin account.")
+        record_audit(
+            "user.delete",
+            target_type="user",
+            target_id=model.id,
+            details={"username": model.username, "role": model.role, "source": "admin"},
+        )
+        AuditLog.query.filter_by(user_id=model.id).update(
+            {"user_id": None}, synchronize_session=False
+        )
 
 
 # ---------------------------------------------------------------------------
