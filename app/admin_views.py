@@ -8,6 +8,7 @@ from werkzeug.security import generate_password_hash
 from markupsafe import Markup
 
 from app import db
+from app.services.audit import record_audit
 from app.models import (
     User,
     Product,
@@ -134,6 +135,12 @@ class ProductView(SecureModelView):
             else:
                 product.stock += change_qty
                 db.session.add(StockLog(product_id=product.id, change_qty=change_qty, reason=reason))
+                record_audit(
+                    "stock.adjust",
+                    target_type="product",
+                    target_id=product.id,
+                    details={"change_qty": change_qty, "reason": reason},
+                )
                 db.session.commit()
                 flash(f"Stock updated: {product.name} is now {product.stock}.", "success")
                 return redirect(url_for("product.index_view"))
