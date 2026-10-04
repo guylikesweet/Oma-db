@@ -154,6 +154,39 @@ def verify_password():
     return jsonify({"verified": True})
 
 
+@api_bp.route("/v1/auth/biometric-login", methods=("POST",))
+def api_biometric_login():
+    """Exchange a previously authenticated device token after local biometric verification."""
+    data = request.get_json(silent=True) or {}
+    username = str(data.get("username") or "").strip()
+    credential = str(data.get("credential") or "").strip()
+    if not username or not credential:
+        return jsonify({"error": "Username and biometric credential are required."}), 400
+
+    user = User.query.filter_by(username=username, api_token=credential).first()
+    if not user:
+        return jsonify({"error": "This username does not have a valid biometric login on this device."}), 401
+
+    record_audit(
+        "login.biometric",
+        target_type="user",
+        target_id=user.id,
+        details={"source": "mobile_biometric"},
+        user=user,
+    )
+    db.session.commit()
+    return jsonify({
+        "token": user.api_token,
+        "user": {
+            "id": user.id,
+            "username": user.username,
+            "role": user.role,
+            "is_admin": user.is_admin,
+            "is_primary_admin": user.is_primary_admin,
+        },
+    })
+
+
 @api_bp.route("/v1/auth/me", methods=("GET",))
 @require_api_token
 def api_me():
@@ -558,8 +591,16 @@ def mobile_change_password():
     if len(new) < 8:
         return jsonify({"error": "New password must be at least 8 characters."}), 400
     g.api_user.password_hash = generate_password_hash(new)
+    g.api_user.api_token = secrets.token_hex(32)
+    record_audit(
+        "password.change",
+        target_type="user",
+        target_id=g.api_user.id,
+        details={"source": "api"},
+        user=g.api_user,
+    )
     db.session.commit()
-    return jsonify({"ok": True})
+    return jsonify({"ok": True, "token": g.api_user.api_token})
 
 
 @api_bp.route("/v1/auth/change-username", methods=("POST",))
@@ -571,7 +612,15 @@ def mobile_change_username():
         return jsonify({"error": "Enter a new username."}), 400
     if User.query.filter(User.username == new_username, User.id != g.api_user.id).first():
         return jsonify({"error": "Username already exists."}), 400
+    old_username = g.api_user.username
     g.api_user.username = new_username
+    record_audit(
+        "username.change",
+        target_type="user",
+        target_id=g.api_user.id,
+        details={"from": old_username, "to": new_username, "source": "api"},
+        user=g.api_user,
+    )
     db.session.commit()
     return jsonify({"id": g.api_user.id, "username": g.api_user.username})
 
