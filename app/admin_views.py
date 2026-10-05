@@ -90,7 +90,11 @@ class UserView(AdminOnlyModelView):
         if model.is_primary_admin:
             model.role = "admin"
             model.is_active = True
-        role_changed = (not is_created) and old_role != model.role
+        if role_changed:
+            if model.id == current_user.id and model.role != User.ROLE_ADMIN:
+                raise Exception("You cannot demote your own account.")
+            if old_role == User.ROLE_ADMIN and model.role == User.ROLE_STAFF and not current_user.is_primary_admin:
+                raise Exception("Only the original admin can downgrade another admin to staff.")
         if not model.is_active:
             model.api_token = None
             model.api_last_activity_at = None
