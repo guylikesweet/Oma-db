@@ -143,6 +143,21 @@ def register_cli(app):
 
         db.session.commit()
 
+    @app.cli.command("chat-cleanup")
+    def chat_cleanup():
+        """Delete stored chat photo bytes older than 30 days."""
+        from app.api import _chat_cleanup_expired_photos
+
+        before = __import__("app.models", fromlist=["ChatMessage"]).ChatMessage.query.filter(
+            __import__("app.models", fromlist=["ChatMessage"]).ChatMessage.attachment_data.isnot(None),
+            __import__("app.models", fromlist=["ChatMessage"]).ChatMessage.attachment_created_at < (
+                __import__("datetime", fromlist=["datetime"]).datetime.utcnow()
+                - __import__("datetime", fromlist=["timedelta"]).timedelta(days=30)
+            ),
+        ).count()
+        _chat_cleanup_expired_photos()
+        print(f"Removed stored bytes from {before} expired chat photo(s).")
+
     @app.cli.command("api-token")
     def api_token():
         """Show the admin user's API token (used by the mobile app), generating one if it doesn't exist yet."""

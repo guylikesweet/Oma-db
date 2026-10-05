@@ -9,6 +9,8 @@ duplicate sales when the phone retries a request.
 The older /api/products and /api/sales endpoints are kept for compatibility.
 New mobile development should use /api/v1/*.
 """
+import base64
+import io
 import json
 import re
 import secrets
@@ -25,7 +27,7 @@ from app.access import require_admin_api
 from app.models import (
     User, Product, Sale, SaleItem, Shipping, Delivery, ShipmentBatch,
     CourierRate, MonthlyShippingRate, MonthlyAirRate, StockLog, MobileOperation, MobileChange, AuditLog, PushDevice,
-    ChatMessage, ChatMention,
+    ChatMessage, ChatMention, ChatReaction,
 )
 from app.services.sales import create_sale, SaleValidationError, shipping_cost_for_items
 from app.services.rates import get_rate_for_month, get_volume_rate, get_rate_per_kg, RateMissingError
@@ -374,20 +376,81 @@ def _batch_json(b):
     }
 
 
+def _chat_attachment_url(message):
+    return f"/api/v1/chat/messages/{message.id}/attachment" if message.attachment_data else None
+
+
+def _chat_cleanup_expired_photos():
+    cutoff = datetime.utcnow() - timedelta(days=30)
+    rows = ChatMessage.query.filter(
+        ChatMessage.attachment_data.isnot(None),
+        ChatMessage.attachment_created_at < cutoff,
+    ).all()
+    for row in rows:
+        row.attachment_data = None
+        row.attachment_mimetype = None
+        row.attachment_filename = None
+        row.attachment_created_at = None
+    if rows:
+        db.session.commit()
+
+
 def _chat_message_json(message):
     reply = message.reply_to
+    is_admin = bool(g.api_user.is_admin)
+    show_deleted_content = is_admin
+    deleted = message.deleted_at is not None
+    edited_by = message.edited_by
+    show_original = bool(
+        message.edited_at
+        and (
+            g.api_user.is_primary_admin
+            or (edited_by is not None and not edited_by.is_admin)
+        )
+    )
+    reactions = {}
+    my_reactions = []
+    for reaction in message.reactions:
+        reactions[reaction.emoji] = reactions.get(reaction.emoji, 0) + 1
+        if reaction.user_id == g.api_user.id:
+            my_reactions.append(reaction.emoji)
+
     return {
         "id": message.id,
-        "content": message.content,
+        "content": message.content if (not deleted or show_deleted_content) else "",
+        "original_content": message.original_content if show_original else None,
         "sender_user_id": message.sender_user_id,
         "sender_username": message.sender.username if message.sender else None,
         "created_at": message.created_at.isoformat() if message.created_at else None,
+        "edited": bool(message.edited_at),
+        "edited_at": message.edited_at.isoformat() if message.edited_at else None,
+        "deleted": deleted,
+        "deleted_at": message.deleted_at.isoformat() if message.deleted_at else None,
+        "deleted_by_user_id": message.deleted_by_user_id,
+        "attachment_url": _chat_attachment_url(message),
+        "attachment_filename": message.attachment_filename if message.attachment_data else None,
+        "attachment_mimetype": message.attachment_mimetype if message.attachment_data else None,
+        "reactions": reactions,
+        "my_reactions": my_reactions,
         "reply_to": (
             {
                 "id": reply.id,
-                "content": reply.content,
+                "content": reply.content if (reply.deleted_at is None or is_admin) else "",
+                "original_content": reply.original_content if (
+                    reply.edited_at
+                    and (
+                        g.api_user.is_primary_admin
+                        or (reply.edited_by is not None and not reply.edited_by.is_admin)
+                    )
+                ) else None,
                 "sender_user_id": reply.sender_user_id,
                 "sender_username": reply.sender.username if reply.sender else None,
+                "created_at": reply.created_at.isoformat() if reply.created_at else None,
+                "edited": bool(reply.edited_at),
+                "deleted": bool(reply.deleted_at),
+                "attachment_url": _chat_attachment_url(reply),
+                "attachment_filename": reply.attachment_filename if reply.attachment_data else None,
+                "attachment_mimetype": reply.attachment_mimetype if reply.attachment_data else None,
             }
             if reply is not None
             else None
@@ -1666,22 +1729,34 @@ def mobile_delete_user(user_id):
 # ---------------------------------------------------------------------------
 # TEAM CHAT
 # ---------------------------------------------------------------------------
+@api_bp.route("/v1/admin/chat/cleanup", methods=("POST",))
+def mobile_admin_chat_cleanup():
+    expected = __import__("os").environ.get("CHAT_CLEANUP_SECRET", "").strip()
+    provided = request.headers.get("X-Chat-Cleanup-Secret", "").strip()
+    if not expected or not provided or not secrets.compare_digest(provided, expected):
+        return jsonify({"error": "Unauthorized."}), 401
+
+    before = ChatMessage.query.filter(
+        ChatMessage.attachment_data.isnot(None),
+        ChatMessage.attachment_created_at < datetime.utcnow() - timedelta(days=30),
+    ).count()
+    _chat_cleanup_expired_photos()
+    return jsonify({"ok": True, "expired_photos": before})
+
+
 @api_bp.route("/v1/chat/messages", methods=("GET",))
 @require_api_token
 def mobile_chat_messages():
+    _chat_cleanup_expired_photos()
     limit = min(max(request.args.get("limit", 100, type=int), 1), 200)
     before_id = request.args.get("before_id", type=int)
-
+    account_created_at = g.api_user.created_at
     query = ChatMessage.query
+    if account_created_at is not None:
+        query = query.filter(ChatMessage.created_at >= account_created_at)
     if before_id:
         query = query.filter(ChatMessage.id < before_id)
-
-    rows = (
-        query
-        .order_by(ChatMessage.id.desc())
-        .limit(limit)
-        .all()
-    )
+    rows = query.order_by(ChatMessage.id.desc()).limit(limit).all()
     rows.reverse()
     return jsonify([_chat_message_json(message) for message in rows])
 
@@ -1689,9 +1764,11 @@ def mobile_chat_messages():
 @api_bp.route("/v1/chat/messages", methods=("POST",))
 @require_api_token
 def mobile_create_chat_message():
+    _chat_cleanup_expired_photos()
     data = request.get_json(silent=True) or {}
     content = str(data.get("content") or "").strip()
-    if not content:
+    attachment_b64 = str(data.get("attachment_base64") or "").strip()
+    if not content and not attachment_b64:
         return jsonify({"error": "Message cannot be empty."}), 400
     if len(content) > 4000:
         return jsonify({"error": "Message is too long. Maximum is 4000 characters."}), 400
@@ -1706,67 +1783,82 @@ def mobile_create_chat_message():
         reply_to = None
         if reply_to_id is not None:
             reply_to = ChatMessage.query.get(reply_to_id)
-            if reply_to is None:
-                raise ValueError("The message you are replying to no longer exists.")
+            if (
+                reply_to is None
+                or (
+                    g.api_user.created_at is not None
+                    and reply_to.created_at < g.api_user.created_at
+                )
+            ):
+                raise ValueError("You cannot reply to a message from before your account was created.")
+
+        attachment = None
+        attachment_mimetype = None
+        attachment_filename = None
+        if attachment_b64:
+            try:
+                raw = base64.b64decode(attachment_b64, validate=True)
+            except Exception:
+                raise ValueError("Invalid photo data.")
+            if len(raw) > 12 * 1024 * 1024:
+                raise ValueError("Photo is too large. Maximum upload is 12 MB.")
+            try:
+                from PIL import Image
+                image = Image.open(io.BytesIO(raw))
+                image = image.convert("RGB")
+                image.thumbnail((1600, 1600), Image.Resampling.LANCZOS)
+                out = io.BytesIO()
+                image.save(out, format="JPEG", quality=78, optimize=True)
+                attachment = out.getvalue()
+                attachment_mimetype = "image/jpeg"
+                attachment_filename = (str(data.get("attachment_filename") or "photo").rsplit("/", 1)[-1][:220] + ".jpg")
+                if len(attachment) > 2 * 1024 * 1024:
+                    out = io.BytesIO()
+                    image.save(out, format="JPEG", quality=62, optimize=True)
+                    attachment = out.getvalue()
+            except Exception:
+                raise ValueError("The uploaded file is not a valid image.")
 
         message = ChatMessage(
             sender_user_id=g.api_user.id,
-            content=content,
+            content=content or "",
+            original_content=None,
             reply_to_id=reply_to_id,
+            attachment_data=attachment,
+            attachment_mimetype=attachment_mimetype,
+            attachment_filename=attachment_filename,
+            attachment_created_at=datetime.utcnow() if attachment else None,
         )
         db.session.add(message)
         db.session.flush()
 
         active_users = User.query.filter(User.is_active.is_(True)).all()
-        users_by_name = {
-            user.username.casefold(): user
-            for user in active_users
-            if user.username
-        }
-
-        # Mentions use the same visible @username form the user types in chat.
+        users_by_name = {user.username.casefold(): user for user in active_users if user.username}
         mentioned_ids = set()
         for match in re.finditer(r"(?<![A-Za-z0-9_])@([A-Za-z0-9_.-]{1,50})", content):
             mentioned = users_by_name.get(match.group(1).casefold())
-            if mentioned is None or mentioned.id == g.api_user.id:
-                continue
-            if mentioned.id in mentioned_ids:
+            if mentioned is None or mentioned.id == g.api_user.id or mentioned.id in mentioned_ids:
                 continue
             mentioned_ids.add(mentioned.id)
-            db.session.add(
-                ChatMention(
-                    message_id=message.id,
-                    user_id=mentioned.id,
-                )
-            )
+            db.session.add(ChatMention(message_id=message.id, user_id=mentioned.id))
 
         db.session.flush()
-
         special_user_ids = set(mentioned_ids)
         if reply_to is not None and reply_to.sender_user_id != g.api_user.id:
             special_user_ids.add(reply_to.sender_user_id)
-
-        queue_chat_message_notifications(
-            message,
-            special_user_ids=special_user_ids,
-        )
+        queue_chat_message_notifications(message, special_user_ids=special_user_ids)
         record_audit(
             "chat.message",
             target_type="chat_message",
             target_id=message.id,
-            details={
-                "reply_to_id": reply_to_id,
-                "mention_user_ids": sorted(mentioned_ids),
-            },
+            details={"reply_to_id": reply_to_id, "mention_user_ids": sorted(mentioned_ids), "has_photo": bool(attachment)},
             user=g.api_user,
         )
-
         db.session.commit()
         try:
             flush_outbox()
         except Exception:
             pass
-
         return jsonify(_chat_message_json(message)), 201
     except ValueError as exc:
         db.session.rollback()
@@ -1774,6 +1866,98 @@ def mobile_create_chat_message():
     except Exception:
         db.session.rollback()
         raise
+
+
+@api_bp.route("/v1/chat/messages/<int:message_id>", methods=("PUT", "PATCH", "DELETE"))
+@require_api_token
+def mobile_modify_chat_message(message_id):
+    message = ChatMessage.query.get_or_404(message_id)
+    if g.api_user.created_at and message.created_at < g.api_user.created_at:
+        return jsonify({"error": "This message predates your account."}), 403
+
+    if request.method == "DELETE":
+        if not g.api_user.is_admin and message.sender_user_id != g.api_user.id:
+            return jsonify({"error": "You can only delete your own messages."}), 403
+        if message.deleted_at is not None:
+            return jsonify(_chat_message_json(message))
+        message.deleted_at = datetime.utcnow()
+        message.deleted_by_user_id = g.api_user.id
+        record_audit(
+            "chat.message.delete",
+            target_type="chat_message",
+            target_id=message.id,
+            details={"sender_user_id": message.sender_user_id},
+            user=g.api_user,
+        )
+        db.session.commit()
+        return jsonify(_chat_message_json(message))
+
+    data = request.get_json(silent=True) or {}
+    if message.deleted_at is not None:
+        return jsonify({"error": "Deleted messages cannot be edited."}), 400
+    if not g.api_user.is_admin and message.sender_user_id != g.api_user.id:
+        return jsonify({"error": "You can only edit your own messages."}), 403
+    content = str(data.get("content") or "").strip()
+    if not content and not message.attachment_data:
+        return jsonify({"error": "Message cannot be empty."}), 400
+    if len(content) > 4000:
+        return jsonify({"error": "Message is too long. Maximum is 4000 characters."}), 400
+
+    if message.original_content is None:
+        message.original_content = message.content
+    message.content = content
+    message.edited_at = datetime.utcnow()
+    message.edited_by_user_id = g.api_user.id
+    record_audit(
+        "chat.message.edit",
+        target_type="chat_message",
+        target_id=message.id,
+        details={"sender_user_id": message.sender_user_id},
+        user=g.api_user,
+    )
+    db.session.commit()
+    return jsonify(_chat_message_json(message))
+
+
+@api_bp.route("/v1/chat/messages/<int:message_id>/react", methods=("POST", "DELETE"))
+@require_api_token
+def mobile_react_chat_message(message_id):
+    message = ChatMessage.query.get_or_404(message_id)
+    if g.api_user.created_at and message.created_at < g.api_user.created_at:
+        return jsonify({"error": "This message predates your account."}), 403
+    data = request.get_json(silent=True) or {}
+    emoji = str(data.get("emoji") or "").strip()
+    if not emoji or len(emoji) > 32:
+        return jsonify({"error": "Choose a valid emoji reaction."}), 400
+    if message.deleted_at is not None and not g.api_user.is_admin:
+        return jsonify({"error": "Deleted messages cannot receive reactions."}), 400
+
+    reaction = ChatReaction.query.filter_by(
+        message_id=message.id, user_id=g.api_user.id, emoji=emoji
+    ).first()
+    if request.method == "DELETE":
+        if reaction:
+            db.session.delete(reaction)
+    elif reaction:
+        db.session.delete(reaction)
+    else:
+        db.session.add(ChatReaction(message_id=message.id, user_id=g.api_user.id, emoji=emoji))
+    db.session.commit()
+    return jsonify(_chat_message_json(message))
+
+
+@api_bp.route("/v1/chat/messages/<int:message_id>/attachment", methods=("GET",))
+@require_api_token
+def mobile_chat_attachment(message_id):
+    message = ChatMessage.query.get_or_404(message_id)
+    if g.api_user.created_at and message.created_at < g.api_user.created_at:
+        return jsonify({"error": "This message predates your account."}), 403
+    if not message.attachment_data:
+        return jsonify({"error": "This photo has expired or no longer exists."}), 404
+    from flask import Response
+    response = Response(message.attachment_data, mimetype=message.attachment_mimetype or "image/jpeg")
+    response.headers["Content-Disposition"] = f'attachment; filename="{message.attachment_filename or "photo.jpg"}"'
+    return response
 
 
 @api_bp.route("/v1/admin/sales/<int:sale_id>", methods=("DELETE",))

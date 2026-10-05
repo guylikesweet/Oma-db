@@ -25,6 +25,7 @@ concurrency:
 
 jobs:
   build:
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
     permissions:
       contents: write
@@ -222,15 +223,42 @@ jobs:
           cp -r build/web/. "$GITHUB_WORKSPACE/app/static/webapp/"
 
           cd "$GITHUB_WORKSPACE"
+
+          # A previous web-build job may have finished just before this job
+          # reached the push step and advanced the branch with compiled output.
+          # Refresh first so this job never fails merely because that generated
+          # commit won the race.
+          git fetch origin "$GITHUB_REF_NAME"
+          git reset --hard "origin/$GITHUB_REF_NAME"
+
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
+          rm -rf "$GITHUB_WORKSPACE/app/static/webapp"
+          mkdir -p "$GITHUB_WORKSPACE/app/static/webapp"
+          cp -r "$GITHUB_WORKSPACE/mobile/build/web/." "$GITHUB_WORKSPACE/app/static/webapp/"
           git add app/static/webapp
 
           if git diff --cached --quiet; then
             echo "No changes to the compiled web app — nothing to commit."
           else
             git commit -m "chore: update compiled web app [skip ci]"
-            git push
+            for attempt in 1 2 3; do
+              if git push origin "HEAD:$GITHUB_REF_NAME"; then
+                break
+              fi
+              if [ "$attempt" -eq 3 ]; then
+                echo "Unable to push compiled web app after 3 attempts."
+                exit 1
+              fi
+              git fetch origin "$GITHUB_REF_NAME"
+              git reset --hard "origin/$GITHUB_REF_NAME"
+              rm -rf "$GITHUB_WORKSPACE/app/static/webapp"
+              mkdir -p "$GITHUB_WORKSPACE/app/static/webapp"
+              cp -r "$GITHUB_WORKSPACE/mobile/build/web/." "$GITHUB_WORKSPACE/app/static/webapp/"
+              git add app/static/webapp
+              git diff --cached --quiet || git commit -m "chore: update compiled web app [skip ci]" || true
+              sleep 2
+            done
           fi
 
   deploy-preview:
