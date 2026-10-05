@@ -122,7 +122,7 @@ class _ChatPageState extends State<ChatPage> {
     final optimistic = <String, dynamic>{
       'id': localId,
       'sender_user_id': AppSession.userId,
-      'sender_username': AppSession.username ?? 'You',
+      'sender_username': AppSession.username.isEmpty ? 'You' : AppSession.username,
       'content': text,
       'created_at': now,
       'reply_to': replyTo,
