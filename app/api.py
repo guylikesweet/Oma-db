@@ -772,8 +772,18 @@ def mobile_stock_adjust():
         if not product: raise ValueError("Product not found.")
         change = int(data["change_qty"])
         if change == 0 or product.stock + change < 0: raise ValueError("Invalid stock adjustment.")
+        reason = str(data.get("reason") or "Manual adjustment")
         product.stock += change
-        db.session.add(StockLog(product_id=product.id, change_qty=change, reason=str(data.get("reason") or "Manual adjustment")))
+        db.session.add(StockLog(product_id=product.id, change_qty=change, reason=reason))
+        # Same audit event the website records, so a mobile stock adjustment is
+        # audited and notifies the other users exactly like a web one.
+        record_audit(
+            "stock.adjust",
+            target_type="product",
+            target_id=product.id,
+            details={"change_qty": change, "reason": reason, "source": "api"},
+            user=g.api_user,
+        )
         payload = _product_json(product)
         return _mobile_finish(op, "stock_adjust", 200, payload)
     except (ValueError, TypeError, KeyError) as e:
@@ -1677,4 +1687,4 @@ def mobile_clear_test_data():
         counts=clear_test_data(data.get('confirmation'))
     except ValueError as e:
         return jsonify({'error':str(e)}),400
-    return jsonify({'ok':True,'counts':counts}),
+    return jsonify({'ok':True,'counts':counts})
