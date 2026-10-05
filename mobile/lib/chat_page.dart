@@ -236,6 +236,42 @@ class _ChatPageState extends State<ChatPage> {
                 },
                 onSelected: (user) =>
                     _selectMention(user, composer),
+                optionsViewBuilder: (
+                  context,
+                  onSelected,
+                  options,
+                ) {
+                  return Align(
+                    alignment: Alignment.topLeft,
+                    child: Material(
+                      elevation: 4,
+                      borderRadius: BorderRadius.circular(10),
+                      clipBehavior: Clip.antiAlias,
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(
+                          maxHeight: 240,
+                          minWidth: 220,
+                        ),
+                        child: ListView.builder(
+                          padding: EdgeInsets.zero,
+                          shrinkWrap: true,
+                          itemCount: options.length,
+                          itemBuilder: (context, index) {
+                            final user = options.elementAt(index);
+                            return ListTile(
+                              dense: true,
+                              leading: const Icon(Icons.person_outline),
+                              title: Text(
+                                '@' + (user['username'] ?? ''),
+                              ),
+                              onTap: () => onSelected(user),
+                            );
+                          },
+                        ),
+                      ),
+                    ),
+                  );
+                },
                 fieldViewBuilder: (
                   context,
                   controller,
