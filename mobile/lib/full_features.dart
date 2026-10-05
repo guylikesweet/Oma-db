@@ -13,6 +13,7 @@ import 'data/local_database.dart';
 import 'data/sale_kind.dart';
 import 'invoice_actions.dart';
 import 'journey_widgets.dart';
+import 'chat_page.dart';
 
 class WebsiteFeaturesPage extends StatefulWidget {
   const WebsiteFeaturesPage({super.key, required this.api, required this.local});
@@ -163,6 +164,13 @@ class _WebsiteFeaturesPageState extends State<WebsiteFeaturesPage> {
             'My account',
             'Change your username or password',
             () => open(ChangePasswordPage(api: widget.api)),
+          ),
+
+          _tile(
+            Icons.forum_outlined,
+            'Team chat',
+            'Converse with the whole team, mention users with @, and reply to messages.',
+            () => open(ChatPage(api: widget.api)),
           ),
 
           _tile(
