@@ -592,8 +592,8 @@ class _ChatPageState extends State<ChatPage> {
         child: Image.memory(local, width: 260, height: 220, fit: BoxFit.cover),
       );
     }
-    final id = int.tryParse('$message['id']}');
-    final url = '$message['attachment_url'] ?? ''}';
+    final id = int.tryParse('${message['id']}');
+    final url = '${message['attachment_url'] ?? ''}';
     if (id == null || url.isEmpty) return const SizedBox.shrink();
     if (photoCache[id] != null) {
       return ClipRRect(
