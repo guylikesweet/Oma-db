@@ -377,7 +377,7 @@ class _ChatPageState extends State<ChatPage> {
     return 'Message';
   }
 
-  Widget _quotedMessage(Map<String, dynamic> reply) {
+  Widget _quotedMessage(Map<String, dynamic> reply, {String? replyAuthor}) {
     final scheme = Theme.of(context).colorScheme;
     final sender = '${reply['sender_username'] ?? 'User'}';
     final deleted = reply['deleted'] == true;
@@ -423,7 +423,7 @@ class _ChatPageState extends State<ChatPage> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  '${sender} • replied message',
+                  replyAuthor == null || replyAuthor.isEmpty ? 'Replying to $sender' : '$replyAuthor → $sender',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
@@ -915,7 +915,7 @@ class _ChatPageState extends State<ChatPage> {
               if (!deleted || AppSession.isAdmin) ...[
                 if ('${message['attachment_url'] ?? ''}'.isNotEmpty || message['_attachment_bytes'] is Uint8List) _photoWidget(message),
               if (reply is Map)
-                _quotedMessage(Map<String, dynamic>.from(reply)),
+                _quotedMessage(Map<String, dynamic>.from(reply), replyAuthor: sender),
               Align(
                 alignment: Alignment.centerLeft,
                 child: Text(
