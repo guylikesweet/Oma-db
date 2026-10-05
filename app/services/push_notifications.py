@@ -172,6 +172,11 @@ def queue_chat_message_notifications(message, *, special_user_ids=None):
                 "chat_message_id": str(message.id),
                 "sender_user_id": str(message.sender_user_id),
                 "sender_username": sender_name,
+                "sender_avatar_url": (
+                    f"/api/v1/users/{message.sender.id}/avatar"
+                    if getattr(message.sender, "profile_photo_data", None)
+                    else ""
+                ),
                 "message_content": preview,
                 "reply_to_id": str(message.reply_to_id or ""),
                 "sound": "chat_message",
