@@ -436,8 +436,21 @@ def _chat_message_json(message):
             {
                 "id": reply.id,
                 "content": reply.content if (reply.deleted_at is None or is_admin) else "",
+                "original_content": reply.original_content if (
+                    reply.edited_at
+                    and (
+                        g.api_user.is_primary_admin
+                        or (reply.edited_by is not None and not reply.edited_by.is_admin)
+                    )
+                ) else None,
                 "sender_user_id": reply.sender_user_id,
                 "sender_username": reply.sender.username if reply.sender else None,
+                "created_at": reply.created_at.isoformat() if reply.created_at else None,
+                "edited": bool(reply.edited_at),
+                "deleted": bool(reply.deleted_at),
+                "attachment_url": _chat_attachment_url(reply),
+                "attachment_filename": reply.attachment_filename if reply.attachment_data else None,
+                "attachment_mimetype": reply.attachment_mimetype if reply.attachment_data else None,
             }
             if reply is not None
             else None
