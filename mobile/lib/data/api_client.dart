@@ -1082,6 +1082,12 @@ class ApiClient {
   // TEAM CHAT
   // ============================================================
 
+  Future<Map<String, dynamic>> chatDiagnostic() {
+    return _map(
+      await _request('GET', '/v1/chat/diagnostic'),
+    );
+  }
+
   Future<List<dynamic>> chatMessages({int limit = 100, int? beforeId}) {
     final query = <String, String>{
       'limit': '$limit',
