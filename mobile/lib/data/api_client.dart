@@ -1097,6 +1097,8 @@ class ApiClient {
   Future<Map<String, dynamic>> sendChatMessage(
     String content, {
     int? replyToId,
+    String? attachmentBase64,
+    String? attachmentFilename,
   }) {
     return _map(
       'POST',
@@ -1104,8 +1106,49 @@ class ApiClient {
       body: {
         'content': content,
         if (replyToId != null) 'reply_to_id': replyToId,
+        if (attachmentBase64 != null) 'attachment_base64': attachmentBase64,
+        if (attachmentFilename != null) 'attachment_filename': attachmentFilename,
       },
     );
+  }
+
+  Future<Map<String, dynamic>> updateChatMessage(int id, String content) {
+    return _map(
+      'PATCH',
+      '/v1/chat/messages/$id',
+      body: {'content': content},
+    );
+  }
+
+  Future<Map<String, dynamic>> deleteChatMessage(int id) {
+    return _map(
+      'DELETE',
+      '/v1/chat/messages/$id',
+      body: const <String, dynamic>{},
+    );
+  }
+
+  Future<Map<String, dynamic>> reactToChatMessage(int id, String emoji) {
+    return _map(
+      'POST',
+      '/v1/chat/messages/$id/react',
+      body: {'emoji': emoji},
+    );
+  }
+
+  Future<Uint8List> downloadChatAttachment(String url) async {
+    final tokenValue = await token();
+    final response = await _client.get(
+      Uri.parse('$baseUrl$url'),
+      headers: {
+        if (tokenValue != null && tokenValue.isNotEmpty)
+          'Authorization': 'Bearer $tokenValue',
+      },
+    );
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw ApiException(response.statusCode, 'Unable to download the photo.');
+    }
+    return response.bodyBytes;
   }
 
   Future<Map<String, dynamic>> deleteUser(
