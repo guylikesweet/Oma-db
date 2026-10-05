@@ -111,7 +111,9 @@ class OmaPushNotifications {
         });
         _foregroundListenerAttached = true;
       }
-    } catch (_) {
+    } catch (error, stackTrace) {
+      debugPrint('OmaPush initialize failed: $error');
+      debugPrint('$stackTrace');
       // Notification setup must never prevent the sales app from opening.
     }
   }
