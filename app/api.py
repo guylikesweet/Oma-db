@@ -10,6 +10,7 @@ The older /api/products and /api/sales endpoints are kept for compatibility.
 New mobile development should use /api/v1/*.
 """
 import json
+import re
 import secrets
 from datetime import date, datetime, timedelta
 from decimal import Decimal, InvalidOperation
@@ -24,14 +25,24 @@ from app.access import require_admin_api
 from app.models import (
     User, Product, Sale, SaleItem, Shipping, Delivery, ShipmentBatch,
     CourierRate, MonthlyShippingRate, MonthlyAirRate, StockLog, MobileOperation, MobileChange, AuditLog, PushDevice,
+    ChatMessage, ChatMention,
 )
 from app.services.sales import create_sale, SaleValidationError, shipping_cost_for_items
 from app.services.rates import get_rate_for_month, get_volume_rate, get_rate_per_kg, RateMissingError
 from app.services.delivery import check_consolidation, find_consolidation_groups
 from app.services.audit import record_audit
-from app.services.push_notifications import queue_batch_arrival, queue_user_notification, flush_outbox
+from app.services.push_notifications import (
+    queue_batch_arrival,
+    queue_user_notification,
+    queue_chat_message_notifications,
+    flush_outbox,
+)
 from app.services.dashboard import get_kpis, get_sales_last_30_days
-from app.services.shipment_batches import mark_unarrived, BatchValidationError
+from app.services.shipment_batches import (
+    mark_unarrived,
+    update_batch_sales,
+    BatchValidationError,
+)
 
 api_bp = Blueprint("api", __name__, url_prefix="/api")
 
@@ -361,6 +372,29 @@ def _batch_json(b):
         "created_at": b.created_at.isoformat() if b.created_at else None,
         "sale_ids": [sale.id for sale in b.sales],
     }
+
+
+def _chat_message_json(message):
+    reply = message.reply_to
+    return {
+        "id": message.id,
+        "content": message.content,
+        "sender_user_id": message.sender_user_id,
+        "sender_username": message.sender.username if message.sender else None,
+        "created_at": message.created_at.isoformat() if message.created_at else None,
+        "reply_to": (
+            {
+                "id": reply.id,
+                "content": reply.content,
+                "sender_user_id": reply.sender_user_id,
+                "sender_username": reply.sender.username if reply.sender else None,
+            }
+            if reply is not None
+            else None
+        ),
+        "mention_user_ids": [mention.user_id for mention in message.mentions],
+    }
+
 
 
 def _rate_json(r):
@@ -1046,6 +1080,37 @@ def mobile_batch_sale(batch_id, sale_id):
         db.session.rollback(); return jsonify({"error": str(e)}), 400
 
 
+@api_bp.route("/v1/batches/<int:batch_id>/sales/bulk", methods=("POST",))
+@require_api_token
+def mobile_batch_sales_bulk(batch_id):
+    data = request.get_json(silent=True) or {}
+    try:
+        op, existing = _mobile_operation(data)
+        if existing:
+            return _mobile_replay(existing)
+
+        add_ids = [int(x) for x in (data.get("add_sale_ids") or [])]
+        remove_ids = [int(x) for x in (data.get("remove_sale_ids") or [])]
+        if not add_ids and not remove_ids:
+            raise ValueError("Select at least one sale to add or remove.")
+
+        batch = update_batch_sales(
+            batch_id,
+            add_sale_ids=add_ids,
+            remove_sale_ids=remove_ids,
+            commit=False,
+        )
+        return _mobile_finish(
+            op,
+            "batch_sales_bulk",
+            200,
+            _batch_json(batch),
+        )
+    except (ValueError, BatchValidationError) as e:
+        db.session.rollback()
+        return jsonify({"error": str(e)}), 400
+
+
 @api_bp.route("/v1/batches/<int:batch_id>/arrive", methods=("POST",))
 @require_api_token
 @require_admin_api
@@ -1552,16 +1617,22 @@ def mobile_update_user(user_id):
             if not u.is_active:
                 u.api_token = None
                 u.api_last_activity_at = None
+        old_role = u.role
         if data.get('role') and g.api_user.is_admin:
             role = str(data['role']).strip().lower()
             if role not in (User.ROLE_ADMIN, User.ROLE_STAFF):raise ValueError('Role must be admin or staff.')
             if u.is_primary_admin and role != User.ROLE_ADMIN:raise ValueError('The original admin cannot be demoted.')
+            if u.id == g.api_user.id and role != User.ROLE_ADMIN:
+                raise ValueError('You cannot demote your own account.')
+            if u.is_admin and role == User.ROLE_STAFF and not g.api_user.is_primary_admin:
+                raise PermissionError('Only the original admin can downgrade another admin to staff.')
             u.role=role
+        role_changed = old_role != u.role
         record_audit(
             "user.update",
             target_type="user",
             target_id=u.id,
-            details={"source": "api"},
+            details={"source": "api", "role_changed": role_changed, "previous_role": old_role, "new_role": u.role},
             user=g.api_user,
         )
         return _mobile_finish(op,'update_user',200,{'id':u.id,'username':u.username,'role':u.role,'is_admin':u.is_admin,'is_primary_admin':u.is_primary_admin,'is_active':u.is_active,'created_at':u.created_at.isoformat() if u.created_at else None})
@@ -1590,6 +1661,119 @@ def mobile_delete_user(user_id):
     db.session.delete(u)
     db.session.commit()
     return jsonify({'ok':True,'id':user_id})
+
+
+# ---------------------------------------------------------------------------
+# TEAM CHAT
+# ---------------------------------------------------------------------------
+@api_bp.route("/v1/chat/messages", methods=("GET",))
+@require_api_token
+def mobile_chat_messages():
+    limit = min(max(request.args.get("limit", 100, type=int), 1), 200)
+    before_id = request.args.get("before_id", type=int)
+
+    query = ChatMessage.query
+    if before_id:
+        query = query.filter(ChatMessage.id < before_id)
+
+    rows = (
+        query
+        .order_by(ChatMessage.id.desc())
+        .limit(limit)
+        .all()
+    )
+    rows.reverse()
+    return jsonify([_chat_message_json(message) for message in rows])
+
+
+@api_bp.route("/v1/chat/messages", methods=("POST",))
+@require_api_token
+def mobile_create_chat_message():
+    data = request.get_json(silent=True) or {}
+    content = str(data.get("content") or "").strip()
+    if not content:
+        return jsonify({"error": "Message cannot be empty."}), 400
+    if len(content) > 4000:
+        return jsonify({"error": "Message is too long. Maximum is 4000 characters."}), 400
+
+    reply_to_id = data.get("reply_to_id")
+    try:
+        reply_to_id = int(reply_to_id) if reply_to_id not in (None, "", 0, "0") else None
+    except (TypeError, ValueError):
+        return jsonify({"error": "Invalid reply message."}), 400
+
+    try:
+        reply_to = None
+        if reply_to_id is not None:
+            reply_to = ChatMessage.query.get(reply_to_id)
+            if reply_to is None:
+                raise ValueError("The message you are replying to no longer exists.")
+
+        message = ChatMessage(
+            sender_user_id=g.api_user.id,
+            content=content,
+            reply_to_id=reply_to_id,
+        )
+        db.session.add(message)
+        db.session.flush()
+
+        active_users = User.query.filter(User.is_active.is_(True)).all()
+        users_by_name = {
+            user.username.casefold(): user
+            for user in active_users
+            if user.username
+        }
+
+        # Mentions use the same visible @username form the user types in chat.
+        mentioned_ids = set()
+        for match in re.finditer(r"(?<![A-Za-z0-9_])@([A-Za-z0-9_.-]{1,50})", content):
+            mentioned = users_by_name.get(match.group(1).casefold())
+            if mentioned is None or mentioned.id == g.api_user.id:
+                continue
+            if mentioned.id in mentioned_ids:
+                continue
+            mentioned_ids.add(mentioned.id)
+            db.session.add(
+                ChatMention(
+                    message_id=message.id,
+                    user_id=mentioned.id,
+                )
+            )
+
+        db.session.flush()
+
+        special_user_ids = set(mentioned_ids)
+        if reply_to is not None and reply_to.sender_user_id != g.api_user.id:
+            special_user_ids.add(reply_to.sender_user_id)
+
+        queue_chat_message_notifications(
+            message,
+            special_user_ids=special_user_ids,
+        )
+        record_audit(
+            "chat.message",
+            target_type="chat_message",
+            target_id=message.id,
+            details={
+                "reply_to_id": reply_to_id,
+                "mention_user_ids": sorted(mentioned_ids),
+            },
+            user=g.api_user,
+        )
+
+        db.session.commit()
+        try:
+            flush_outbox()
+        except Exception:
+            pass
+
+        return jsonify(_chat_message_json(message)), 201
+    except ValueError as exc:
+        db.session.rollback()
+        return jsonify({"error": str(exc)}), 400
+    except Exception:
+        db.session.rollback()
+        raise
 
 
 @api_bp.route("/v1/admin/sales/<int:sale_id>", methods=("DELETE",))

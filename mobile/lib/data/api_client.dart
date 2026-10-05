@@ -625,6 +625,21 @@ class ApiClient {
     );
   }
 
+  Future<Map<String, dynamic>> updateBatchSalesBulk(
+    int batchId, {
+    List<int> addSaleIds = const [],
+    List<int> removeSaleIds = const [],
+  }) {
+    return _map(
+      'POST',
+      '/v1/batches/$batchId/sales/bulk',
+      body: {
+        'add_sale_ids': addSaleIds,
+        'remove_sale_ids': removeSaleIds,
+      },
+    );
+  }
+
   Future<Map<String, dynamic>> arriveBatch(
     int id, [
     Map<String, dynamic>? payload,
@@ -1060,6 +1075,36 @@ class ApiClient {
       'PUT',
       '/v1/users/$id',
       body: payload,
+    );
+  }
+
+  // ============================================================
+  // TEAM CHAT
+  // ============================================================
+
+  Future<List<dynamic>> chatMessages({int limit = 100, int? beforeId}) {
+    final query = <String, String>{
+      'limit': '$limit',
+      if (beforeId != null) 'before_id': '$beforeId',
+    };
+    return _list(
+      'GET',
+      '/v1/chat/messages',
+      query: query,
+    );
+  }
+
+  Future<Map<String, dynamic>> sendChatMessage(
+    String content, {
+    int? replyToId,
+  }) {
+    return _map(
+      'POST',
+      '/v1/chat/messages',
+      body: {
+        'content': content,
+        if (replyToId != null) 'reply_to_id': replyToId,
+      },
     );
   }
 

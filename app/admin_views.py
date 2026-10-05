@@ -6,6 +6,7 @@ from flask_admin.menu import MenuLink
 from flask_login import current_user
 from werkzeug.security import generate_password_hash
 from markupsafe import Markup
+from sqlalchemy import inspect
 
 from app import db
 from app.access import admin_required, password_recently_confirmed, reauth_url
@@ -78,11 +79,23 @@ class UserView(AdminOnlyModelView):
 
     def on_model_change(self, form, model, is_created):
         # New users are created with a default password they must change on first login.
+        role_history = inspect(model).attrs.role.history
+        old_role = (
+            None
+            if is_created
+            else (role_history.deleted[0] if role_history.deleted else model.role)
+        )
         if is_created:
             model.password_hash = generate_password_hash("changeme123")
         if model.is_primary_admin:
             model.role = "admin"
             model.is_active = True
+        role_changed = (not is_created) and old_role != model.role
+        if role_changed:
+            if model.id == current_user.id and model.role != User.ROLE_ADMIN:
+                raise Exception("You cannot demote your own account.")
+            if old_role == User.ROLE_ADMIN and model.role == User.ROLE_STAFF and not current_user.is_primary_admin:
+                raise Exception("Only the original admin can downgrade another admin to staff.")
         if not model.is_active:
             model.api_token = None
             model.api_last_activity_at = None
@@ -94,6 +107,8 @@ class UserView(AdminOnlyModelView):
                 "username": model.username,
                 "role": model.role,
                 "is_active": model.is_active,
+                "role_changed": role_changed,
+                "previous_role": old_role,
                 "source": "admin",
             },
         )

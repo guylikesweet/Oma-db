@@ -4,7 +4,7 @@ from flask import g, has_request_context, request, after_this_request
 from flask_login import current_user
 
 from app import db
-from app.models import AuditLog
+from app.models import AuditLog, User
 
 
 def _resolve_actor(user=None):
@@ -186,8 +186,68 @@ def _change_notification_for_audit(
         "target_type": target_type or "",
         "target_id": target_id or "",
     }
+
+    recipient_user_ids = None
+
+    if action == "user.create":
+        username = details.get("username") or "a user"
+        role = str(details.get("role") or "staff").title()
+        title = "New user account created"
+        body = f"{username} was created as {role}."
+
+    elif action == "user.update" and details.get("role_changed"):
+        new_role = str(
+            details.get("new_role") or details.get("role") or "staff"
+        ).lower()
+        title = (
+            "You are now an admin"
+            if new_role == User.ROLE_ADMIN
+            else "Your role is now staff"
+        )
+        body = (
+            "Your OmaSales account has been upgraded to admin."
+            if new_role == User.ROLE_ADMIN
+            else "Your OmaSales account has been downgraded to staff."
+        )
+        data["role"] = new_role
+
+    elif action == "batch.create":
+        batch_name = details.get("name") or "A shipment batch"
+        mode = str(details.get("transport_mode") or "sea").upper()
+        title = "New shipment batch"
+        body = f"{batch_name} was created for {mode} shipment."
+
+    # User creation is an admin event: only admins should be told about it.
+    if action == "user.create":
+        recipient_user_ids = [
+            row[0]
+            for row in User.query.filter(
+                User.role == User.ROLE_ADMIN,
+                User.is_active.is_(True),
+            ).with_entities(User.id).all()
+        ]
+
+    # A role change is private to the affected account. The audit details are
+    # populated by both the web admin UI and the mobile API.
+    elif action == "user.update" and details.get("role_changed"):
+        try:
+            recipient_user_ids = [int(target_id)]
+        except (TypeError, ValueError):
+            recipient_user_ids = []
+
+    # Shipment creation is an admin-only operational event.
+    elif action == "batch.create":
+        recipient_user_ids = [
+            row[0]
+            for row in User.query.filter(
+                User.role == User.ROLE_ADMIN,
+                User.is_active.is_(True),
+            ).with_entities(User.id).all()
+        ]
+
     return {
         "actor_user_id": actor_id,
+        "recipient_user_ids": recipient_user_ids,
         "event_type": event_type,
         "title": title,
         "body": body,
