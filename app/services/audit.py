@@ -186,8 +186,40 @@ def _change_notification_for_audit(
         "target_type": target_type or "",
         "target_id": target_id or "",
     }
+
+    recipient_user_ids = None
+
+    # User creation is an admin event: only admins should be told about it.
+    if action == "user.create":
+        recipient_user_ids = [
+            row[0]
+            for row in User.query.filter(
+                User.role == User.ROLE_ADMIN,
+                User.is_active.is_(True),
+            ).with_entities(User.id).all()
+        ]
+
+    # A role change is private to the affected account. The audit details are
+    # populated by both the web admin UI and the mobile API.
+    elif action == "user.update" and details.get("role_changed"):
+        try:
+            recipient_user_ids = [int(target_id)]
+        except (TypeError, ValueError):
+            recipient_user_ids = []
+
+    # Shipment creation is an admin-only operational event.
+    elif action == "batch.create":
+        recipient_user_ids = [
+            row[0]
+            for row in User.query.filter(
+                User.role == User.ROLE_ADMIN,
+                User.is_active.is_(True),
+            ).with_entities(User.id).all()
+        ]
+
     return {
         "actor_user_id": actor_id,
+        "recipient_user_ids": recipient_user_ids,
         "event_type": event_type,
         "title": title,
         "body": body,
