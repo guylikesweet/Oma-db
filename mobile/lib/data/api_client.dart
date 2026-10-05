@@ -1139,7 +1139,7 @@ class ApiClient {
   Future<Uint8List> downloadChatAttachment(String url) async {
     final tokenValue = await token();
     final response = await _client.get(
-      Uri.parse('${AppConfig.apiBaseUrl}$url'),
+      Uri.parse(AppConfig.apiBaseUrl).resolve(url),
       headers: {
         if (tokenValue != null && tokenValue.isNotEmpty)
           'Authorization': 'Bearer $tokenValue',
