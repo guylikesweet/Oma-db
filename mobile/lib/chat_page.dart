@@ -206,7 +206,7 @@ class _ChatPageState extends State<ChatPage> {
                   ),
                 ),
               if (replyTo != null) const SizedBox(height: 7),
-              Autocomplete<Map<String, dynamic>>(
+              RawAutocomplete<Map<String, dynamic>>(
                 textEditingController: composer,
                 displayStringForOption: (user) =>
                     '@${user['username'] ?? ''}',
