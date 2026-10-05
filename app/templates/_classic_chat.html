@@ -25,8 +25,8 @@
 </div>
 
 <style>
-.oma-chat-fab{position:fixed;right:22px;bottom:24px;z-index:1200;border:0;border-radius:999px;background:linear-gradient(135deg,#039664,#027a52);color:#fff;padding:12px 18px;display:flex;gap:8px;align-items:center;font-weight:800;box-shadow:0 10px 28px rgba(0,0,0,.22);cursor:pointer}
-.oma-chat-panel{position:fixed;right:22px;bottom:82px;width:min(430px,calc(100vw - 28px));height:min(650px,calc(100vh - 110px));z-index:1201;background:var(--oma-surface,#fff);color:var(--oma-text,#212529);border:1px solid var(--oma-border,#e2e2e2);border-radius:20px;box-shadow:0 20px 60px rgba(0,0,0,.25);display:none;overflow:hidden}
+.oma-chat-fab{position:fixed;right:22px;bottom:92px;z-index:1200;border:0;border-radius:999px;background:linear-gradient(135deg,#039664,#027a52);color:#fff;padding:12px 18px;display:flex;gap:8px;align-items:center;font-weight:800;box-shadow:0 10px 28px rgba(0,0,0,.22);cursor:pointer}
+.oma-chat-panel{position:fixed;right:22px;bottom:150px;width:min(430px,calc(100vw - 28px));height:min(650px,calc(100vh - 110px));z-index:1201;background:var(--oma-surface,#fff);color:var(--oma-text,#212529);border:1px solid var(--oma-border,#e2e2e2);border-radius:20px;box-shadow:0 20px 60px rgba(0,0,0,.25);display:none;overflow:hidden}
 .oma-chat-panel.open{display:flex;flex-direction:column}
 .oma-chat-head{display:flex;justify-content:space-between;align-items:center;padding:15px 17px;background:#039664;color:#fff}
 .oma-chat-head strong{display:block;font-size:16px}.oma-chat-head small{display:block;opacity:.82;font-size:11px;margin-top:2px}
@@ -35,7 +35,7 @@
 .oma-chat-msg{max-width:86%;margin:0 0 10px;padding:9px 11px;border-radius:14px;background:var(--oma-surface,#fff);border:1px solid var(--oma-border,#e2e2e2)}
 .oma-chat-msg.mine{margin-left:auto;background:#e8f6f0;border-color:#b8e3d2}.oma-chat-name{font-size:11px;font-weight:800;color:#039664;margin-bottom:3px}.oma-chat-time{font-size:9px;color:var(--oma-muted,#666);margin-top:5px}.oma-chat-actions{display:flex;gap:5px;margin-top:6px}.oma-chat-actions button{font-size:10px;padding:3px 7px;border-radius:7px;border:1px solid var(--oma-border,#e2e2e2);background:transparent;color:inherit;cursor:pointer}.oma-chat-state{text-align:center;color:var(--oma-muted,#666);padding:25px 10px}
 .oma-chat-reply{padding:7px 12px;background:var(--oma-orange-soft,#fff0e9);border-top:1px solid var(--oma-border,#e2e2e2);font-size:11px}.oma-chat-compose{display:flex;gap:7px;padding:10px;border-top:1px solid var(--oma-border,#e2e2e2)}.oma-chat-compose input[type=text]{flex:1;min-width:0}.oma-chat-photo{display:flex;align-items:center;justify-content:center;width:42px;border:1px solid var(--oma-border,#e2e2e2);border-radius:10px;cursor:pointer}.oma-chat-compose button{border:0;border-radius:10px;padding:0 15px;background:#039664;color:#fff;font-weight:800;cursor:pointer}
-@media(max-width:600px){.oma-chat-fab{right:12px;bottom:12px}.oma-chat-panel{right:10px;bottom:66px;width:calc(100vw - 20px);height:calc(100vh - 90px)}}
+@media(max-width:600px){.oma-chat-fab{right:12px;bottom:82px}.oma-chat-panel{right:10px;bottom:140px;width:calc(100vw - 20px);height:calc(100vh - 90px)}}
 </style>
 
 <script>
