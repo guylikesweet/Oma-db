@@ -24,6 +24,7 @@ from app.access import require_admin_api
 from app.models import (
     User, Product, Sale, SaleItem, Shipping, Delivery, ShipmentBatch,
     CourierRate, MonthlyShippingRate, MonthlyAirRate, StockLog, MobileOperation, MobileChange, AuditLog, PushDevice,
+    ChatMessage, ChatMention,
 )
 from app.services.sales import create_sale, SaleValidationError, shipping_cost_for_items
 from app.services.rates import get_rate_for_month, get_volume_rate, get_rate_per_kg, RateMissingError
@@ -31,7 +32,11 @@ from app.services.delivery import check_consolidation, find_consolidation_groups
 from app.services.audit import record_audit
 from app.services.push_notifications import queue_batch_arrival, queue_user_notification, flush_outbox
 from app.services.dashboard import get_kpis, get_sales_last_30_days
-from app.services.shipment_batches import mark_unarrived, BatchValidationError
+from app.services.shipment_batches import (
+    mark_unarrived,
+    update_batch_sales,
+    BatchValidationError,
+)
 
 api_bp = Blueprint("api", __name__, url_prefix="/api")
 
@@ -361,6 +366,29 @@ def _batch_json(b):
         "created_at": b.created_at.isoformat() if b.created_at else None,
         "sale_ids": [sale.id for sale in b.sales],
     }
+
+
+def _chat_message_json(message):
+    reply = message.reply_to
+    return {
+        "id": message.id,
+        "content": message.content,
+        "sender_user_id": message.sender_user_id,
+        "sender_username": message.sender.username if message.sender else None,
+        "created_at": message.created_at.isoformat() if message.created_at else None,
+        "reply_to": (
+            {
+                "id": reply.id,
+                "content": reply.content,
+                "sender_user_id": reply.sender_user_id,
+                "sender_username": reply.sender.username if reply.sender else None,
+            }
+            if reply is not None
+            else None
+        ),
+        "mention_user_ids": [mention.user_id for mention in message.mentions],
+    }
+
 
 
 def _rate_json(r):
@@ -1046,6 +1074,36 @@ def mobile_batch_sale(batch_id, sale_id):
         db.session.rollback(); return jsonify({"error": str(e)}), 400
 
 
+@api_bp.route("/v1/batches/<int:batch_id>/sales/bulk", methods=("POST",))
+@require_api_token
+def mobile_batch_sales_bulk(batch_id):
+    data = request.get_json(silent=True) or {}
+    try:
+        op, existing = _mobile_operation(data)
+        if existing:
+            return _mobile_replay(existing)
+
+        add_ids = [int(x) for x in (data.get("add_sale_ids") or [])]
+        remove_ids = [int(x) for x in (data.get("remove_sale_ids") or [])]
+        if not add_ids and not remove_ids:
+            raise ValueError("Select at least one sale to add or remove.")
+
+        batch = update_batch_sales(
+            batch_id,
+            add_sale_ids=add_ids,
+            remove_sale_ids=remove_ids,
+        )
+        return _mobile_finish(
+            op,
+            "batch_sales_bulk",
+            200,
+            _batch_json(batch),
+        )
+    except (ValueError, BatchValidationError) as e:
+        db.session.rollback()
+        return jsonify({"error": str(e)}), 400
+
+
 @api_bp.route("/v1/batches/<int:batch_id>/arrive", methods=("POST",))
 @require_api_token
 @require_admin_api
@@ -1552,16 +1610,18 @@ def mobile_update_user(user_id):
             if not u.is_active:
                 u.api_token = None
                 u.api_last_activity_at = None
+        old_role = u.role
         if data.get('role') and g.api_user.is_admin:
             role = str(data['role']).strip().lower()
             if role not in (User.ROLE_ADMIN, User.ROLE_STAFF):raise ValueError('Role must be admin or staff.')
             if u.is_primary_admin and role != User.ROLE_ADMIN:raise ValueError('The original admin cannot be demoted.')
             u.role=role
+        role_changed = old_role != u.role
         record_audit(
             "user.update",
             target_type="user",
             target_id=u.id,
-            details={"source": "api"},
+            details={"source": "api", "role_changed": role_changed, "previous_role": old_role, "new_role": u.role},
             user=g.api_user,
         )
         return _mobile_finish(op,'update_user',200,{'id':u.id,'username':u.username,'role':u.role,'is_admin':u.is_admin,'is_primary_admin':u.is_primary_admin,'is_active':u.is_active,'created_at':u.created_at.isoformat() if u.created_at else None})
