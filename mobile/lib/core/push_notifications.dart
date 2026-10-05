@@ -147,24 +147,33 @@ class OmaPushNotifications {
     final title = '${data['title'] ?? 'OmaSales'}';
     final body = '${data['body'] ?? ''}';
 
+    final type = '${data['type'] ?? ''}';
+    final isChat = type == 'chat_message';
     final mode = '${data['transport_mode'] ?? ''}'.toLowerCase();
-    final soundName = mode == 'air'
-        ? 'airport_arrival'
-        : mode == 'sea'
-            ? 'ship_horn'
-            : '${data['sound'] ?? 'scanner_beep'}';
 
-    final channelId = mode == 'air'
-        ? 'oma_arrival_air_v2'
-        : mode == 'sea'
-            ? 'oma_arrival_sea_v2'
-            : 'oma_scanner_v2';
+    final soundName = isChat
+        ? 'chat_message'
+        : mode == 'air'
+            ? 'airport_arrival'
+            : mode == 'sea'
+                ? 'ship_horn'
+                : '${data['sound'] ?? 'scanner_beep'}';
 
-    final channelName = mode == 'air'
-        ? 'Air shipment arrivals'
-        : mode == 'sea'
-            ? 'Sea shipment arrivals'
-            : 'Oma notifications';
+    final channelId = isChat
+        ? 'oma_chat_v1'
+        : mode == 'air'
+            ? 'oma_arrival_air_v2'
+            : mode == 'sea'
+                ? 'oma_arrival_sea_v2'
+                : 'oma_scanner_v2';
+
+    final channelName = isChat
+        ? 'Oma team chat'
+        : mode == 'air'
+            ? 'Air shipment arrivals'
+            : mode == 'sea'
+                ? 'Sea shipment arrivals'
+                : 'Oma notifications';
 
     final details = AndroidNotificationDetails(
       channelId,
@@ -196,9 +205,11 @@ class OmaPushNotifications {
           '${data['operation_id'] ?? ''}',
     );
 
-    // Keep the exact same notification repeating every two hours until the
-    // user opens the app. Opening/resuming Oma cancels all outstanding
-    // reminders in clearPendingReminders().
+    // Business notifications keep the existing two-hour reminder.
+    // Chat messages intentionally do not repeat: a busy team chat should not
+    // create an endless stream of scheduled reminders.
+    if (isChat) return;
+
     await _local.periodicallyShowWithDuration(
       id,
       title,
