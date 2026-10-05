@@ -28,7 +28,7 @@
     }
   </style>
   <style>
-    body { background:#f4f5f7; margin:0; }
+    body { background:#f4f5f7; margin:0; padding-bottom:92px; }
 
     /* Top bar with hamburger toggle only */
     .topbar { background:#212529; padding:10px 16px; display:flex; align-items:center; }
@@ -100,6 +100,11 @@
   </nav>
 
   {% block body %}{% endblock %}
+
+  {% if current_user.is_authenticated %}
+    {% include '_classic_chat.html' %}
+    {% include '_classic_nav.html' %}
+  {% endif %}
 
   <script>
     var sideNav = document.getElementById('sideNav');

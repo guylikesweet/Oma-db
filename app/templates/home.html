@@ -32,16 +32,15 @@
 <body>
   <div class="home-wrap">
     <div class="home-title">Omabuy Admin</div>
-    <div class="kpi-grid" style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-bottom:22px;">
-      <div class="card" style="padding:16px;"><small>Sales today</small><div style="font-size:22px;font-weight:800;">NGN {{ '{:,.0f}'.format(kpis.sales_today|float) }}</div></div>
-      <div class="card" style="padding:16px;"><small>Profit today</small><div style="font-size:22px;font-weight:800;">NGN {{ '{:,.0f}'.format(kpis.profit_today|float) }}</div></div>
-      <div class="card" style="padding:16px;"><small>Shipping owed</small><div style="font-size:22px;font-weight:800;">NGN {{ '{:,.0f}'.format(kpis.shipping_owed|float) }}</div></div>
-      <div class="card" style="padding:16px;"><small>Low stock</small><div style="font-size:22px;font-weight:800;">{{ kpis.low_stock_count }}</div></div>
-    </div>
-
-    <div class="action-grid">
+    <div class="action-grid top-actions">
       <a class="action-btn primary" href="{{ url_for('sales.new_sale') }}">
         <span class="icon">&#128230;</span> New Sale
+      </a>
+      <a class="action-btn primary" href="{{ url_for('sales.new_sale', type='stock') }}">
+        <span class="icon">&#128230;</span> Stock Sale
+      </a>
+      <a class="action-btn" href="{{ url_for('product.index_view') }}">
+        <span class="icon">&#10133;</span> Adjust Stock
       </a>
       <a class="action-btn" href="{{ url_for('product.index_view') }}">
         <span class="icon">&#128717;</span> Products
@@ -72,10 +71,19 @@
       </a>
     </div>
 
+    <div class="kpi-grid" style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-bottom:22px;">
+      <div class="card" style="padding:16px;"><small>Sales today</small><div style="font-size:22px;font-weight:800;">NGN {{ '{:,.0f}'.format(kpis.sales_today|float) }}</div></div>
+      <div class="card" style="padding:16px;"><small>Profit today</small><div style="font-size:22px;font-weight:800;">NGN {{ '{:,.0f}'.format(kpis.profit_today|float) }}</div></div>
+      <div class="card" style="padding:16px;"><small>Shipping owed</small><div style="font-size:22px;font-weight:800;">NGN {{ '{:,.0f}'.format(kpis.shipping_owed|float) }}</div></div>
+      <div class="card" style="padding:16px;"><small>Low stock</small><div style="font-size:22px;font-weight:800;">{{ kpis.low_stock_count }}</div></div>
+    </div>
+
     <div class="logout-row">
       <a href="{{ url_for('auth.logout') }}" onclick="return confirm('Are you sure you want to log out?');">Log Out</a>
     </div>
   </div>
+  {% include '_classic_chat.html' %}
+  {% include '_classic_nav.html' %}
   <script src="{{ url_for('static', filename='oma-theme.js') }}"></script>
 </body>
 </html>

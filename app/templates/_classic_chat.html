@@ -1,0 +1,123 @@
+<button type="button" id="omaClassicChatFab" class="oma-chat-fab" aria-label="Open team chat">
+  <span>💬</span><b>Team chat</b>
+</button>
+
+<div id="omaClassicChatPanel" class="oma-chat-panel" aria-hidden="true">
+  <div class="oma-chat-head">
+    <div>
+      <strong>Team chat</strong>
+      <small>Shared with the mobile app and web app</small>
+    </div>
+    <button type="button" id="omaClassicChatClose" aria-label="Close">&times;</button>
+  </div>
+  <div id="omaClassicChatMessages" class="oma-chat-messages">
+    <div class="oma-chat-state">Loading…</div>
+  </div>
+  <div id="omaClassicChatReply" class="oma-chat-reply" hidden></div>
+  <div class="oma-chat-compose">
+    <label class="oma-chat-photo" title="Attach photo">
+      📎
+      <input id="omaClassicChatPhoto" type="file" accept="image/*" hidden>
+    </label>
+    <input id="omaClassicChatInput" type="text" maxlength="4000" placeholder="Write a message…">
+    <button type="button" id="omaClassicChatSend">Send</button>
+  </div>
+</div>
+
+<style>
+.oma-chat-fab{position:fixed;right:22px;bottom:92px;z-index:1200;border:0;border-radius:999px;background:linear-gradient(135deg,#039664,#027a52);color:#fff;padding:12px 18px;display:flex;gap:8px;align-items:center;font-weight:800;box-shadow:0 10px 28px rgba(0,0,0,.22);cursor:pointer}
+.oma-chat-panel{position:fixed;right:22px;bottom:150px;width:min(430px,calc(100vw - 28px));height:min(650px,calc(100vh - 110px));z-index:1201;background:var(--oma-surface,#fff);color:var(--oma-text,#212529);border:1px solid var(--oma-border,#e2e2e2);border-radius:20px;box-shadow:0 20px 60px rgba(0,0,0,.25);display:none;overflow:hidden}
+.oma-chat-panel.open{display:flex;flex-direction:column}
+.oma-chat-head{display:flex;justify-content:space-between;align-items:center;padding:15px 17px;background:#039664;color:#fff}
+.oma-chat-head strong{display:block;font-size:16px}.oma-chat-head small{display:block;opacity:.82;font-size:11px;margin-top:2px}
+.oma-chat-head button{border:0;background:transparent;color:#fff;font-size:27px;cursor:pointer}
+.oma-chat-messages{flex:1;overflow:auto;padding:14px;background:var(--oma-bg,#f4f5f7)}
+.oma-chat-msg{max-width:86%;margin:0 0 10px;padding:9px 11px;border-radius:14px;background:var(--oma-surface,#fff);border:1px solid var(--oma-border,#e2e2e2)}
+.oma-chat-msg.mine{margin-left:auto;background:#e8f6f0;border-color:#b8e3d2}.oma-chat-name{font-size:11px;font-weight:800;color:#039664;margin-bottom:3px}.oma-chat-time{font-size:9px;color:var(--oma-muted,#666);margin-top:5px}.oma-chat-actions{display:flex;gap:5px;margin-top:6px}.oma-chat-actions button{font-size:10px;padding:3px 7px;border-radius:7px;border:1px solid var(--oma-border,#e2e2e2);background:transparent;color:inherit;cursor:pointer}.oma-chat-state{text-align:center;color:var(--oma-muted,#666);padding:25px 10px}
+.oma-chat-reply{padding:7px 12px;background:var(--oma-orange-soft,#fff0e9);border-top:1px solid var(--oma-border,#e2e2e2);font-size:11px}.oma-chat-compose{display:flex;gap:7px;padding:10px;border-top:1px solid var(--oma-border,#e2e2e2)}.oma-chat-compose input[type=text]{flex:1;min-width:0}.oma-chat-photo{display:flex;align-items:center;justify-content:center;width:42px;border:1px solid var(--oma-border,#e2e2e2);border-radius:10px;cursor:pointer}.oma-chat-compose button{border:0;border-radius:10px;padding:0 15px;background:#039664;color:#fff;font-weight:800;cursor:pointer}
+@media(max-width:600px){.oma-chat-fab{right:12px;bottom:82px}.oma-chat-panel{right:10px;bottom:140px;width:calc(100vw - 20px);height:calc(100vh - 90px)}}
+</style>
+
+<script>
+window.omaClassicChatUserId = {{ current_user.id|tojson }};
+(function(){
+  'use strict';
+  var fab=document.getElementById('omaClassicChatFab');
+  var panel=document.getElementById('omaClassicChatPanel');
+  if(!fab||!panel)return;
+  var close=document.getElementById('omaClassicChatClose');
+  var list=document.getElementById('omaClassicChatMessages');
+  var input=document.getElementById('omaClassicChatInput');
+  var send=document.getElementById('omaClassicChatSend');
+  var photo=document.getElementById('omaClassicChatPhoto');
+  var replyBox=document.getElementById('omaClassicChatReply');
+  var csrf='';
+  var replyTo=null;
+  var messages=[];
+
+  function esc(s){return String(s??'').replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]})}
+  function openChat(){panel.classList.add('open');panel.setAttribute('aria-hidden','false');load()}
+  function closeChat(){panel.classList.remove('open');panel.setAttribute('aria-hidden','true')}
+  async function initCsrf(){if(csrf)return;var r=await fetch('/classic/chat/csrf',{headers:{Accept:'application/json'}});var d=await r.json();csrf=d.token||''}
+  async function api(path,opts){
+    opts=opts||{};opts.headers=Object.assign({'Accept':'application/json'},opts.headers||{});
+    if(opts.body&&!opts.headers['Content-Type'])opts.headers['Content-Type']='application/json';
+    if(opts.method&&opts.method!=='GET')opts.headers['X-Oma-Chat-CSRF']=csrf;
+    var r=await fetch(path,opts);var d=await r.json().catch(function(){return {error:'Unexpected server response.'}});
+    if(!r.ok)throw new Error(d.error||('HTTP '+r.status)+(d.diagnostic?' — '+d.diagnostic:''));return d
+  }
+  function render(){
+    if(!messages.length){list.innerHTML='<div class="oma-chat-state">No messages yet. Start the conversation.</div>';return}
+    list.innerHTML=messages.map(function(m){
+      var mine=m.sender_user_id===window.omaClassicChatUserId;
+      var deleted=m.deleted;
+      var body=deleted?'Message deleted':esc(m.content||'');
+      var reply=m.reply_to?'<div style="border-left:3px solid #039664;padding-left:7px;margin-bottom:6px;font-size:11px;opacity:.75">↪ '+esc(m.reply_to.content||'Message deleted')+'</div>':'';
+      return '<div class="oma-chat-msg '+(mine?'mine':'')+'" data-id="'+esc(m.id)+'">'+
+        '<div class="oma-chat-name">'+esc(m.sender_username||'Team member')+'</div>'+reply+
+        '<div>'+body+(m.edited?' <small>(edited)</small>':'')+'</div>'+
+        '<div class="oma-chat-time">'+(m.created_at?new Date(m.created_at).toLocaleString():'')+'</div>'+
+        '<div class="oma-chat-actions">'+
+        '<button data-act="reply">Reply</button><button data-act="react">👍</button>'+
+        (mine?'<button data-act="edit">Edit</button><button data-act="delete">Delete</button>':'')+
+        '</div></div>'
+    }).join('');
+    list.scrollTop=list.scrollHeight
+  }
+  async function load(){
+    try{await initCsrf();messages=await api('/classic/chat/messages?limit=100');render()}catch(e){list.innerHTML='<div class="oma-chat-state">'+esc(e.message)+'</div>'}
+  }
+  async function sendMessage(){
+    var text=input.value.trim();var file=photo.files[0];
+    if(!text&&!file)return;
+    send.disabled=true;
+    try{
+      var payload={content:text,reply_to_id:replyTo?replyTo.id:null};
+      if(file){
+        if(file.size>12*1024*1024)throw new Error('Photo is too large. Maximum is 12 MB.');
+        payload.attachment_filename=file.name;
+        payload.attachment_base64=await new Promise(function(resolve,reject){
+          var fr=new FileReader();fr.onload=function(){resolve(String(fr.result).split(',')[1]||'')};fr.onerror=reject;fr.readAsDataURL(file)
+        });
+      }
+      await api('/classic/chat/messages',{method:'POST',body:JSON.stringify(payload)});
+      input.value='';photo.value='';replyTo=null;replyBox.hidden=true;replyBox.textContent='';
+      await load()
+    }catch(e){alert(e.message)}finally{send.disabled=false}
+  }
+  list.addEventListener('click',async function(ev){
+    var b=ev.target.closest('button[data-act]');if(!b)return;
+    var row=b.closest('.oma-chat-msg');var id=row&&row.getAttribute('data-id');var m=messages.find(function(x){return String(x.id)===String(id)});if(!m)return;
+    var act=b.getAttribute('data-act');
+    try{
+      if(act==='reply'){replyTo=m;replyBox.hidden=false;replyBox.textContent='Replying to '+(m.sender_username||'team member')+': '+(m.content||'Message deleted');input.focus();return}
+      if(act==='delete'){if(!confirm('Delete this message?'))return;await api('/classic/chat/messages/'+id,{method:'DELETE'});await load();return}
+      if(act==='edit'){var next=prompt('Edit message',m.content||'');if(next===null)return;await api('/classic/chat/messages/'+id,{method:'PATCH',body:JSON.stringify({content:next})});await load();return}
+      if(act==='react'){await api('/classic/chat/messages/'+id+'/react',{method:'POST',body:JSON.stringify({emoji:'👍'})});await load()}
+    }catch(e){alert(e.message)}
+  });
+  fab.addEventListener('click',openChat);close.addEventListener('click',closeChat);send.addEventListener('click',sendMessage);
+  input.addEventListener('keydown',function(e){if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();sendMessage()}});
+  window.setInterval(function(){if(panel.classList.contains('open'))load()},4000);
+})();
+</script>

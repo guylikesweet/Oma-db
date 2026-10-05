@@ -120,10 +120,22 @@ class _ChatPageState extends State<ChatPage> {
       }
     } catch (e) {
       if (!mounted) return;
+      var message = '${e}';
+      if (e is ApiException &&
+          e.statusCode == 503 &&
+          AppSession.isAdmin) {
+        try {
+          final diagnostic = await widget.api.chatDiagnostic();
+          message = '${e}\\nDiagnostic: ${jsonEncode(diagnostic)}';
+        } catch (_) {
+          // Keep the original server error if the protected diagnostic
+          // endpoint is itself unavailable.
+        }
+      }
       if (!silent || messages.isEmpty) {
         setState(() {
           loading = false;
-          error = '${e}';
+          error = message;
         });
       }
     }

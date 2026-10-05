@@ -677,7 +677,7 @@ class _GlobalChatLauncherState extends State<GlobalChatLauncher> {
   Widget build(BuildContext context) {
     return Positioned(
       right: 18,
-      bottom: 18,
+      bottom: 94,
       child: FloatingActionButton.extended(
         heroTag: 'global-team-chat',
         onPressed: open ? null : _openChat,
@@ -707,7 +707,8 @@ class _AppShellState extends State<AppShell> {
 
   StreamSubscription<List<ConnectivityResult>>? connectivity;
 
-  int tab = 0;
+  // Home is the center destination in the shared app/web navigation.
+  int tab = 2;
   bool syncing = false;
   String syncText = 'Ready';
   int refreshKey = 0;
@@ -862,16 +863,9 @@ class _AppShellState extends State<AppShell> {
 
   @override
   Widget build(BuildContext context) {
+    // Same destination order on Android, iOS and Flutter Web.
+    // Home is deliberately the physical center item.
     final pages = [
-      DashboardPage(
-        api: widget.api,
-        local: local,
-        repo: repo,
-        syncText: syncText,
-        syncing: syncing,
-        onSync: sync,
-        refreshKey: refreshKey,
-      ),
       SalesPage(
         api: widget.api,
         local: local,
@@ -882,6 +876,15 @@ class _AppShellState extends State<AppShell> {
         api: widget.api,
         local: local,
         repo: repo,
+        refreshKey: refreshKey,
+      ),
+      DashboardPage(
+        api: widget.api,
+        local: local,
+        repo: repo,
+        syncText: syncText,
+        syncing: syncing,
+        onSync: sync,
         refreshKey: refreshKey,
       ),
       StockPage(
@@ -900,7 +903,6 @@ class _AppShellState extends State<AppShell> {
       ),
     ];
 
-    final wide = MediaQuery.sizeOf(context).width >= 1000;
     final content = Listener(
       behavior: HitTestBehavior.translucent,
       onPointerDown: (_) => _touchActivity(),
@@ -912,59 +914,6 @@ class _AppShellState extends State<AppShell> {
       ),
     );
 
-    if (wide) {
-      return Scaffold(
-        body: Row(
-          children: [
-            NavigationRail(
-              selectedIndex: tab,
-              onDestinationSelected: (i) => setState(() => tab = i),
-              extended: MediaQuery.sizeOf(context).width >= 1200,
-              labelType: MediaQuery.sizeOf(context).width >= 1200
-                  ? NavigationRailLabelType.none
-                  : NavigationRailLabelType.all,
-              destinations: const [
-                NavigationRailDestination(
-                  icon: Icon(Icons.dashboard_outlined),
-                  selectedIcon: Icon(Icons.dashboard),
-                  label: Text('Home'),
-                ),
-                NavigationRailDestination(
-                  icon: Icon(Icons.receipt_long_outlined),
-                  selectedIcon: Icon(Icons.receipt_long),
-                  label: Text('Sales'),
-                ),
-                NavigationRailDestination(
-                  icon: Icon(Icons.inventory_2_outlined),
-                  selectedIcon: Icon(Icons.inventory_2),
-                  label: Text('Products'),
-                ),
-                NavigationRailDestination(
-                  icon: Icon(Icons.warehouse_outlined),
-                  selectedIcon: Icon(Icons.warehouse),
-                  label: Text('Stock'),
-                ),
-                NavigationRailDestination(
-                  icon: Icon(Icons.more_horiz),
-                  selectedIcon: Icon(Icons.more_horiz),
-                  label: Text('More'),
-                ),
-              ],
-            ),
-            const VerticalDivider(width: 1),
-            Expanded(
-              child: Stack(
-                children: [
-                  Positioned.fill(child: content),
-                  GlobalChatLauncher(api: widget.api),
-                ],
-              ),
-            ),
-          ],
-        ),
-      );
-    }
-
     return Scaffold(
       body: Stack(
         children: [
@@ -972,35 +921,131 @@ class _AppShellState extends State<AppShell> {
           GlobalChatLauncher(api: widget.api),
         ],
       ),
-      bottomNavigationBar: NavigationBar(
+      bottomNavigationBar: _OmaBottomNavigation(
         selectedIndex: tab,
-        onDestinationSelected: (i) => setState(() => tab = i),
-        destinations: const [
-          NavigationDestination(
-            icon: Icon(Icons.dashboard_outlined),
-            selectedIcon: Icon(Icons.dashboard),
-            label: 'Home',
+        onSelected: (i) => setState(() => tab = i),
+      ),
+    );
+
+  }
+}
+
+class _OmaBottomNavigation extends StatelessWidget {
+  const _OmaBottomNavigation({
+    required this.selectedIndex,
+    required this.onSelected,
+  });
+
+  final int selectedIndex;
+  final ValueChanged<int> onSelected;
+
+  static const _items = <(IconData, IconData, String)>[
+    (Icons.receipt_long_outlined, Icons.receipt_long, 'Sales'),
+    (Icons.inventory_2_outlined, Icons.inventory_2, 'Products'),
+    (Icons.dashboard_outlined, Icons.dashboard, 'Home'),
+    (Icons.warehouse_outlined, Icons.warehouse, 'Stock'),
+    (Icons.more_horiz, Icons.more_horiz, 'More'),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return SafeArea(
+      top: false,
+      child: Material(
+        color: scheme.surface,
+        elevation: 14,
+        child: Container(
+          height: 82,
+          decoration: BoxDecoration(
+            border: Border(
+              top: BorderSide(color: scheme.outline.withOpacity(.55)),
+            ),
           ),
-          NavigationDestination(
-            icon: Icon(Icons.receipt_long_outlined),
-            selectedIcon: Icon(Icons.receipt_long),
-            label: 'Sales',
+          child: Row(
+            children: List.generate(_items.length, (index) {
+              final item = _items[index];
+              final selected = selectedIndex == index;
+              if (index == 2) {
+                return Expanded(
+                  child: InkWell(
+                    onTap: () => onSelected(index),
+                    child: Transform.translate(
+                      offset: const Offset(0, -14),
+                      child: Center(
+                        child: Container(
+                          width: 68,
+                          height: 68,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            gradient: LinearGradient(
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                              colors: [
+                                brandGreen,
+                                scheme.primary,
+                                brandGreen.withOpacity(.72),
+                              ],
+                            ),
+                            border: Border.all(
+                              color: Colors.white.withOpacity(.82),
+                              width: 3,
+                            ),
+                            boxShadow: [
+                              BoxShadow(
+                                color: brandGreen.withOpacity(.35),
+                                blurRadius: 18,
+                                spreadRadius: 2,
+                                offset: const Offset(0, 7),
+                              ),
+                            ],
+                          ),
+                          child: Icon(
+                            selected ? item.$2 : item.$1,
+                            color: Colors.white,
+                            size: 31,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                );
+              }
+              return Expanded(
+                child: InkWell(
+                  onTap: () => onSelected(index),
+                  child: Padding(
+                    padding: const EdgeInsets.only(top: 8, bottom: 5),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          selected ? item.$2 : item.$1,
+                          color: selected
+                              ? scheme.primary
+                              : scheme.onSurface.withOpacity(.58),
+                          size: 23,
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          item.$3,
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight:
+                                selected ? FontWeight.w800 : FontWeight.w600,
+                            color: selected
+                                ? scheme.primary
+                                : scheme.onSurface.withOpacity(.62),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              );
+            }),
           ),
-          NavigationDestination(
-            icon: Icon(Icons.inventory_2_outlined),
-            selectedIcon: Icon(Icons.inventory_2),
-            label: 'Products',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.warehouse_outlined),
-            selectedIcon: Icon(Icons.warehouse),
-            label: 'Stock',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.more_horiz),
-            label: 'More',
-          ),
-        ],
+        ),
       ),
     );
   }
@@ -1130,6 +1175,81 @@ class _DashboardPageState extends State<DashboardPage> {
               sliver: SliverList(
                 delegate: SliverChildListDelegate(
                   [
+                    // Primary actions stay above the dashboard data.
+                    Card(
+                      child: Padding(
+                        padding: const EdgeInsets.all(12),
+                        child: LayoutBuilder(
+                          builder: (context, constraints) {
+                            final compact = constraints.maxWidth < 520;
+                            final children = [
+                              FilledButton.icon(
+                                onPressed: () => Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) => NewSalePage(
+                                      repo: widget.repo,
+                                    ),
+                                  ),
+                                ),
+                                icon: const Icon(Icons.add_shopping_cart),
+                                label: const Text('Preorder sale'),
+                              ),
+                              FilledButton.tonalIcon(
+                                onPressed: () => Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) => NewSalePage(
+                                      repo: widget.repo,
+                                      stocked: true,
+                                    ),
+                                  ),
+                                ),
+                                icon: const Icon(Icons.inventory_2_outlined),
+                                label: const Text('Stock sale'),
+                              ),
+                              OutlinedButton.icon(
+                                onPressed: () => Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) => StockPage(
+                                      api: widget.api,
+                                      local: widget.local,
+                                      repo: widget.repo,
+                                      refreshKey: widget.refreshKey,
+                                    ),
+                                  ),
+                                ),
+                                icon: const Icon(Icons.add_box),
+                                label: const Text('Adjust stock'),
+                              ),
+                            ];
+                            if (compact) {
+                              return Column(
+                                crossAxisAlignment: CrossAxisAlignment.stretch,
+                                children: [
+                                  for (var i = 0; i < children.length; i++) ...[
+                                    children[i],
+                                    if (i < children.length - 1)
+                                      const SizedBox(height: 8),
+                                  ],
+                                ],
+                              );
+                            }
+                            return Row(
+                              children: [
+                                for (var i = 0; i < children.length; i++) ...[
+                                  Expanded(child: children[i]),
+                                  if (i < children.length - 1)
+                                    const SizedBox(width: 8),
+                                ],
+                              ],
+                            );
+                          },
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 14),
                     // The web build has no real offline mode — nothing is
                     // ever "waiting to sync" there, so this whole card
                     // (which is about the offline queue) is mobile-only.
@@ -1263,74 +1383,6 @@ class _DashboardPageState extends State<DashboardPage> {
                           ),
                         ),
                       ),
-                    const SizedBox(height: 16),
-                    Text(
-                      'Quick actions',
-                      style: Theme.of(context)
-                          .textTheme
-                          .titleLarge,
-                    ),
-                    const SizedBox(height: 8),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: FilledButton.icon(
-                            onPressed: () => Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => NewSalePage(
-                                  repo: widget.repo,
-                                ),
-                              ),
-                            ),
-                            icon: const Icon(
-                              Icons.add_shopping_cart,
-                            ),
-                            label: const Text('Preorder sale'),
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: FilledButton.tonalIcon(
-                            onPressed: () => Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => NewSalePage(
-                                  repo: widget.repo,
-                                  stocked: true,
-                                ),
-                              ),
-                            ),
-                            icon: const Icon(
-                              Icons.inventory_2_outlined,
-                            ),
-                            label: const Text('Stock sale'),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: OutlinedButton.icon(
-                            onPressed: () => Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => StockPage(
-                                  api: widget.api,
-                                  local: widget.local,
-                                  repo: widget.repo,
-                                  refreshKey: widget.refreshKey,
-                                ),
-                              ),
-                            ),
-                            icon: const Icon(Icons.add_box),
-                            label: const Text('Adjust stock'),
-                          ),
-                        ),
-                      ],
-                    ),
                   ],
                 ),
               ),

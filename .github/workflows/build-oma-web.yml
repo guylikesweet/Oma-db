@@ -1,6 +1,14 @@
 name: Build OmaSales Web
 
 on:
+  pull_request:
+    paths:
+      - 'app/**'
+      - 'mobile/**'
+      - 'migrations/**'
+      - 'requirements.txt'
+      - '.github/workflows/build-oma-web.yml'
+
   push:
     paths:
       - 'app/**'
@@ -25,7 +33,7 @@ concurrency:
 
 jobs:
   build:
-    if: github.ref == 'refs/heads/main'
+    if: github.event_name == 'pull_request' || github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
     permissions:
       contents: write
@@ -214,6 +222,7 @@ jobs:
       # this workflow's own "app/**" trigger and re-run itself forever.
       # ------------------------------------------------------------
       - name: Commit compiled web app
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         shell: bash
         run: |
           set -euo pipefail
