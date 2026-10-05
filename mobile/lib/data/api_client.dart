@@ -1050,6 +1050,16 @@ class ApiClient {
   // USERS
   // ============================================================
 
+  Future<Map<String, dynamic>> getProfile() {
+    return _map('GET', '/v1/profile');
+  }
+
+  Future<Map<String, dynamic>> updateProfile(
+    Map<String, dynamic> payload,
+  ) {
+    return _map('PUT', '/v1/profile', body: payload);
+  }
+
   Future<List<dynamic>> users() {
     return _list(
       'GET',
