@@ -63,6 +63,20 @@ def upgrade():
     op.create_index("ix_chat_messages_deleted_by_user_id", "chat_messages", ["deleted_by_user_id"])
     op.create_foreign_key("fk_chat_messages_edited_by_user_id", "chat_messages", "users", ["edited_by_user_id"], ["id"], ondelete="SET NULL")
     op.create_foreign_key("fk_chat_messages_deleted_by_user_id", "chat_messages", "users", ["deleted_by_user_id"], ["id"], ondelete="SET NULL")
+    op.create_table(
+        "chat_reactions",
+        sa.Column("id", sa.Integer(), nullable=False),
+        sa.Column("message_id", sa.Integer(), nullable=False),
+        sa.Column("user_id", sa.Integer(), nullable=False),
+        sa.Column("emoji", sa.String(32), nullable=False),
+        sa.Column("created_at", sa.DateTime(), nullable=False),
+        sa.ForeignKeyConstraint(["message_id"], ["chat_messages.id"], ondelete="CASCADE"),
+        sa.ForeignKeyConstraint(["user_id"], ["users.id"], ondelete="CASCADE"),
+        sa.PrimaryKeyConstraint("id"),
+        sa.UniqueConstraint("message_id", "user_id", "emoji", name="uq_chat_reaction_message_user_emoji"),
+    )
+    op.create_index("ix_chat_reactions_message_id", "chat_reactions", ["message_id"])
+    op.create_index("ix_chat_reactions_user_id", "chat_reactions", ["user_id"])
 
     op.create_table(
         "chat_mentions",
@@ -103,6 +117,10 @@ def downgrade():
     op.drop_index("ix_chat_mentions_user_id", table_name="chat_mentions")
     op.drop_index("ix_chat_mentions_message_id", table_name="chat_mentions")
     op.drop_table("chat_mentions")
+
+    op.drop_index("ix_chat_reactions_user_id", table_name="chat_reactions")
+    op.drop_index("ix_chat_reactions_message_id", table_name="chat_reactions")
+    op.drop_table("chat_reactions")
 
     op.drop_constraint("fk_chat_messages_deleted_by_user_id", "chat_messages", type_="foreignkey")
     op.drop_constraint("fk_chat_messages_edited_by_user_id", "chat_messages", type_="foreignkey")
