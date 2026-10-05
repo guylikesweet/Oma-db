@@ -6,6 +6,7 @@ from flask_admin.menu import MenuLink
 from flask_login import current_user
 from werkzeug.security import generate_password_hash
 from markupsafe import Markup
+from sqlalchemy import inspect
 
 from app import db
 from app.access import admin_required, password_recently_confirmed, reauth_url
@@ -78,7 +79,12 @@ class UserView(AdminOnlyModelView):
 
     def on_model_change(self, form, model, is_created):
         # New users are created with a default password they must change on first login.
-        old_role = None if is_created else model.role
+        role_history = inspect(model).attrs.role.history
+        old_role = (
+            None
+            if is_created
+            else (role_history.deleted[0] if role_history.deleted else model.role)
+        )
         if is_created:
             model.password_hash = generate_password_hash("changeme123")
         if model.is_primary_admin:
