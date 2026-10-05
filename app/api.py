@@ -1672,7 +1672,13 @@ def mobile_chat_messages():
     limit = min(max(request.args.get("limit", 100, type=int), 1), 200)
     before_id = request.args.get("before_id", type=int)
 
+    # A user may only see chat messages created after their own account
+    # was created. This prevents a newly added staff/admin account from
+    # inheriting the team's historical conversation.
+    account_created_at = g.api_user.created_at
     query = ChatMessage.query
+    if account_created_at is not None:
+        query = query.filter(ChatMessage.created_at >= account_created_at)
     if before_id:
         query = query.filter(ChatMessage.id < before_id)
 
@@ -1706,8 +1712,16 @@ def mobile_create_chat_message():
         reply_to = None
         if reply_to_id is not None:
             reply_to = ChatMessage.query.get(reply_to_id)
-            if reply_to is None:
-                raise ValueError("The message you are replying to no longer exists.")
+            if (
+                reply_to is None
+                or (
+                    g.api_user.created_at is not None
+                    and reply_to.created_at < g.api_user.created_at
+                )
+            ):
+                raise ValueError(
+                    "You cannot reply to a message from before your account was created."
+                )
 
         message = ChatMessage(
             sender_user_id=g.api_user.id,
