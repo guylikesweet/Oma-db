@@ -17,22 +17,3 @@ services:
         sync: false
       - key: ADMIN_PASSWORD
         sync: false          # after first deploy, run `flask seed-admin` once via Render Shell
-
-
-  # Removes stored chat-photo bytes once they are more than 30 days old.
-  # The chat API also performs lazy cleanup, so this scheduled job is the
-  # independent wall-clock cleanup path.
-  - type: cron
-    name: oma-chat-photo-cleanup
-    env: python
-    plan: free
-    schedule: "0 * * * *"
-    buildCommand: "pip install -r requirements.txt"
-    startCommand: "flask chat-cleanup"
-    envVars:
-      - key: FLASK_APP
-        value: run.py
-      - key: SECRET_KEY
-        sync: false
-      - key: DATABASE_URL
-        sync: false
