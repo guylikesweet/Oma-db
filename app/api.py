@@ -1930,9 +1930,14 @@ def mobile_create_chat_message():
     except ValueError as exc:
         db.session.rollback()
         return jsonify({"error": str(exc)}), 400
-    except Exception:
+    except Exception as exc:
         db.session.rollback()
-        raise
+        current_app.logger.exception("Team chat POST failed")
+        detail = str(exc) if g.api_user.is_admin else "The team chat database is unavailable."
+        return jsonify({
+            "error": "Team chat message could not be saved.",
+            "diagnostic": detail,
+        }), 503
 
 
 @api_bp.route("/v1/chat/messages/<int:message_id>", methods=("PUT", "PATCH", "DELETE"))
