@@ -458,6 +458,12 @@ class ChatMessage(db.Model):
         foreign_keys=[reply_to_id],
         backref=db.backref("replies", lazy=True),
     )
+    mentions = db.relationship(
+        "ChatMention",
+        backref="message",
+        cascade="all, delete-orphan",
+        lazy=True,
+    )
 
     def __repr__(self):
         return f"<ChatMessage #{self.id} by {self.sender_user_id}>"
@@ -491,8 +497,6 @@ class ChatMention(db.Model):
     )
 
 
-# ---------------------------------------------------------------------------
-# ---------------------------------------------------------------------------
 # ---------------------------------------------------------------------------
 class StockLog(db.Model):
     __tablename__ = "stock_log"
