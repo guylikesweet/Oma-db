@@ -1621,6 +1621,10 @@ def mobile_update_user(user_id):
             role = str(data['role']).strip().lower()
             if role not in (User.ROLE_ADMIN, User.ROLE_STAFF):raise ValueError('Role must be admin or staff.')
             if u.is_primary_admin and role != User.ROLE_ADMIN:raise ValueError('The original admin cannot be demoted.')
+            if u.id == g.api_user.id and role != User.ROLE_ADMIN:
+                raise ValueError('You cannot demote your own account.')
+            if u.is_admin and role == User.ROLE_STAFF and not g.api_user.is_primary_admin:
+                raise PermissionError('Only the original admin can downgrade another admin to staff.')
             u.role=role
         role_changed = old_role != u.role
         record_audit(
