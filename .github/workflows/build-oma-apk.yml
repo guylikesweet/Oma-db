@@ -1245,6 +1245,30 @@ jobs:
           echo "build/app/outputs/bundle/release/app-release.aab"
 
       # ------------------------------------------------------------
+      # 11a. RENAME BUILD OUTPUTS
+      #
+      # Flutter always names its output app-release.apk/.aab, which is
+      # what Android's installer and file managers display. Copy them to
+      # a branded name so the file shows as the app name instead. This
+      # only renames the file; applicationId and signing are unchanged.
+      # ------------------------------------------------------------
+      - name: Rename build outputs
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          mkdir -p build/named
+
+          cp build/app/outputs/flutter-apk/app-release.apk \
+            build/named/OmaSales-Mobile.apk
+
+          cp build/app/outputs/bundle/release/app-release.aab \
+            build/named/OmaSales-Mobile.aab
+
+          test -s build/named/OmaSales-Mobile.apk
+          test -s build/named/OmaSales-Mobile.aab
+
+      # ------------------------------------------------------------
       # 12. UPLOAD APK
       # ------------------------------------------------------------
       - name: Upload APK
@@ -1252,7 +1276,7 @@ jobs:
         with:
           name: OmaSales-APK-${{ github.run_number }}
           if-no-files-found: error
-          path: mobile/build/app/outputs/flutter-apk/app-release.apk
+          path: mobile/build/named/OmaSales-Mobile.apk
 
       # ------------------------------------------------------------
       # 13. UPLOAD AAB
@@ -1262,4 +1286,4 @@ jobs:
         with:
           name: OmaSales-AAB-${{ github.run_number }}
           if-no-files-found: error
-          path: mobile/build/app/outputs/bundle/release/app-release.aab
+          path: mobile/build/named/OmaSales-Mobile.aab
