@@ -1071,12 +1071,11 @@ class _BatchesPageState extends State<BatchesPage> {
     Map<String, dynamic> batch,
   ) async {
     final allSales = await widget.api.sales();
-
     if (!mounted) return;
 
     final saleIds = List<int>.from(
       (batch['sale_ids'] as List? ?? const [])
-          .map((x) => x is int ? x : int.parse('$x')),
+          .map((x) => x is int ? x : int.parse('${x}')),
     );
 
     await showModalBottomSheet<void>(
@@ -1092,172 +1091,218 @@ class _BatchesPageState extends State<BatchesPage> {
           return sale['id'] != null &&
               sale['batch_id'] == null &&
               sale['order_status'] != 'Cancelled' &&
-              !isStockSale(sale); // stocked sales aren't shipped in batches
-        }).take(50).toList();
+              !isStockSale(sale);
+        }).take(100).toList();
 
-        return SafeArea(
-          child: ListView(
-            padding: const EdgeInsets.all(16),
-            shrinkWrap: true,
-            children: [
-              Text(
-                '${batch['name'] ?? 'Batch'} • '
-                '${batch['status'] ?? ''}',
-                style: Theme.of(sheetContext)
-                    .textTheme
-                    .titleLarge,
-              ),
-              const SizedBox(height: 12),
+        final selectedRemove = <int>{};
+        final selectedAdd = <int>{};
 
-              if (assigned.isEmpty)
-                const ListTile(
-                  title: Text(
-                    'No sales assigned.',
-                  ),
-                ),
+        return StatefulBuilder(
+          builder: (context, setSheetState) {
+            final inTransit = batch['status'] == 'In Transit';
 
-              ...assigned.map(
-                (sale) {
-                  final settled =
-                      sale['shipping_payment_settled'] == true;
-                  final cost = sale['actual_shipping_cost'];
-                  final arrived = batch['status'] ==
-                      'Arrived - Awaiting Shipping Payment';
-
-                  Widget? trailing;
-                  if (batch['status'] == 'In Transit') {
-                    trailing = IconButton(
-                      icon: const Icon(
-                        Icons.remove_circle_outline,
-                      ),
-                      onPressed: () async {
-                        try {
-                          await widget.api
-                              .removeSaleFromBatch(
-                            batch['id'] as int,
-                            sale['id'] as int,
-                            {
-                              'action': 'remove',
-                            },
-                          );
-
-                          if (sheetContext.mounted) {
-                            Navigator.pop(sheetContext);
-                          }
-
-                          await load();
-                        } catch (e) {
-                          if (sheetContext.mounted) {
-                            ScaffoldMessenger.of(
-                              sheetContext,
-                            ).showSnackBar(
-                              SnackBar(
-                                content: Text('$e'),
-                              ),
-                            );
-                          }
-                        }
-                      },
-                    );
-                  } else if (arrived && !settled) {
-                    trailing = Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        IconButton(
-                          tooltip: 'Notify customer on WhatsApp',
-                          icon: const Icon(
-                            Icons.chat,
-                            color: Color(0xFF25D366),
-                          ),
-                          onPressed: () => notifyCustomer(
-                            sheetContext,
-                            sale['id'] as int,
-                          ),
-                        ),
-                        FilledButton.tonal(
-                          onPressed: () => settleFromBatch(
-                            sheetContext,
-                            sale['id'] as int,
-                          ),
-                          child: const Text('Settle'),
-                        ),
-                      ],
-                    );
-                  } else if (settled) {
-                    trailing = const Icon(
-                      Icons.check_circle,
-                      color: Colors.green,
-                    );
-                  }
-
-                  return ListTile(
-                    title: Text(
-                      '${sale['order_id'] ?? sale['id']}'
-                      ' • ${sale['customer_name'] ?? ''}',
+            Future<void> submitBulk({
+              required bool add,
+            }) async {
+              final ids = add ? selectedAdd : selectedRemove;
+              if (ids.isEmpty) {
+                ScaffoldMessenger.of(sheetContext).showSnackBar(
+                  SnackBar(
+                    content: Text(
+                      add
+                          ? 'Select at least one sale to add.'
+                          : 'Select at least one sale to remove.',
                     ),
-                    subtitle: cost == null
-                        ? null
-                        : Text(
-                            settled
-                                ? 'Shipping ₦${(cost as num).toStringAsFixed(2)} — settled, ready for delivery'
-                                : 'Shipping cost: ₦${(cost as num).toStringAsFixed(2)} — awaiting payment',
-                          ),
-                    trailing: trailing,
+                  ),
+                );
+                return;
+              }
+
+              try {
+                await widget.api.updateBatchSalesBulk(
+                  batch['id'] as int,
+                  addSaleIds: add ? ids.toList() : const [],
+                  removeSaleIds: add ? const [] : ids.toList(),
+                );
+                if (sheetContext.mounted) {
+                  Navigator.pop(sheetContext);
+                }
+                await load();
+              } catch (e) {
+                if (sheetContext.mounted) {
+                  ScaffoldMessenger.of(sheetContext).showSnackBar(
+                    SnackBar(content: Text('${e}')),
                   );
-                },
-              ),
+                }
+              }
+            }
 
-              if (batch['status'] == 'In Transit') ...[
-                const Divider(),
-                const Padding(
-                  padding: EdgeInsets.symmetric(
-                    vertical: 8,
-                  ),
-                  child: Text(
-                    'Add sales',
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-                ...available.map(
-                  (sale) => ListTile(
-                    title: Text(
-                      'Add ${sale['order_id'] ?? sale['id']}'
-                      ' • ${sale['customer_name'] ?? ''}',
-                    ),
-                    onTap: () async {
-                      try {
-                        await widget.api.addSaleToBatch(
-                          batch['id'] as int,
-                          sale['id'] as int,
-                          {
-                            'action': 'add',
-                          },
-                        );
-
-                        if (sheetContext.mounted) {
-                          Navigator.pop(sheetContext);
-                        }
-
-                        await load();
-                      } catch (e) {
-                        if (sheetContext.mounted) {
-                          ScaffoldMessenger.of(
-                            sheetContext,
-                          ).showSnackBar(
-                            SnackBar(
-                              content: Text('$e'),
+            return SafeArea(
+              child: SizedBox(
+                height: MediaQuery.of(context).size.height * .88,
+                child: Column(
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 12, 8, 8),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              '${batch['name'] ?? 'Batch'} • ${batch['status'] ?? ''}',
+                              style: Theme.of(context).textTheme.titleLarge,
                             ),
-                          );
-                        }
-                      }
-                    },
-                  ),
+                          ),
+                          IconButton(
+                            onPressed: () => Navigator.pop(sheetContext),
+                            icon: const Icon(Icons.close),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const Divider(height: 1),
+                    Expanded(
+                      child: ListView(
+                        padding: const EdgeInsets.all(16),
+                        children: [
+                          Text(
+                            'Sales in this batch (${assigned.length})',
+                            style: const TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 16,
+                            ),
+                          ),
+                          if (!inTransit)
+                            const Padding(
+                              padding: EdgeInsets.only(top: 5),
+                              child: Text(
+                                'This batch has arrived, so its sales can no longer be changed here.',
+                                style: TextStyle(color: Colors.grey),
+                              ),
+                            ),
+                          if (inTransit && assigned.isNotEmpty)
+                            ...assigned.map(
+                              (sale) => CheckboxListTile(
+                                value: selectedRemove.contains(sale['id']),
+                                onChanged: (checked) {
+                                  setSheetState(() {
+                                    if (checked == true) {
+                                      selectedRemove.add(sale['id'] as int);
+                                    } else {
+                                      selectedRemove.remove(sale['id']);
+                                    }
+                                  });
+                                },
+                                title: Text(
+                                  '${sale['order_id'] ?? sale['id']} • '
+                                  '${sale['customer_name'] ?? ''}',
+                                ),
+                                subtitle: const Text(
+                                  'Select to remove from this batch',
+                                ),
+                                controlAffinity:
+                                    ListTileControlAffinity.leading,
+                                contentPadding: EdgeInsets.zero,
+                              ),
+                            ),
+                          if (inTransit && assigned.isEmpty)
+                            const Padding(
+                              padding: EdgeInsets.symmetric(vertical: 12),
+                              child: Text('No sales assigned.'),
+                            ),
+                          if (inTransit && selectedRemove.isNotEmpty)
+                            FilledButton.tonalIcon(
+                              onPressed: () => submitBulk(add: false),
+                              icon: const Icon(Icons.remove_circle_outline),
+                              label: Text(
+                                'Remove ${selectedRemove.length} selected',
+                              ),
+                            ),
+                          if (inTransit) ...[
+                            const Divider(height: 28),
+                            Text(
+                              'Available sales (${available.length})',
+                              style: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 16,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            const Text(
+                              'Select more than one sale, then add them all at once.',
+                              style: TextStyle(color: Colors.grey),
+                            ),
+                            const SizedBox(height: 8),
+                            ...available.map(
+                              (sale) => CheckboxListTile(
+                                value: selectedAdd.contains(sale['id']),
+                                onChanged: (checked) {
+                                  setSheetState(() {
+                                    if (checked == true) {
+                                      selectedAdd.add(sale['id'] as int);
+                                    } else {
+                                      selectedAdd.remove(sale['id']);
+                                    }
+                                  });
+                                },
+                                title: Text(
+                                  '${sale['order_id'] ?? sale['id']} • '
+                                  '${sale['customer_name'] ?? ''}',
+                                ),
+                                subtitle: Text(
+                                  '${sale['customer_state'] ?? 'No state'} • '
+                                  '${sale['sale_date'] ?? ''}',
+                                ),
+                                controlAffinity:
+                                    ListTileControlAffinity.leading,
+                                contentPadding: EdgeInsets.zero,
+                              ),
+                            ),
+                            if (selectedAdd.isNotEmpty)
+                              FilledButton.icon(
+                                onPressed: () => submitBulk(add: true),
+                                icon: const Icon(Icons.add_circle_outline),
+                                label: Text(
+                                  'Add ${selectedAdd.length} selected',
+                                ),
+                              ),
+                          ],
+                          if (!inTransit) ...[
+                            const SizedBox(height: 16),
+                            ...assigned.map(
+                              (sale) {
+                                final settled =
+                                    sale['shipping_payment_settled'] == true;
+                                final cost = sale['actual_shipping_cost'];
+                                return ListTile(
+                                  title: Text(
+                                    '${sale['order_id'] ?? sale['id']} • '
+                                    '${sale['customer_name'] ?? ''}',
+                                  ),
+                                  subtitle: cost == null
+                                      ? null
+                                      : Text(
+                                          settled
+                                              ? 'Shipping ₦${(cost as num).toStringAsFixed(2)} — settled, ready for delivery'
+                                              : 'Shipping ₦${(cost as num).toStringAsFixed(2)}',
+                                        ),
+                                  trailing: settled
+                                      ? const Icon(
+                                          Icons.check_circle,
+                                          color: Colors.green,
+                                        )
+                                      : null,
+                                );
+                              },
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
-              ],
-            ],
-          ),
+              ),
+            );
+          },
         );
       },
     );
