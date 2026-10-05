@@ -423,7 +423,7 @@ class _ChatPageState extends State<ChatPage> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  sender,
+                  '${sender} • replied message',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
@@ -777,7 +777,7 @@ class _ChatPageState extends State<ChatPage> {
     final pending = status == 'sending';
     final failed = status == 'failed';
     final reply = message['reply_to'];
-    final sender = '${message['sender_username'] ?? 'User'}';
+    final sender = mine ? 'Me' : '${message['sender_username'] ?? 'User'}';
     final created = '${message['created_at'] ?? ''}'
         .replaceFirst('T', ' ')
         .split('.')
