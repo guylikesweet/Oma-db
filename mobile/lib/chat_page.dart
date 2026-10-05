@@ -27,6 +27,7 @@ class _ChatPageState extends State<ChatPage> {
   String? attachmentName;
   bool emojiOpen = false;
   final Map<int, Uint8List> photoCache = {};
+  final Map<int, GlobalKey> messageKeys = {};
   static const emojiChoices = <String>[
     '😀','😂','😍','🥰','😎','😭','😅','😮','😢','😡',
     '👍','👎','👏','🙌','🙏','❤️','🔥','🎉','💯','✅',
@@ -371,8 +372,12 @@ class _ChatPageState extends State<ChatPage> {
     final hasPhoto = '${reply['attachment_url'] ?? ''}'.isNotEmpty ||
         reply['_attachment_bytes'] is Uint8List;
     final quote = _quoteText(reply);
+    final replyId = reply['id'] is int ? reply['id'] as int : int.tryParse('${reply['id']}');
 
-    return Container(
+    return InkWell(
+      onTap: replyId == null ? null : () => _jumpToMessage(replyId),
+      borderRadius: BorderRadius.circular(10),
+      child: Container(
       width: double.infinity,
       margin: const EdgeInsets.only(top: 5, bottom: 7),
       padding: const EdgeInsets.fromLTRB(9, 7, 9, 7),
@@ -709,6 +714,18 @@ class _ChatPageState extends State<ChatPage> {
     );
   }
 
+  Future<void> _jumpToMessage(int id) async {
+    final key = messageKeys[id];
+    final target = key?.currentContext;
+    if (target == null) return;
+    await Scrollable.ensureVisible(
+      target,
+      duration: const Duration(milliseconds: 420),
+      curve: Curves.easeOutCubic,
+      alignment: .35,
+    );
+  }
+
   Widget _messageBubble(Map<String, dynamic> message) {
     final mine = message['sender_user_id'] == AppSession.userId;
     final status = '${message['_status'] ?? 'sent'}';
@@ -748,7 +765,13 @@ class _ChatPageState extends State<ChatPage> {
             ],
           );
 
+    final messageId = message['id'] is int ? message['id'] as int : int.tryParse('${message['id']}');
+    final messageKey = messageId == null
+        ? null
+        : (messageKeys[messageId] ??= GlobalKey());
+
     return Align(
+      key: messageKey,
       alignment: mine ? Alignment.centerRight : Alignment.centerLeft,
       child: GestureDetector(
         onLongPress: failed ? null : () => _replyTo(message),
