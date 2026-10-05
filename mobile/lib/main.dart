@@ -614,47 +614,102 @@ class _LoginPageState extends State<LoginPage> {
 
 class GlobalChatLauncher extends StatefulWidget {
   const GlobalChatLauncher({super.key, required this.api});
-
   final ApiClient api;
-
   @override
   State<GlobalChatLauncher> createState() => _GlobalChatLauncherState();
 }
 
-class _GlobalChatLauncherState extends State<GlobalChatLauncher> {
+class _GlobalChatLauncherState extends State<GlobalChatLauncher>
+    with SingleTickerProviderStateMixin {
   bool open = false;
+  bool unread = false;
+  int? _latestMessageId;
+  Timer? _poller;
+  late final AnimationController _pulseController;
+
+  @override
+  void initState() {
+    super.initState();
+    _pulseController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1100),
+    );
+    _poller = Timer.periodic(
+      const Duration(seconds: 4),
+      (_) => _checkForNewMessages(),
+    );
+    _checkForNewMessages();
+  }
+
+  @override
+  void dispose() {
+    _poller?.cancel();
+    _pulseController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _checkForNewMessages() async {
+    if (open) return;
+    try {
+      final rows = await widget.api.chatMessages(limit: 1);
+      if (rows.isEmpty || !mounted) return;
+      final latest = int.tryParse('${rows.last['id']}');
+      if (latest == null) return;
+      if (_latestMessageId == null) {
+        _latestMessageId = latest;
+        return;
+      }
+      if (latest > _latestMessageId!) {
+        _latestMessageId = latest;
+        setState(() => unread = true);
+        if (!_pulseController.isAnimating) {
+          _pulseController.repeat(reverse: true);
+        }
+      }
+    } catch (_) {}
+  }
 
   Future<void> _openChat() async {
-    setState(() => open = true);
+    setState(() {
+      open = true;
+      unread = false;
+    });
+    _pulseController.stop();
+    _pulseController.value = 0;
+    try {
+      final rows = await widget.api.chatMessages(limit: 1);
+      if (rows.isNotEmpty) {
+        _latestMessageId = int.tryParse('${rows.last['id']}');
+      }
+    } catch (_) {}
+
     await showGeneralDialog<void>(
       context: context,
       barrierDismissible: true,
       barrierLabel: 'Close team chat',
       barrierColor: Colors.black.withOpacity(.35),
       transitionDuration: const Duration(milliseconds: 220),
-      pageBuilder: (context, animation, secondaryAnimation) {
-        return SafeArea(
-          child: Align(
-            alignment: Alignment.bottomRight,
-            child: Padding(
-              padding: const EdgeInsets.all(14),
-              child: Material(
-                color: Colors.transparent,
-                child: ConstrainedBox(
-                  constraints: BoxConstraints(
-                    maxWidth: 560,
-                    maxHeight: MediaQuery.sizeOf(context).height * .88,
-                  ),
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(22),
-                    child: ChatPage(api: widget.api),
-                  ),
+      pageBuilder: (context, animation, secondaryAnimation) => SafeArea(
+        child: Align(
+          alignment: Alignment.bottomRight,
+          child: Padding(
+            padding: const EdgeInsets.all(14),
+            child: Material(
+              color: Colors.transparent,
+              child: ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxWidth: 560,
+                  maxHeight: MediaQuery.sizeOf(context).height * .88,
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(22),
+                  child: ChatPage(api: widget.api),
                 ),
               ),
             ),
           ),
-        );
-      },
+        ),
+      ),
       transitionBuilder: (context, animation, secondaryAnimation, child) {
         final curved = CurvedAnimation(
           parent: animation,
@@ -670,19 +725,68 @@ class _GlobalChatLauncherState extends State<GlobalChatLauncher> {
         );
       },
     );
-    if (mounted) setState(() => open = false);
+    if (mounted) {
+      setState(() => open = false);
+      _checkForNewMessages();
+    }
   }
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     return Positioned(
       right: 18,
       bottom: 94,
-      child: FloatingActionButton.extended(
-        heroTag: 'global-team-chat',
-        onPressed: open ? null : _openChat,
-        icon: const Icon(Icons.forum_rounded),
-        label: const Text('Team chat'),
+      child: AnimatedBuilder(
+        animation: _pulseController,
+        builder: (context, child) {
+          final pulse = _pulseController.value;
+          return Transform.scale(
+            scale: unread ? 1 + pulse * .055 : 1,
+            child: Container(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(18),
+                boxShadow: unread
+                    ? [
+                        BoxShadow(
+                          color: scheme.primary.withOpacity(.28 + pulse * .30),
+                          blurRadius: 12 + pulse * 12,
+                          spreadRadius: 2 + pulse * 3,
+                        ),
+                      ]
+                    : const [],
+              ),
+              child: child,
+            ),
+          );
+        },
+        child: FloatingActionButton.extended(
+          heroTag: 'global-team-chat',
+          onPressed: open ? null : _openChat,
+          backgroundColor: unread ? scheme.primary : scheme.primaryContainer,
+          foregroundColor: unread ? scheme.onPrimary : scheme.onPrimaryContainer,
+          icon: Stack(
+            clipBehavior: Clip.none,
+            children: [
+              const Icon(Icons.forum_rounded),
+              if (unread)
+                Positioned(
+                  right: -6,
+                  top: -6,
+                  child: Container(
+                    width: 10,
+                    height: 10,
+                    decoration: BoxDecoration(
+                      color: scheme.secondary,
+                      shape: BoxShape.circle,
+                      border: Border.all(color: scheme.primary, width: 2),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+          label: Text(unread ? 'New chat' : 'Team chat'),
+        ),
       ),
     );
   }
