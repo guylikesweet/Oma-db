@@ -19,7 +19,7 @@ class _ChatPageState extends State<ChatPage> {
   final TextEditingController composer = TextEditingController();
   final ScrollController scroll = ScrollController();
 
-  List<dynamic> messages = [];
+  List<Map<String, dynamic>> messages = [];
   List<Map<String, dynamic>> users = [];
   Map<String, dynamic>? replyTo;
   bool loading = true;
@@ -52,16 +52,19 @@ class _ChatPageState extends State<ChatPage> {
         if (users.isEmpty) widget.api.users(),
       ]);
 
-      final nextMessages = List<dynamic>.from(results[0]);
+      final nextMessages = results[0]
+          .whereType<Map>()
+          .map((message) => Map<String, dynamic>.from(message))
+          .toList();
+
       final previousLastId =
-          messages.isEmpty ? null : (messages.last as Map)['id'];
+          messages.isEmpty ? null : messages.last['id'];
 
       final nextUsers = users.isEmpty
-          ? List<Map<String, dynamic>>.from(
-              results[1]
-                  .whereType<Map>()
-                  .map((x) => Map<String, dynamic>.from(x)),
-            )
+          ? results[1]
+              .whereType<Map>()
+              .map((user) => Map<String, dynamic>.from(user))
+              .toList()
           : users;
 
       if (!mounted) return;
@@ -74,7 +77,7 @@ class _ChatPageState extends State<ChatPage> {
       });
 
       final nextLastId =
-          nextMessages.isEmpty ? null : (nextMessages.last as Map)['id'];
+          nextMessages.isEmpty ? null : nextMessages.last['id'];
 
       if (previousLastId == null) {
         _scrollToBottom(animated: false);
@@ -432,11 +435,7 @@ class _ChatPageState extends State<ChatPage> {
                           padding: const EdgeInsets.symmetric(vertical: 8),
                           itemCount: messages.length,
                           itemBuilder: (_, index) =>
-                              _messageBubble(
-                            Map<String, dynamic>.from(
-                              messages[index] as Map,
-                            ),
-                          ),
+                              _messageBubble(messages[index]),
                         ),
                 ),
                 _composer(),
