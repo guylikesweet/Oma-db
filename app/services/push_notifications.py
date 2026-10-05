@@ -82,24 +82,85 @@ def _push_user_ids(exclude_user_id=None):
 def queue_change_notification(
     *,
     actor_user_id=None,
+    recipient_user_ids=None,
     event_type,
     title,
     body,
     data=None,
     sound="scanner_beep",
 ):
-    """Queue one meaningful-change notification for every other registered user."""
+    """Queue a meaningful-change notification for the requested recipients.
+
+    If recipient_user_ids is omitted, every enabled registered device receives
+    the notification. Specific events can instead target only admins or the
+    affected user.
+    """
     payload = dict(data or {})
     payload.setdefault("type", event_type)
     payload.setdefault("sound", sound)
 
-    for user_id in _push_user_ids(exclude_user_id=actor_user_id):
+    user_ids = (
+        list(dict.fromkeys(recipient_user_ids))
+        if recipient_user_ids is not None
+        else _push_user_ids(exclude_user_id=actor_user_id)
+    )
+
+    for user_id in user_ids:
         queue_user_notification(
             user_id,
             event_type=event_type,
             title=title,
             body=body,
             data=payload,
+        )
+
+
+def queue_chat_message_notifications(message, *, special_user_ids=None):
+    """Queue one chat notification for every active user.
+
+    Users who were mentioned or whose message was replied to receive a more
+    specific notification instead of the generic chat notification.
+    """
+    special_user_ids = set(special_user_ids or ())
+    sender_name = getattr(message.sender, "username", "Someone")
+    preview = " ".join((message.content or "").split())
+    if len(preview) > 180:
+        preview = preview[:177].rstrip() + "..."
+
+    active_users = (
+        User.query.filter(User.is_active.is_(True))
+        .with_entities(User.id)
+        .all()
+    )
+
+    for (user_id,) in active_users:
+        if user_id in special_user_ids:
+            reasons = []
+            if any(mention.user_id == user_id for mention in message.mentions):
+                reasons.append("mentioned you")
+            if message.reply_to is not None and message.reply_to.sender_user_id == user_id:
+                reasons.append("replied to your message")
+            if len(reasons) == 2:
+                title = f"{sender_name} mentioned you and replied to you"
+            elif reasons:
+                title = f"{sender_name} {reasons[0]}"
+            else:
+                title = f"{sender_name} sent you a chat message"
+        else:
+            title = f"New chat message from {sender_name}"
+
+        queue_user_notification(
+            user_id,
+            event_type="chat_message",
+            title=title,
+            body=preview or "New message",
+            data={
+                "type": "chat_message",
+                "chat_message_id": str(message.id),
+                "sender_user_id": str(message.sender_user_id),
+                "reply_to_id": str(message.reply_to_id or ""),
+                "sound": "chat_message",
+            },
         )
 
 
