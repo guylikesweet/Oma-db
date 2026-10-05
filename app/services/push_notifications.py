@@ -73,10 +73,13 @@ def _push_user_ids(exclude_user_id=None):
     query = (
         db.session.query(PushDevice.user_id)
         .filter(PushDevice.enabled.is_(True))
-        .distinct()
     )
-    # Notifications are intentionally sent to all enabled registered users.
-    return [row[0] for row in query.all()]
+    if exclude_user_id is not None:
+        query = query.filter(PushDevice.user_id != exclude_user_id)
+
+    # Notifications are intentionally sent to all enabled registered users
+    # unless the actor is explicitly excluded.
+    return list(dict.fromkeys(row[0] for row in query.all()))
 
 
 def queue_change_notification(
