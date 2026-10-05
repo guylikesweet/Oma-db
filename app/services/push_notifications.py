@@ -75,8 +75,7 @@ def _push_user_ids(exclude_user_id=None):
         .filter(PushDevice.enabled.is_(True))
         .distinct()
     )
-    if exclude_user_id is not None:
-        query = query.filter(PushDevice.user_id != exclude_user_id)
+    # Notifications are intentionally sent to all enabled registered users.
     return [row[0] for row in query.all()]
 
 
