@@ -96,7 +96,7 @@ def remove_sale_from_batch(sale_id):
     db.session.commit()
 
 
-def update_batch_sales(batch_id, *, add_sale_ids=None, remove_sale_ids=None):
+def update_batch_sales(batch_id, *, add_sale_ids=None, remove_sale_ids=None, commit=True):
     """Atomically add and/or remove multiple sales from an In Transit batch."""
     batch = ShipmentBatch.query.get(batch_id)
     if not batch:
@@ -171,7 +171,8 @@ def update_batch_sales(batch_id, *, add_sale_ids=None, remove_sale_ids=None):
             },
         )
 
-    db.session.commit()
+    if commit:
+        db.session.commit()
     return batch
 
 
