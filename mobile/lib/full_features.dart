@@ -4152,6 +4152,92 @@ class _UsersPageState
     }
   }
 
+  Future<void> changeRole(
+    Map<String, dynamic> user,
+  ) async {
+    final id = user['id'] as int;
+    final isPrimary = user['is_primary_admin'] == true;
+    final currentRole = '${user['role'] ?? 'staff'}';
+    final isAdmin = currentRole == 'admin';
+
+    if (isPrimary) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('The original admin must remain an admin.'),
+        ),
+      );
+      return;
+    }
+
+    if (isAdmin && !AppSession.isPrimaryAdmin) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Only the original admin can downgrade another admin.'),
+        ),
+      );
+      return;
+    }
+
+    final nextRole = isAdmin ? 'staff' : 'admin';
+    final label = nextRole == 'admin'
+        ? 'Upgrade ${user['username'] ?? 'user'} to admin?'
+        : 'Downgrade ${user['username'] ?? 'user'} to staff?';
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(label),
+        content: Text(
+          nextRole == 'admin'
+              ? 'This user will receive admin access.'
+              : 'This user will lose admin-only access.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: Text(nextRole == 'admin' ? 'Upgrade' : 'Downgrade'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    if (!await BiometricGuard.require(
+      context,
+      reason: 'Verify your identity before changing a user role.',
+    )) return;
+
+    try {
+      await widget.api.updateUser(
+        id,
+        {'role': nextRole},
+      );
+      await load();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              nextRole == 'admin'
+                  ? 'User upgraded to admin.'
+                  : 'User downgraded to staff.',
+            ),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('$e')),
+        );
+      }
+    }
+  }
+
   Future<void> deleteUser(
     Map<String, dynamic> user,
   ) async {
@@ -4263,15 +4349,33 @@ class _UsersPageState
                     ),
                     trailing: isPrimary
                         ? const Tooltip(
-                            message: 'The original admin cannot be removed',
+                            message: 'The original admin cannot be removed or downgraded',
                             child: Icon(Icons.lock_outline),
                           )
-                        : IconButton(
-                            onPressed: () =>
-                                deleteUser(user),
-                            icon: const Icon(
-                              Icons.delete_outline,
-                            ),
+                        : PopupMenuButton<String>(
+                            onSelected: (value) {
+                              if (value == 'role') {
+                                changeRole(user);
+                              } else if (value == 'delete') {
+                                deleteUser(user);
+                              }
+                            },
+                            itemBuilder: (_) => [
+                              if (role == 'staff')
+                                const PopupMenuItem(
+                                  value: 'role',
+                                  child: Text('Upgrade to Admin'),
+                                ),
+                              if (role == 'admin' && AppSession.isPrimaryAdmin)
+                                const PopupMenuItem(
+                                  value: 'role',
+                                  child: Text('Downgrade to Staff'),
+                                ),
+                              const PopupMenuItem(
+                                value: 'delete',
+                                child: Text('Delete user'),
+                              ),
+                            ],
                           ),
                   );
                 },
