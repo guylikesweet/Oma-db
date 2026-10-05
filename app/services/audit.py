@@ -189,6 +189,34 @@ def _change_notification_for_audit(
 
     recipient_user_ids = None
 
+    if action == "user.create":
+        username = details.get("username") or "a user"
+        role = str(details.get("role") or "staff").title()
+        title = "New user account created"
+        body = f"{username} was created as {role}."
+
+    elif action == "user.update" and details.get("role_changed"):
+        new_role = str(
+            details.get("new_role") or details.get("role") or "staff"
+        ).lower()
+        title = (
+            "You are now an admin"
+            if new_role == User.ROLE_ADMIN
+            else "Your role is now staff"
+        )
+        body = (
+            "Your OmaSales account has been upgraded to admin."
+            if new_role == User.ROLE_ADMIN
+            else "Your OmaSales account has been downgraded to staff."
+        )
+        data["role"] = new_role
+
+    elif action == "batch.create":
+        batch_name = details.get("name") or "A shipment batch"
+        mode = str(details.get("transport_mode") or "sea").upper()
+        title = "New shipment batch"
+        body = f"{batch_name} was created for {mode} shipment."
+
     # User creation is an admin event: only admins should be told about it.
     if action == "user.create":
         recipient_user_ids = [
