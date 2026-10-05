@@ -1,6 +1,11 @@
 import 'dart:async';
+import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:share_plus/share_plus.dart';
 
 import 'brand_loader.dart';
 import 'data/api_client.dart';
@@ -18,6 +23,17 @@ class ChatPage extends StatefulWidget {
 class _ChatPageState extends State<ChatPage> {
   final TextEditingController composer = TextEditingController();
   final ScrollController scroll = ScrollController();
+  final ImagePicker picker = ImagePicker();
+  Uint8List? attachmentBytes;
+  String? attachmentName;
+  bool emojiOpen = false;
+  final Map<int, Uint8List> photoCache = {};
+  static const emojiChoices = <String>[
+    '😀','😂','😍','🥰','😎','😭','😅','😮','😢','😡',
+    '👍','👎','👏','🙌','🙏','❤️','🔥','🎉','💯','✅',
+    '👀','🤝','💪','🚀','⭐','🤣','😊','😉','😘','🤔',
+    '😴','🥳','🤩','😇','😱','🤗','🫡','❤️‍🔥','🎯','📦',
+  ];
 
   List<Map<String, dynamic>> messages = [];
   List<Map<String, dynamic>> users = [];
@@ -186,6 +202,139 @@ class _ChatPageState extends State<ChatPage> {
       });
       _scrollToBottom();
     }
+  }
+
+  Future<void> pickPhoto() async {
+    try {
+      final file = await picker.pickImage(
+        source: ImageSource.gallery,
+        imageQuality: 80,
+        maxWidth: 1600,
+        maxHeight: 1600,
+      );
+      if (file == null) return;
+      final bytes = await file.readAsBytes();
+      if (!mounted) return;
+      setState(() {
+        attachmentBytes = bytes;
+        attachmentName = file.name;
+      });
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not select photo: $e')),
+        );
+      }
+    }
+  }
+
+  void insertEmoji(String emoji) {
+    final value = composer.value;
+    final start = value.selection.start < 0 ? value.text.length : value.selection.start;
+    final end = value.selection.end < 0 ? start : value.selection.end;
+    final next = value.text.replaceRange(start, end, emoji);
+    composer.value = TextEditingValue(
+      text: next,
+      selection: TextSelection.collapsed(offset: start + emoji.length),
+    );
+    setState(() => emojiOpen = false);
+  }
+
+  Future<void> editMessage(Map<String, dynamic> message) async {
+    final id = int.tryParse('${message['id']}');
+    if (id == null) return;
+    final controller = TextEditingController(text: '${message['content'] ?? ''}');
+    final result = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Edit message'),
+        content: TextField(controller: controller, autofocus: true, maxLines: 6),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+          FilledButton(onPressed: () => Navigator.pop(context, controller.text.trim()), child: const Text('Save')),
+        ],
+      ),
+    );
+    controller.dispose();
+    if (result == null || result.isEmpty || !mounted) return;
+    try {
+      final updated = await widget.api.updateChatMessage(id, result);
+      if (mounted) setState(() => messages = messages.map((m) => '${m['id']}' == '$id' ? updated : m).toList());
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Could not edit message: $e')));
+    }
+  }
+
+  Future<void> deleteMessage(Map<String, dynamic> message) async {
+    final id = int.tryParse('${message['id']}');
+    if (id == null) return;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete message?'),
+        content: const Text('The message will be marked as deleted. Administrators can still review it.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+          FilledButton.tonal(onPressed: () => Navigator.pop(context, true), child: const Text('Delete')),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+    try {
+      final updated = await widget.api.deleteChatMessage(id);
+      if (mounted) setState(() => messages = messages.map((m) => '${m['id']}' == '$id' ? updated : m).toList());
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Could not delete message: $e')));
+    }
+  }
+
+  Future<void> react(Map<String, dynamic> message, String emoji) async {
+    final id = int.tryParse('${message['id']}');
+    if (id == null) return;
+    try {
+      final updated = await widget.api.reactToChatMessage(id, emoji);
+      if (mounted) setState(() => messages = messages.map((m) => '${m['id']}' == '$id' ? updated : m).toList());
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Could not react: $e')));
+    }
+  }
+
+  Future<void> copyMessage(Map<String, dynamic> message) async {
+    final text = '${message['content'] ?? ''}';
+    if (text.isEmpty) return;
+    await Clipboard.setData(ClipboardData(text: text));
+    if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Message copied')));
+  }
+
+  Future<void> downloadPhoto(Map<String, dynamic> message) async {
+    final id = int.tryParse('${message['id']}');
+    final url = '${message['attachment_url'] ?? ''}';
+    if (id == null || url.isEmpty) return;
+    try {
+      final bytes = photoCache[id] ?? await widget.api.downloadChatAttachment(url);
+      photoCache[id] = bytes;
+      await Share.shareXFiles([
+        XFile.fromData(bytes, name: '${message['attachment_filename'] ?? 'chat-photo.jpg'}', mimeType: 'image/jpeg'),
+      ], text: 'Oma team chat photo');
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Could not download photo: $e')));
+    }
+  }
+
+  Future<void> showReactionPicker(Map<String, dynamic> message) async {
+    await showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (context) => SafeArea(
+        child: Wrap(
+          alignment: WrapAlignment.center,
+          children: emojiChoices.map((emoji) => InkWell(
+            onTap: () { Navigator.pop(context); react(message, emoji); },
+            child: Padding(padding: const EdgeInsets.all(12), child: Text(emoji, style: const TextStyle(fontSize: 28))),
+          )).toList(),
+        ),
+      ),
+    );
   }
 
   void _replyTo(Map<String, dynamic> message) {
