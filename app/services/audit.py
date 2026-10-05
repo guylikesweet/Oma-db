@@ -1,12 +1,57 @@
 import json
 
-from flask import has_request_context, request
+from flask import g, has_request_context, request, after_this_request
 from flask_login import current_user
-from sqlalchemy import event
-from sqlalchemy.orm import Session
 
 from app import db
 from app.models import AuditLog
+
+
+def _resolve_actor(user=None):
+    """Who performed the action.
+
+    Order: an explicitly passed user, then the logged-in web user, then the
+    mobile API user (set on `g` by require_api_token). The last step matters:
+    service functions such as create_sale() and mark_unarrived() are called
+    from /api routes without a `user=` argument, and bearer-token requests
+    have no Flask-Login session, so without it the audit row would have no
+    username and the actor would receive their own push notification.
+    """
+    if user is not None:
+        return user
+    if not has_request_context():
+        return None
+    if current_user.is_authenticated:
+        return current_user
+    return g.get("api_user")
+
+
+def _schedule_outbox_flush():
+    """Deliver queued push notifications once, after the response is built.
+
+    Replaces the old SQLAlchemy `after_commit` listener, which could not run
+    queries (the session is already committed at that point) and so failed
+    silently. A response callback runs after the view has committed, with a
+    usable session. Outside a request (CLI/jobs) the rows simply stay pending
+    and go out on the next flush.
+    """
+    if not has_request_context() or g.get("_push_flush_scheduled"):
+        return
+    g._push_flush_scheduled = True
+
+    @after_this_request
+    def _flush(response):
+        try:
+            from app.services.push_notifications import flush_outbox
+            flush_outbox()
+        except Exception:
+            # Push delivery is best effort. The committed outbox row stays
+            # pending and is retried by a later flush.
+            try:
+                db.session.rollback()
+            except Exception:
+                pass
+        return response
 
 
 def record_audit(
@@ -24,9 +69,7 @@ def record_audit(
     the row to the current SQLAlchemy session, so the audit event commits or
     rolls back with the business operation it describes.
     """
-    actor = user
-    if actor is None and has_request_context() and current_user.is_authenticated:
-        actor = current_user
+    actor = _resolve_actor(user)
 
     details_json = None
     if details is not None:
@@ -71,10 +114,10 @@ def record_audit(
             actor_user_id=notification.pop("actor_user_id"),
             **notification,
         )
-        # The outbox row is part of the same transaction. Flush it only after
-        # the transaction successfully commits, so a failed business write
-        # cannot produce a push notification.
-        db.session.info["_push_outbox_after_commit"] = True
+        # The outbox row is part of the same transaction, so a failed business
+        # write cannot produce a push notification. Delivery is attempted only
+        # after the response is ready (i.e. after the commit).
+        _schedule_outbox_flush()
 
     return row
 
@@ -150,21 +193,3 @@ def _change_notification_for_audit(
         "body": body,
         "data": data,
     }
-
-
-@event.listens_for(Session, "after_commit")
-def _flush_push_outbox_after_commit(session):
-    if not session.info.pop("_push_outbox_after_commit", False):
-        return
-    if session.info.get("_flushing_push_outbox"):
-        return
-    session.info["_flushing_push_outbox"] = True
-    try:
-        from app.services.push_notifications import flush_outbox
-        flush_outbox()
-    except Exception:
-        # Push delivery is best effort. The committed outbox row remains
-        # pending and can be retried by a later registration or business event.
-        pass
-    finally:
-        session.info["_flushing_push_outbox"] = False
