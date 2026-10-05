@@ -370,6 +370,7 @@ jobs:
                           Triple("oma_scanner_v2", "Oma scanner", "scanner_beep"),
                           Triple("oma_arrival_sea_v2", "Sea shipment arrivals", "ship_horn"),
                           Triple("oma_arrival_air_v2", "Air shipment arrivals", "airport_arrival"),
+                          Triple("oma_chat_v1", "Oma team chat", "chat_message"),
                       )
 
                       val manager = getSystemService(NotificationManager::class.java)
@@ -465,17 +466,8 @@ jobs:
               "scanner_beep.wav": custom / "scanner_beep.wav",
               "ship_horn.wav": custom / "ship_horn.wav",
               "airport_arrival.wav": custom / "airport_arrival.wav",
+              "chat_message.wav": custom / "chat_message.wav",
           }
-
-          def copy_custom():
-              found = all(path.exists() for path in required.values())
-              if not found:
-                  return False
-              import shutil
-              for name, source in required.items():
-                  shutil.copy2(source, raw / name)
-              print("Using custom notification sounds from assets/notifications.")
-              return True
 
           def tone(path, seconds, frequencies, amplitude=0.42, sample_rate=44100):
               frames = int(seconds * sample_rate)
@@ -493,17 +485,25 @@ jobs:
                       data.extend(struct.pack("<h", int(32767 * amplitude * env * value)))
                   out.writeframes(data)
 
-          if not copy_custom():
-              # Short, clean scanner confirmation.
-              tone(raw / "scanner_beep.wav", 0.18, (1850, 2400), 0.34)
+          fallback = {
+              "scanner_beep.wav": (0.18, (1850, 2400), 0.34),
+              "ship_horn.wav": (0.72, (330, 392), 0.48),
+              "airport_arrival.wav": (0.62, (523, 659, 784), 0.36),
+              "chat_message.wav": (0.24, (880, 1175), 0.30),
+          }
 
-              # Brief sea-shipment horn.
-              tone(raw / "ship_horn.wav", 0.72, (330, 392), 0.48)
+          import shutil
+          custom.mkdir(parents=True, exist_ok=True)
 
-              # Brief airport-style arrival chime.
-              tone(raw / "airport_arrival.wav", 0.62, (523, 659, 784), 0.36)
-
-              print("Fallback notification sounds generated.")
+          for filename, source in required.items():
+              destination = raw / filename
+              if source.is_file() and source.stat().st_size > 0:
+                  shutil.copy2(source, destination)
+                  print(f"Using custom notification sound: {source}")
+              else:
+                  seconds, frequencies, amplitude = fallback[filename]
+                  tone(destination, seconds, frequencies, amplitude)
+                  print(f"Generated fallback notification sound: {filename}")
 
           for filename in required:
               if not (raw / filename).is_file() or (raw / filename).stat().st_size == 0:
