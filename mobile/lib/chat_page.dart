@@ -148,7 +148,7 @@ class _ChatPageState extends State<ChatPage> {
 
     final before = text.substring(0, cursor);
     final match = RegExp(
-      r'(^|\\s)@([A-Za-z0-9_.-]*)$',
+      r'(^|\s)@([A-Za-z0-9_.-]*)$',
     ).firstMatch(before);
     if (match == null) return;
 
@@ -218,7 +218,7 @@ class _ChatPageState extends State<ChatPage> {
                   }
                   final before = text.substring(0, cursor);
                   final match = RegExp(
-                    r'(^|\\s)@([A-Za-z0-9_.-]*)$',
+                    r'(^|\s)@([A-Za-z0-9_.-]*)$',
                   ).firstMatch(before);
                   if (match == null) {
                     return const <Map<String, dynamic>>[];
