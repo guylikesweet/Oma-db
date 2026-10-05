@@ -124,6 +124,10 @@ def queue_chat_message_notifications(message, *, special_user_ids=None):
     special_user_ids = set(special_user_ids or ())
     sender_name = getattr(message.sender, "username", "Someone")
     preview = " ".join((message.content or "").split())
+    if not preview and getattr(message, "attachment_data", None):
+        preview = "📷 Photo"
+    if not preview:
+        preview = "New message"
     if len(preview) > 180:
         preview = preview[:177].rstrip() + "..."
 
@@ -134,6 +138,12 @@ def queue_chat_message_notifications(message, *, special_user_ids=None):
     )
 
     for (user_id,) in active_users:
+        # Never notify the sender about their own message. Other team members
+        # get the sender name in the title and the actual message content in
+        # the notification body.
+        if user_id == message.sender_user_id:
+            continue
+
         if user_id in special_user_ids:
             reasons = []
             if any(mention.user_id == user_id for mention in message.mentions):
@@ -153,7 +163,7 @@ def queue_chat_message_notifications(message, *, special_user_ids=None):
             user_id,
             event_type="chat_message",
             title=title,
-            body=preview or "New message",
+            body=preview,
             data={
                 "type": "chat_message",
                 "chat_message_id": str(message.id),
