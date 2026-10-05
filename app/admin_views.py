@@ -78,11 +78,13 @@ class UserView(AdminOnlyModelView):
 
     def on_model_change(self, form, model, is_created):
         # New users are created with a default password they must change on first login.
+        old_role = None if is_created else model.role
         if is_created:
             model.password_hash = generate_password_hash("changeme123")
         if model.is_primary_admin:
             model.role = "admin"
             model.is_active = True
+        role_changed = (not is_created) and old_role != model.role
         if not model.is_active:
             model.api_token = None
             model.api_last_activity_at = None
@@ -94,6 +96,8 @@ class UserView(AdminOnlyModelView):
                 "username": model.username,
                 "role": model.role,
                 "is_active": model.is_active,
+                "role_changed": role_changed,
+                "previous_role": old_role,
                 "source": "admin",
             },
         )
