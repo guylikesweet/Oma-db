@@ -323,7 +323,7 @@ class _ChatPageState extends State<ChatPage> {
                     color: Theme.of(context)
                         .colorScheme
                         .surface
-                        .withValues(alpha: .65),
+                        .withOpacity(.65),
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Text(
