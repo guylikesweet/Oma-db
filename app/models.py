@@ -492,6 +492,33 @@ class ChatMessage(db.Model):
         return f"<ChatMessage #{self.id} by {self.sender_user_id}>"
 
 
+class ChatReaction(db.Model):
+    __tablename__ = "chat_reactions"
+
+    id = db.Column(db.Integer, primary_key=True)
+    message_id = db.Column(
+        db.Integer,
+        db.ForeignKey("chat_messages.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    user_id = db.Column(
+        db.Integer,
+        db.ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    emoji = db.Column(db.String(32), nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+
+    user = db.relationship("User", backref=db.backref("chat_reactions", lazy=True))
+    message = db.relationship("ChatMessage", backref=db.backref("reactions", cascade="all, delete-orphan", lazy=True))
+
+    __table_args__ = (
+        db.UniqueConstraint("message_id", "user_id", "emoji", name="uq_chat_reaction_message_user_emoji"),
+    )
+
+
 class ChatMention(db.Model):
     __tablename__ = "chat_mentions"
 
