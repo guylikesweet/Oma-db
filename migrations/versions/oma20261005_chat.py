@@ -50,6 +50,20 @@ def upgrade():
         ["created_at"],
     )
 
+    op.add_column("chat_messages", sa.Column("original_content", sa.Text(), nullable=True))
+    op.add_column("chat_messages", sa.Column("edited_at", sa.DateTime(), nullable=True))
+    op.add_column("chat_messages", sa.Column("edited_by_user_id", sa.Integer(), nullable=True))
+    op.add_column("chat_messages", sa.Column("deleted_at", sa.DateTime(), nullable=True))
+    op.add_column("chat_messages", sa.Column("deleted_by_user_id", sa.Integer(), nullable=True))
+    op.add_column("chat_messages", sa.Column("attachment_data", sa.LargeBinary(), nullable=True))
+    op.add_column("chat_messages", sa.Column("attachment_mimetype", sa.String(50), nullable=True))
+    op.add_column("chat_messages", sa.Column("attachment_filename", sa.String(255), nullable=True))
+    op.add_column("chat_messages", sa.Column("attachment_created_at", sa.DateTime(), nullable=True))
+    op.create_index("ix_chat_messages_edited_by_user_id", "chat_messages", ["edited_by_user_id"])
+    op.create_index("ix_chat_messages_deleted_by_user_id", "chat_messages", ["deleted_by_user_id"])
+    op.create_foreign_key("fk_chat_messages_edited_by_user_id", "chat_messages", "users", ["edited_by_user_id"], ["id"], ondelete="SET NULL")
+    op.create_foreign_key("fk_chat_messages_deleted_by_user_id", "chat_messages", "users", ["deleted_by_user_id"], ["id"], ondelete="SET NULL")
+
     op.create_table(
         "chat_mentions",
         sa.Column("id", sa.Integer(), nullable=False),
@@ -89,6 +103,20 @@ def downgrade():
     op.drop_index("ix_chat_mentions_user_id", table_name="chat_mentions")
     op.drop_index("ix_chat_mentions_message_id", table_name="chat_mentions")
     op.drop_table("chat_mentions")
+
+    op.drop_constraint("fk_chat_messages_deleted_by_user_id", "chat_messages", type_="foreignkey")
+    op.drop_constraint("fk_chat_messages_edited_by_user_id", "chat_messages", type_="foreignkey")
+    op.drop_index("ix_chat_messages_deleted_by_user_id", table_name="chat_messages")
+    op.drop_index("ix_chat_messages_edited_by_user_id", table_name="chat_messages")
+    op.drop_column("chat_messages", "attachment_created_at")
+    op.drop_column("chat_messages", "attachment_filename")
+    op.drop_column("chat_messages", "attachment_mimetype")
+    op.drop_column("chat_messages", "attachment_data")
+    op.drop_column("chat_messages", "deleted_by_user_id")
+    op.drop_column("chat_messages", "deleted_at")
+    op.drop_column("chat_messages", "edited_by_user_id")
+    op.drop_column("chat_messages", "edited_at")
+    op.drop_column("chat_messages", "original_content")
 
     op.drop_index("ix_chat_messages_created_at", table_name="chat_messages")
     op.drop_index("ix_chat_messages_reply_to_id", table_name="chat_messages")
