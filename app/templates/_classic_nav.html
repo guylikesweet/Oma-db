@@ -1,0 +1,25 @@
+<nav class="oma-classic-bottom-nav" aria-label="Primary navigation">
+  <a href="{{ url_for('sale.index_view') }}" class="oma-classic-nav-item">
+    <span>▣</span><small>Sales</small>
+  </a>
+  <a href="{{ url_for('product.index_view') }}" class="oma-classic-nav-item">
+    <span>▤</span><small>Products</small>
+  </a>
+  <a href="{{ url_for('classic_home') }}" class="oma-classic-nav-home" aria-label="Home">
+    <span>⌂</span>
+  </a>
+  <a href="{{ url_for('deliveryadmin.index_view') }}" class="oma-classic-nav-item">
+    <span>▰</span><small>Deliveries</small>
+  </a>
+  <a href="{{ url_for('classic_home') }}" class="oma-classic-nav-item">
+    <span>•••</span><small>More</small>
+  </a>
+</nav>
+<style>
+.oma-classic-bottom-nav{position:fixed;left:50%;bottom:0;transform:translateX(-50%);z-index:1100;width:min(720px,calc(100vw - 20px));height:72px;display:grid;grid-template-columns:1fr 1fr 1fr 1fr 1fr;align-items:end;padding:6px 8px 5px;background:rgba(255,255,255,.96);border:1px solid var(--oma-border,#e2e2e2);border-bottom:0;border-radius:20px 20px 0 0;box-shadow:0 -10px 35px rgba(18,35,28,.13);backdrop-filter:blur(14px)}
+.oma-classic-nav-item{height:58px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;text-decoration:none!important;color:var(--oma-muted,#666)!important;font-weight:700}
+.oma-classic-nav-item span{font-size:21px;line-height:1}.oma-classic-nav-item small{font-size:10px}
+.oma-classic-nav-home{width:66px;height:66px;margin:auto;transform:translateY(-18px);border-radius:50%;display:flex;align-items:center;justify-content:center;text-decoration:none!important;color:#fff!important;background:linear-gradient(135deg,#039664,#027a52 55%,#03b979);border:3px solid #fff;box-shadow:0 10px 24px rgba(3,150,100,.38),inset 0 2px 5px rgba(255,255,255,.45);font-size:34px}
+html[data-oma-theme="dark"] .oma-classic-bottom-nav{background:rgba(23,27,34,.96)}
+@media(max-width:600px){.oma-classic-bottom-nav{width:calc(100vw - 12px);height:68px;border-radius:18px 18px 0 0}.oma-classic-nav-home{width:62px;height:62px;font-size:31px}}
+</style>
