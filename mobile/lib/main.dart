@@ -707,7 +707,8 @@ class _AppShellState extends State<AppShell> {
 
   StreamSubscription<List<ConnectivityResult>>? connectivity;
 
-  // Home is the center destination in the shared app/web navigation.\n  int tab = 2;
+  // Home is the center destination in the shared app/web navigation.
+  int tab = 2;
   bool syncing = false;
   String syncText = 'Ready';
   int refreshKey = 0;
