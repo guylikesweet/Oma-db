@@ -53,10 +53,27 @@ class _ChatPageState extends State<ChatPage> {
         if (users.isEmpty) widget.api.users(),
       ]);
 
-      final nextMessages = results[0]
+      final serverMessages = results[0]
           .whereType<Map>()
           .map((message) => Map<String, dynamic>.from(message))
           .toList();
+
+      // Polling must never make an optimistic bubble disappear while a
+      // request is still in flight (or after a failed send).
+      final localMessages = messages
+          .where((message) => '${message['id'] ?? ''}'.startsWith('local-'))
+          .toList();
+
+      final serverIds = serverMessages
+          .map((message) => '${message['id'] ?? ''}')
+          .toSet();
+
+      final nextMessages = [
+        ...serverMessages,
+        ...localMessages.where(
+          (message) => !serverIds.contains('${message['id'] ?? ''}'),
+        ),
+      ];
 
       final previousLastId =
           messages.isEmpty ? null : messages.last['id'];
