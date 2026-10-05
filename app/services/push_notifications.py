@@ -158,6 +158,8 @@ def queue_chat_message_notifications(message, *, special_user_ids=None):
                 "type": "chat_message",
                 "chat_message_id": str(message.id),
                 "sender_user_id": str(message.sender_user_id),
+                "sender_username": sender_name,
+                "message_content": preview,
                 "reply_to_id": str(message.reply_to_id or ""),
                 "sound": "chat_message",
             },
