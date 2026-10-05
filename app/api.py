@@ -18,8 +18,9 @@ from datetime import date, datetime, timedelta
 from decimal import Decimal, InvalidOperation
 from functools import wraps
 
-from flask import Blueprint, request, jsonify, g
+from flask import Blueprint, request, jsonify, g, current_app
 from werkzeug.security import check_password_hash, generate_password_hash
+from sqlalchemy import inspect as sa_inspect, text as sa_text
 
 from app import db
 from app.services.journey import journey_public, flow_for, manual_stages_for, stage_label, set_manual_stage_bulk, JourneyError
@@ -1747,7 +1748,8 @@ def mobile_admin_chat_cleanup():
 @api_bp.route("/v1/chat/messages", methods=("GET",))
 @require_api_token
 def mobile_chat_messages():
-    _chat_cleanup_expired_photos()
+    # Photo expiry is handled by the protected cleanup endpoint. Chat reads
+    # must never depend on the optional cleanup query being healthy.
     limit = min(max(request.args.get("limit", 100, type=int), 1), 200)
     before_id = request.args.get("before_id", type=int)
     account_created_at = g.api_user.created_at
@@ -1756,15 +1758,72 @@ def mobile_chat_messages():
         query = query.filter(ChatMessage.created_at >= account_created_at)
     if before_id:
         query = query.filter(ChatMessage.id < before_id)
-    rows = query.order_by(ChatMessage.id.desc()).limit(limit).all()
-    rows.reverse()
-    return jsonify([_chat_message_json(message) for message in rows])
+    try:
+        rows = query.order_by(ChatMessage.id.desc()).limit(limit).all()
+        rows.reverse()
+        return jsonify([_chat_message_json(message) for message in rows])
+    except Exception as exc:
+        db.session.rollback()
+        current_app.logger.exception("Team chat GET failed")
+        detail = str(exc) if g.api_user.is_admin else "The team chat database is unavailable."
+        return jsonify({
+            "error": "Team chat is temporarily unavailable.",
+            "diagnostic": detail,
+        }), 503
+
+
+@api_bp.route("/v1/chat/diagnostic", methods=("GET",))
+@require_api_token
+def mobile_chat_diagnostic():
+    if not g.api_user.is_admin:
+        return jsonify({"error": "Administrator access required."}), 403
+
+    inspector = sa_inspect(db.engine)
+    required = {
+        "chat_messages": [
+            "id", "sender_user_id", "content", "original_content", "edited_at",
+            "edited_by_user_id", "deleted_at", "deleted_by_user_id",
+            "attachment_data", "attachment_mimetype", "attachment_filename",
+            "attachment_created_at", "reply_to_id", "created_at",
+        ],
+        "chat_reactions": ["id", "message_id", "user_id", "emoji", "created_at"],
+        "chat_mentions": ["id", "message_id", "user_id", "created_at"],
+    }
+    schema = {}
+    for table, columns in required.items():
+        exists = inspector.has_table(table)
+        present = set()
+        if exists:
+            present = {column["name"] for column in inspector.get_columns(table)}
+        schema[table] = {
+            "exists": exists,
+            "missing_columns": [column for column in columns if column not in present],
+        }
+
+    alembic_versions = []
+    try:
+        alembic_versions = [
+            str(row[0])
+            for row in db.session.execute(
+                sa_text("SELECT version_num FROM alembic_version ORDER BY version_num")
+            ).all()
+        ]
+    except Exception as exc:
+        db.session.rollback()
+        alembic_versions = [f"ERROR: {exc}"]
+
+    return jsonify({
+        "ok": all(item["exists"] and not item["missing_columns"] for item in schema.values()),
+        "alembic_versions": alembic_versions,
+        "schema": schema,
+    })
 
 
 @api_bp.route("/v1/chat/messages", methods=("POST",))
 @require_api_token
 def mobile_create_chat_message():
-    _chat_cleanup_expired_photos()
+    # Photo expiry is handled separately so a cleanup/schema problem cannot
+    # make ordinary chat sends fail.
     data = request.get_json(silent=True) or {}
     content = str(data.get("content") or "").strip()
     attachment_b64 = str(data.get("attachment_base64") or "").strip()
