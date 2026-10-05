@@ -1098,6 +1098,7 @@ def mobile_batch_sales_bulk(batch_id):
             batch_id,
             add_sale_ids=add_ids,
             remove_sale_ids=remove_ids,
+            commit=False,
         )
         return _mobile_finish(
             op,
