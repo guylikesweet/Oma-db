@@ -504,10 +504,65 @@ class _ChatPageState extends State<ChatPage> {
                   );
                 },
               ),
+              if (attachmentBytes != null)
+                Container(
+                  width: double.infinity,
+                  margin: const EdgeInsets.only(bottom: 7),
+                  padding: const EdgeInsets.all(7),
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Row(
+                    children: [
+                      Image.memory(attachmentBytes!, width: 54, height: 54, fit: BoxFit.cover),
+                      const SizedBox(width: 8),
+                      Expanded(child: Text(attachmentName ?? 'Photo')),
+                      IconButton(
+                        onPressed: () => setState(() {
+                          attachmentBytes = null;
+                          attachmentName = null;
+                        }),
+                        icon: const Icon(Icons.close),
+                      ),
+                    ],
+                  ),
+                ),
+              if (emojiOpen)
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: Wrap(
+                    spacing: 4,
+                    runSpacing: 4,
+                    children: emojiChoices.map((emoji) => InkWell(
+                      onTap: () => insertEmoji(emoji),
+                      child: Padding(
+                        padding: const EdgeInsets.all(5),
+                        child: Text(emoji, style: const TextStyle(fontSize: 22)),
+                      ),
+                    )).toList(),
+                  ),
+                ),
               const SizedBox(height: 6),
-              Align(
-                alignment: Alignment.centerRight,
-                child: IconButton.filled(
+              Row(
+                children: [
+                  IconButton(
+                    tooltip: 'Emoji',
+                    onPressed: sending ? null : () => setState(() => emojiOpen = !emojiOpen),
+                    icon: const Icon(Icons.emoji_emotions_outlined),
+                  ),
+                  IconButton(
+                    tooltip: 'Photo',
+                    onPressed: sending ? null : pickPhoto,
+                    icon: const Icon(Icons.photo_outlined),
+                  ),
+                  const Spacer(),
+                  IconButton.filled(
                   onPressed: sending ? null : send,
                   icon: sending
                       ? const SizedBox(
@@ -519,6 +574,8 @@ class _ChatPageState extends State<ChatPage> {
                         )
                       : const Icon(Icons.send),
                 ),
+              ),
+                ],
               ),
             ],
           ),
