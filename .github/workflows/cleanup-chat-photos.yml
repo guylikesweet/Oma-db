@@ -1,0 +1,33 @@
+name: Clean up expired chat photos
+
+on:
+  schedule:
+    - cron: "17 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Remove chat photos older than 30 days
+        env:
+          CLEANUP_SECRET: ${{ secrets.CHAT_CLEANUP_SECRET }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [ -z "${CLEANUP_SECRET}" ]; then
+            echo "CHAT_CLEANUP_SECRET is not configured in repository secrets."
+            exit 1
+          fi
+
+          curl --fail-with-body --silent --show-error \
+            --request POST \
+            --header "X-Chat-Cleanup-Secret: ${CLEANUP_SECRET}" \
+            "https://oma-db.onrender.com/api/v1/admin/chat/cleanup"
+
+          echo
+          echo "Chat photo cleanup completed."
