@@ -207,6 +207,7 @@ class _ChatPageState extends State<ChatPage> {
                 ),
               if (replyTo != null) const SizedBox(height: 7),
               Autocomplete<Map<String, dynamic>>(
+                textEditingController: composer,
                 displayStringForOption: (user) =>
                     '@${user['username'] ?? ''}',
                 optionsBuilder: (value) {
@@ -241,17 +242,8 @@ class _ChatPageState extends State<ChatPage> {
                   focusNode,
                   onFieldSubmitted,
                 ) {
-                  if (!identical(controller, composer)) {
-                    controller.value = composer.value;
-                    controller.addListener(() {
-                      if (composer.value.text != controller.text) {
-                        composer.value = controller.value;
-                      }
-                    });
-                  }
-
                   return TextField(
-                    controller: composer,
+                    controller: controller,
                     focusNode: focusNode,
                     minLines: 1,
                     maxLines: 4,
