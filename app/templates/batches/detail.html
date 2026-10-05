@@ -55,8 +55,12 @@
         </td>
         <td>
           {% if batch.status == 'In Transit' %}
+          <label style="display:inline-flex;align-items:center;gap:5px;margin-right:8px;">
+            <input type="checkbox" name="remove_sale_ids" value="{{ sale.id }}" form="bulk-remove-sales">
+            Remove
+          </label>
           <form method="post" action="{{ url_for('batches.remove_sale', batch_id=batch.id, sale_id=sale.id) }}" style="display:inline;">
-            <button type="submit" class="btn btn-xs btn-default">Remove</button>
+            <button type="submit" class="btn btn-xs btn-default">Remove one</button>
           </form>
           {% elif batch.status == 'Arrived - Awaiting Shipping Payment' and not sale.shipping_payment_settled %}
           <form method="post" action="{{ url_for('batches.settle_sale_route', batch_id=batch.id, sale_id=sale.id) }}" style="display:inline;">
@@ -72,17 +76,34 @@
   </table>
 
   {% if batch.status == 'In Transit' %}
-  <h4>Add a sale to this batch</h4>
-  <form method="post" action="{{ url_for('batches.add_sale', batch_id=batch.id) }}" class="form-inline">
-    <select name="sale_id" class="form-control" style="margin-right:8px;">
-      {% for s in eligible_sales %}
-      <option value="{{ s.id }}">{{ s.order_id }} — {{ s.customer_name }} ({{ s.customer_state }}, {{ s.sale_date }})</option>
-      {% else %}
-      <option value="">No eligible unassigned sales</option>
-      {% endfor %}
-    </select>
-    <button type="submit" class="btn btn-default">Add to Batch</button>
+  <h4>Add sales to this batch</h4>
+  {% if eligible_sales %}
+  <div style="border:1px solid #ddd;border-radius:8px;padding:10px;max-height:360px;overflow:auto;">
+    {% for s in eligible_sales %}
+    <label style="display:flex;align-items:flex-start;gap:8px;padding:8px 4px;border-bottom:1px solid #eee;">
+      <input type="checkbox" name="add_sale_ids" value="{{ s.id }}" form="bulk-add-sales" style="margin-top:3px;">
+      <span>
+        <strong>{{ s.order_id }}</strong> — {{ s.customer_name }}
+        <small style="display:block;color:#777;">{{ s.customer_state or 'No state' }} · {{ s.sale_date }}</small>
+      </span>
+    </label>
+    {% endfor %}
+  </div>
+  <div style="margin-top:10px;">
+    <form id="bulk-add-sales" method="post" action="{{ url_for('batches.bulk_sales', batch_id=batch.id) }}" style="display:inline-block;">
+      <button type="submit" class="btn btn-primary">Add selected sales</button>
+    </form>
+  </div>
+  {% else %}
+  <p class="text-muted">No eligible unassigned sales.</p>
+  {% endif %}
+
+  <form id="bulk-remove-sales" method="post" action="{{ url_for('batches.bulk_sales', batch_id=batch.id) }}" style="margin-top:8px;">
+    <button type="submit" class="btn btn-warning">Remove selected sales</button>
   </form>
+  <p class="text-muted" style="margin-top:8px;">
+    Select any number of sales above, then use the matching Add or Remove button.
+  </p>
   {% endif %}
 
   {% if batch.sales|selectattr('shipping_payment_settled')|list %}
