@@ -349,6 +349,97 @@ class _ChatPageState extends State<ChatPage> {
     setState(() => replyTo = message);
   }
 
+  String _quoteText(Map<String, dynamic> message) {
+    final deleted = message['deleted'] == true;
+    if (deleted) return 'Message deleted';
+
+    final content = '${message['content'] ?? ''}'.trim();
+    if (content.isNotEmpty) return content;
+
+    if ('${message['attachment_url'] ?? ''}'.isNotEmpty ||
+        message['_attachment_bytes'] is Uint8List) {
+      return 'Photo';
+    }
+
+    return 'Message';
+  }
+
+  Widget _quotedMessage(Map<String, dynamic> reply) {
+    final scheme = Theme.of(context).colorScheme;
+    final sender = '${reply['sender_username'] ?? 'User'}';
+    final deleted = reply['deleted'] == true;
+    final hasPhoto = '${reply['attachment_url'] ?? ''}'.isNotEmpty ||
+        reply['_attachment_bytes'] is Uint8List;
+    final quote = _quoteText(reply);
+
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(top: 5, bottom: 7),
+      padding: const EdgeInsets.fromLTRB(9, 7, 9, 7),
+      decoration: BoxDecoration(
+        color: scheme.surface.withOpacity(.55),
+        borderRadius: BorderRadius.circular(10),
+        border: Border(
+          left: BorderSide(
+            color: mineQuoteColor(reply),
+            width: 3,
+          ),
+        ),
+      ),
+      child: Row(
+        children: [
+          if (hasPhoto) ...[
+            Container(
+              width: 38,
+              height: 38,
+              margin: const EdgeInsets.only(right: 8),
+              clipBehavior: Clip.antiAlias,
+              decoration: BoxDecoration(
+                color: scheme.surfaceContainerHighest,
+                borderRadius: BorderRadius.circular(7),
+              ),
+              child: const Icon(Icons.photo_outlined, size: 20),
+            ),
+          ],
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  sender,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w800,
+                    color: mineQuoteColor(reply),
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  quote,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontStyle: deleted ? FontStyle.italic : FontStyle.normal,
+                    color: scheme.onSurfaceVariant,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Color mineQuoteColor(Map<String, dynamic> reply) {
+    final isMine = reply['sender_user_id'] == AppSession.userId;
+    final scheme = Theme.of(context).colorScheme;
+    return isMine ? scheme.primary : scheme.secondary;
+  }
+
   void _selectMention(
     Map<String, dynamic> user,
     TextEditingController controller,
@@ -403,7 +494,7 @@ class _ChatPageState extends State<ChatPage> {
                       Expanded(
                         child: Text(
                           'Replying to ${replyTo!['sender_username'] ?? 'user'}: '
-                          '${replyTo!['content'] ?? ''}',
+                          '${_quoteText(replyTo!)}',
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
                         ),
@@ -739,33 +830,8 @@ class _ChatPageState extends State<ChatPage> {
                 ),
               if (!deleted || AppSession.isAdmin) ...[
                 if ('${message['attachment_url'] ?? ''}'.isNotEmpty || message['_attachment_bytes'] is Uint8List) _photoWidget(message),
-              if (!mine)                Text(
-                  sender,
-                  style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    color: scheme.primary,
-                  ),
-                ),
               if (reply is Map)
-                Container(
-                  width: double.infinity,
-                  margin: const EdgeInsets.only(top: 5, bottom: 7),
-                  padding: const EdgeInsets.all(7),
-                  decoration: BoxDecoration(
-                    color: scheme.surface.withOpacity(.62),
-                    borderRadius: BorderRadius.circular(9),
-                  ),
-                  child: Text(
-                    '${reply['sender_username'] ?? 'User'}: '
-                    '${reply['content'] ?? ''}',
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: scheme.onSurfaceVariant,
-                    ),
-                  ),
-                ),
+                _quotedMessage(Map<String, dynamic>.from(reply)),
               Align(
                 alignment: Alignment.centerLeft,
                 child: Text(
