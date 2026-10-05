@@ -820,7 +820,10 @@ class _ChatPageState extends State<ChatPage> {
       alignment: mine ? Alignment.centerRight : Alignment.centerLeft,
       child: GestureDetector(
         onLongPress: failed ? null : () => _replyTo(message),
-        child: AnimatedContainer(
+        child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+        AnimatedContainer(
           duration: const Duration(milliseconds: 280),
           curve: Curves.easeOutCubic,
           constraints: const BoxConstraints(maxWidth: 520),
@@ -860,6 +863,7 @@ class _ChatPageState extends State<ChatPage> {
                 mine ? CrossAxisAlignment.end : CrossAxisAlignment.start,
             children: [
               Row(
+                mainAxisSize: MainAxisSize.min,
                 children: [
                   if (!mine) ...[
                     Container(
@@ -871,7 +875,7 @@ class _ChatPageState extends State<ChatPage> {
                         style: TextStyle(fontSize: 11, fontWeight: FontWeight.w900, color: scheme.onPrimaryContainer)),
                     ),
                     const SizedBox(width: 7),
-                    Expanded(child: Text(sender, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: scheme.primary))),
+                    Text(sender, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: scheme.primary)),
                   ],
                   if (!pending && !failed)
                     const SizedBox(width: 4),
@@ -913,28 +917,6 @@ class _ChatPageState extends State<ChatPage> {
               ),
               if (message['edited'] == true && !deleted)
                 Text('edited', style: TextStyle(fontSize: 10, fontStyle: FontStyle.italic, color: mine ? Colors.white70 : scheme.onSurfaceVariant)),
-              if (!deleted && !pending && !failed)
-                Padding(
-                  padding: const EdgeInsets.only(top: 7),
-                  child: Align(
-                    alignment: mine ? Alignment.centerRight : Alignment.centerLeft,
-                    child: Wrap(
-                      spacing: 3,
-                      children: [
-                        _chatAction(icon: Icons.reply_rounded, label: 'Reply', mine: mine, onTap: () => _replyTo(message)),
-                        _chatAction(icon: Icons.add_reaction_rounded, label: 'React', mine: mine, onTap: () => showReactionPicker(message)),
-                        if (message['content']?.toString().trim().isNotEmpty == true)
-                          _chatAction(icon: Icons.content_copy_rounded, label: 'Copy', mine: mine, onTap: () => copyMessage(message)),
-                        if (canModify)
-                          _chatAction(icon: Icons.edit_rounded, label: 'Edit', mine: mine, onTap: () => editMessage(message)),
-                        if (canModify)
-                          _chatAction(icon: Icons.delete_outline_rounded, label: 'Delete', mine: mine, onTap: () => deleteMessage(message)),
-                        if (message['attachment_url']?.toString().isNotEmpty == true || message['_attachment_bytes'] is Uint8List)
-                          _chatAction(icon: Icons.download_rounded, label: 'Save', mine: mine, onTap: () => downloadPhoto(message)),
-                      ],
-                    ),
-                  ),
-                ),
               if (message['original_content'] != null && AppSession.isPrimaryAdmin && message['edited'] == true)
                 Container(margin: const EdgeInsets.only(top: 6), padding: const EdgeInsets.all(8), decoration: BoxDecoration(color: scheme.tertiaryContainer, borderRadius: BorderRadius.circular(9)), child: Text('Original: ${message['original_content']}')),
               if ((message['reactions'] as Map?)?.isNotEmpty == true)
@@ -998,7 +980,29 @@ class _ChatPageState extends State<ChatPage> {
             ],
           ),
         ),
-      ),
+        if (!deleted && !pending && !failed)
+          Positioned(
+            bottom: -31,
+            left: mine ? null : 0,
+            right: mine ? 0 : null,
+            child: Wrap(
+              spacing: 3,
+              children: [
+                _chatAction(icon: Icons.reply_rounded, label: 'Reply', mine: mine, onTap: () => _replyTo(message)),
+                _chatAction(icon: Icons.add_reaction_rounded, label: 'React', mine: mine, onTap: () => showReactionPicker(message)),
+                if (message['content']?.toString().trim().isNotEmpty == true)
+                  _chatAction(icon: Icons.content_copy_rounded, label: 'Copy', mine: mine, onTap: () => copyMessage(message)),
+                if (canModify)
+                  _chatAction(icon: Icons.edit_rounded, label: 'Edit', mine: mine, onTap: () => editMessage(message)),
+                if (canModify)
+                  _chatAction(icon: Icons.delete_outline_rounded, label: 'Delete', mine: mine, onTap: () => deleteMessage(message)),
+                if (message['attachment_url']?.toString().isNotEmpty == true || message['_attachment_bytes'] is Uint8List)
+                  _chatAction(icon: Icons.download_rounded, label: 'Save', mine: mine, onTap: () => downloadPhoto(message)),
+              ],
+            ),
+          ),
+      ],
+    )
     );
   }
   @override
