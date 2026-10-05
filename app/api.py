@@ -1846,7 +1846,15 @@ def mobile_create_chat_message():
         special_user_ids = set(mentioned_ids)
         if reply_to is not None and reply_to.sender_user_id != g.api_user.id:
             special_user_ids.add(reply_to.sender_user_id)
-        queue_chat_message_notifications(message, special_user_ids=special_user_ids)
+        # Chat delivery must not fail just because the optional push-notification
+        # subsystem has a problem. The message itself is the primary operation.
+        try:
+            queue_chat_message_notifications(message, special_user_ids=special_user_ids)
+        except Exception:
+            db.session.rollback()
+            db.session.add(message)
+            db.session.flush()
+
         record_audit(
             "chat.message",
             target_type="chat_message",
