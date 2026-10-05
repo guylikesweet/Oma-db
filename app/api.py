@@ -81,8 +81,13 @@ def require_api_token(f):
             db.session.commit()
             return jsonify({"error": "Your session expired after 6 hours of inactivity. Please sign in again."}), 401
 
-        user.api_last_activity_at = now
-        db.session.commit()
+        # Avoid a database write on every authenticated request. Mobile sync,
+        # chat polling and dashboards can otherwise turn normal reads into a
+        # steady stream of writes. Refresh activity at most every five minutes.
+        if last is None or now - last >= timedelta(minutes=5):
+            user.api_last_activity_at = now
+            db.session.commit()
+
         g.api_user = user
         return f(*args, **kwargs)
     return wrapper
