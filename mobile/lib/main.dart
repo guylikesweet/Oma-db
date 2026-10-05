@@ -902,6 +902,17 @@ class _AppShellState extends State<AppShell> {
       ),
     ];
 
+    final content = Listener(
+      behavior: HitTestBehavior.translucent,
+      onPointerDown: (_) => _touchActivity(),
+      onPointerMove: (_) => _touchActivity(),
+      onPointerSignal: (_) => _touchActivity(),
+      child: IndexedStack(
+        index: tab,
+        children: pages,
+      ),
+    );
+
     return Scaffold(
       body: Stack(
         children: [
