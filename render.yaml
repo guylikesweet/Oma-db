@@ -3,7 +3,7 @@ services:
     name: logistics-app
     env: python
     plan: free
-    buildCommand: "pip install -r requirements.txt && flask db upgrade heads && flask db current"
+    buildCommand: "pip install -r requirements.txt && flask db upgrade heads && flask db current && flask db heads && flask seed-admin"
     startCommand: "gunicorn run:app"
     healthCheckPath: /healthz
     envVars:
