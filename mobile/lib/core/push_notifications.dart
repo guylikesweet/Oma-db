@@ -49,12 +49,17 @@ class OmaPushNotifications {
   }
 
   static Future<void> initialize(ApiClient api) async {
-    final options = _options();
-    if (options == null) return;
-
     try {
       if (!_firebaseReady) {
-        await Firebase.initializeApp(options: options);
+        if (kIsWeb) {
+          final options = _options();
+          if (options == null) return;
+          await Firebase.initializeApp(options: options);
+        } else {
+          // Android uses the native Firebase configuration generated from
+          // google-services.json by the Google Services Gradle plugin.
+          await Firebase.initializeApp();
+        }
         _firebaseReady = true;
       }
       final messaging = FirebaseMessaging.instance;
@@ -116,11 +121,19 @@ class OmaPushNotifications {
   static Future<void> handleBackgroundMessage(
     RemoteMessage message,
   ) async {
-    final options = _options();
-    if (options == null) return;
-
     try {
-      await Firebase.initializeApp(options: options);
+      if (!_firebaseReady) {
+        if (kIsWeb) {
+          final options = _options();
+          if (options == null) return;
+          await Firebase.initializeApp(options: options);
+        } else {
+          // Background Android isolates use the same native Firebase
+          // configuration installed from google-services.json.
+          await Firebase.initializeApp();
+        }
+        _firebaseReady = true;
+      }
       await _local.initialize(_initSettings);
       await _showAndRepeat(message.data);
     } catch (_) {
