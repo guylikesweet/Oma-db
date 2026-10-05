@@ -820,8 +820,9 @@ class _ChatPageState extends State<ChatPage> {
       alignment: mine ? Alignment.centerRight : Alignment.centerLeft,
       child: GestureDetector(
         onLongPress: failed ? null : () => _replyTo(message),
-        child: Stack(
-        clipBehavior: Clip.none,
+        child: IntrinsicWidth(
+          child: Stack(
+            clipBehavior: Clip.none,
         children: [
         AnimatedContainer(
           duration: const Duration(milliseconds: 280),
