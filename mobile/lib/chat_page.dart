@@ -584,6 +584,42 @@ class _ChatPageState extends State<ChatPage> {
     );
   }
 
+  Widget _photoWidget(Map<String, dynamic> message) {
+    final local = message['_attachment_bytes'];
+    if (local is Uint8List) {
+      return ClipRRect(
+        borderRadius: BorderRadius.circular(12),
+        child: Image.memory(local, width: 260, height: 220, fit: BoxFit.cover),
+      );
+    }
+    final id = int.tryParse('$message['id']}');
+    final url = '$message['attachment_url'] ?? ''}';
+    if (id == null || url.isEmpty) return const SizedBox.shrink();
+    if (photoCache[id] != null) {
+      return ClipRRect(
+        borderRadius: BorderRadius.circular(12),
+        child: Image.memory(photoCache[id]!, width: 260, height: 220, fit: BoxFit.cover),
+      );
+    }
+    return FutureBuilder<Uint8List>(
+      future: widget.api.downloadChatAttachment(url),
+      builder: (context, snapshot) {
+        if (snapshot.hasData) {
+          photoCache[id] = snapshot.data!;
+          return ClipRRect(
+            borderRadius: BorderRadius.circular(12),
+            child: Image.memory(snapshot.data!, width: 260, height: 220, fit: BoxFit.cover),
+          );
+        }
+        return const SizedBox(
+          width: 260,
+          height: 120,
+          child: Center(child: CircularProgressIndicator()),
+        );
+      },
+    );
+  }
+
   Widget _messageBubble(Map<String, dynamic> message) {
     final mine = message['sender_user_id'] == AppSession.userId;
     final status = '${message['_status'] ?? 'sent'}';
@@ -595,6 +631,8 @@ class _ChatPageState extends State<ChatPage> {
         .replaceFirst('T', ' ')
         .split('.')
         .first;
+    final deleted = message['deleted'] == true;
+    final canModify = !pending && !failed && !deleted && (mine || AppSession.isAdmin);
 
     final scheme = Theme.of(context).colorScheme;
     final bubbleGradient = mine
