@@ -96,6 +96,85 @@ def remove_sale_from_batch(sale_id):
     db.session.commit()
 
 
+def update_batch_sales(batch_id, *, add_sale_ids=None, remove_sale_ids=None):
+    """Atomically add and/or remove multiple sales from an In Transit batch."""
+    batch = ShipmentBatch.query.get(batch_id)
+    if not batch:
+        raise BatchValidationError("Batch not found.")
+    if batch.status != ShipmentBatch.STATUS_IN_TRANSIT:
+        raise BatchValidationError("Sales can only be changed while the batch is In Transit.")
+
+    add_ids = list(dict.fromkeys(int(x) for x in (add_sale_ids or [])))
+    remove_ids = list(dict.fromkeys(int(x) for x in (remove_sale_ids or [])))
+
+    overlap = set(add_ids) & set(remove_ids)
+    if overlap:
+        raise BatchValidationError("A sale cannot be added and removed in the same request.")
+
+    if remove_ids:
+        remove_sales = Sale.query.filter(Sale.id.in_(remove_ids)).all()
+        found = {sale.id for sale in remove_sales}
+        missing = [sale_id for sale_id in remove_ids if sale_id not in found]
+        if missing:
+            raise BatchValidationError(
+                "Sales not found: " + ", ".join(str(x) for x in missing) + "."
+            )
+        for sale in remove_sales:
+            if sale.batch_id != batch.id:
+                raise BatchValidationError(
+                    f"Sale #{sale.id} is not in this batch."
+                )
+
+    if add_ids:
+        add_sales = Sale.query.filter(Sale.id.in_(add_ids)).all()
+        found = {sale.id for sale in add_sales}
+        missing = [sale_id for sale_id in add_ids if sale_id not in found]
+        if missing:
+            raise BatchValidationError(
+                "Sales not found: " + ", ".join(str(x) for x in missing) + "."
+            )
+        for sale in add_sales:
+            if sale.order_status == "Cancelled":
+                raise BatchValidationError(
+                    f"Sale #{sale.id} is cancelled and cannot be added."
+                )
+            if sale.is_stock_sale:
+                raise BatchValidationError(
+                    f"Sale #{sale.id} is a stock sale and cannot be shipped in a batch."
+                )
+            if sale.batch_id is not None and sale.batch_id != batch.id:
+                raise BatchValidationError(
+                    f"Sale #{sale.id} already belongs to another shipment batch."
+                )
+
+    for sale in remove_sales if remove_ids else []:
+        sale.batch_id = None
+        sale.batch_assigned_at = None
+        record_audit(
+            "batch.remove_sale",
+            target_type="sale",
+            target_id=sale.id,
+            details={"batch_id": batch.id, "source": "bulk"},
+        )
+
+    for sale in add_sales if add_ids else []:
+        sale.batch_id = batch.id
+        sale.batch_assigned_at = datetime.utcnow()
+        record_audit(
+            "batch.add_sale",
+            target_type="sale",
+            target_id=sale.id,
+            details={
+                "batch_id": batch.id,
+                "transport_mode": batch.transport_mode,
+                "source": "bulk",
+            },
+        )
+
+    db.session.commit()
+    return batch
+
+
 def mark_arrived(batch_id):
     """
     Marks the batch arrived and, using THIS month's rate (the arrival month),
