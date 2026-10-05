@@ -870,15 +870,29 @@ class _ChatPageState extends State<ChatPage> {
                       width: 25,
                       height: 25,
                       alignment: Alignment.center,
-                      decoration: BoxDecoration(color: scheme.primaryContainer, shape: BoxShape.circle),
-                      child: Text(sender.trim().isEmpty ? '?' : sender.trim()[0].toUpperCase(),
-                        style: TextStyle(fontSize: 11, fontWeight: FontWeight.w900, color: scheme.onPrimaryContainer)),
+                      decoration: BoxDecoration(
+                        color: scheme.primaryContainer,
+                        shape: BoxShape.circle,
+                      ),
+                      child: Text(
+                        sender.trim().isEmpty ? '?' : sender.trim()[0].toUpperCase(),
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w900,
+                          color: scheme.onPrimaryContainer,
+                        ),
+                      ),
                     ),
                     const SizedBox(width: 7),
-                    Text(sender, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: scheme.primary)),
                   ],
-                  if (!pending && !failed)
-                    const SizedBox(width: 4),
+                  Text(
+                    sender,
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w900,
+                      color: mine ? Colors.white : scheme.primary,
+                    ),
+                  ),
                 ],
               ),
               if (deleted && !AppSession.isAdmin)
