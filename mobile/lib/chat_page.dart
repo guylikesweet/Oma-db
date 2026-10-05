@@ -697,8 +697,51 @@ class _ChatPageState extends State<ChatPage> {
             crossAxisAlignment:
                 mine ? CrossAxisAlignment.end : CrossAxisAlignment.start,
             children: [
-              if (!mine)
-                Text(
+              Row(
+                children: [
+                  if (!mine)
+                    Expanded(child: Text(sender, style: TextStyle(fontWeight: FontWeight.bold, color: scheme.primary))),
+                  if (!pending && !failed)
+                    PopupMenuButton<String>(
+                      onSelected: (action) {
+                        if (action == 'reply') _replyTo(message);
+                        if (action == 'copy') copyMessage(message);
+                        if (action == 'edit') editMessage(message);
+                        if (action == 'delete') deleteMessage(message);
+                        if (action == 'react') showReactionPicker(message);
+                        if (action == 'photo') downloadPhoto(message);
+                      },
+                      itemBuilder: (_) => [
+                        if (!deleted) const PopupMenuItem(value: 'reply', child: Text('Reply')),
+                        if (!deleted) const PopupMenuItem(value: 'react', child: Text('React')),
+                        if (!deleted && '${message['content'] ?? ''}'.isNotEmpty) const PopupMenuItem(value: 'copy', child: Text('Copy')),
+                        if (canModify) const PopupMenuItem(value: 'edit', child: Text('Edit')),
+                        if (canModify) const PopupMenuItem(value: 'delete', child: Text('Delete')),
+                        if ('${message['attachment_url'] ?? ''}'.isNotEmpty || message['_attachment_bytes'] is Uint8List) const PopupMenuItem(value: 'photo', child: Text('Download photo')),
+                      ],
+                    ),
+                ],
+              ),
+              if (deleted && !AppSession.isAdmin)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 18),
+                  decoration: BoxDecoration(color: scheme.surface.withOpacity(.75), borderRadius: BorderRadius.circular(14)),
+                  child: Column(children: [
+                    Icon(Icons.delete_sweep_rounded, size: 40, color: scheme.onSurfaceVariant),
+                    const SizedBox(height: 5),
+                    Text('Message deleted', style: TextStyle(fontStyle: FontStyle.italic, color: scheme.onSurfaceVariant)),
+                  ]),
+                ),
+              if (deleted && AppSession.isAdmin)
+                Container(
+                  margin: const EdgeInsets.only(bottom: 6),
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(color: scheme.errorContainer, borderRadius: BorderRadius.circular(8)),
+                  child: Text('DELETED', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: scheme.onErrorContainer)),
+                ),
+              if (!deleted || AppSession.isAdmin) ...[
+                if ('${message['attachment_url'] ?? ''}'.isNotEmpty || message['_attachment_bytes'] is Uint8List) _photoWidget(message),
+              if (!mine)                Text(
                   sender,
                   style: TextStyle(
                     fontWeight: FontWeight.bold,
@@ -738,6 +781,13 @@ class _ChatPageState extends State<ChatPage> {
                   ),
                 ),
               ),
+              if (message['edited'] == true && !deleted)
+                Text('edited', style: TextStyle(fontSize: 10, fontStyle: FontStyle.italic, color: mine ? Colors.white70 : scheme.onSurfaceVariant)),
+              if (message['original_content'] != null && AppSession.isPrimaryAdmin && message['edited'] == true)
+                Container(margin: const EdgeInsets.only(top: 6), padding: const EdgeInsets.all(8), decoration: BoxDecoration(color: scheme.tertiaryContainer, borderRadius: BorderRadius.circular(9)), child: Text('Original: ${message['original_content']}')),
+              if ((message['reactions'] as Map?)?.isNotEmpty == true)
+                Wrap(spacing: 4, children: (message['reactions'] as Map).entries.map((entry) => ActionChip(visualDensity: VisualDensity.compact, avatar: Text('${entry.key}'), label: Text('${entry.value}'), onPressed: () => react(message, '${entry.key}'))).toList()),
+              ],
               const SizedBox(height: 5),
               Row(
                 mainAxisSize: MainAxisSize.min,
