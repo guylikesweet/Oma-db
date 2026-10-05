@@ -427,6 +427,11 @@ def _chat_message_json(message):
         "original_content": message.original_content if show_original else None,
         "sender_user_id": message.sender_user_id,
         "sender_username": message.sender.username if message.sender else None,
+        "sender_profile_photo_url": (
+            f"/api/v1/users/{message.sender.id}/avatar"
+            if message.sender and message.sender.profile_photo_data
+            else None
+        ),
         "created_at": message.created_at.isoformat() if message.created_at else None,
         "edited": bool(message.edited_at),
         "edited_at": message.edited_at.isoformat() if message.edited_at else None,
@@ -451,6 +456,11 @@ def _chat_message_json(message):
                 ) else None,
                 "sender_user_id": reply.sender_user_id,
                 "sender_username": reply.sender.username if reply.sender else None,
+                "sender_profile_photo_url": (
+                    f"/api/v1/users/{reply.sender.id}/avatar"
+                    if reply.sender and reply.sender.profile_photo_data
+                    else None
+                ),
                 "created_at": reply.created_at.isoformat() if reply.created_at else None,
                 "edited": bool(reply.edited_at),
                 "deleted": bool(reply.deleted_at),
@@ -1622,6 +1632,117 @@ def mobile_settings_update():
     except (ValueError,TypeError) as e:db.session.rollback();return jsonify({'error':str(e)}),400
 
 
+def _profile_json(user):
+    return {
+        "id": user.id,
+        "username": user.username,
+        "role": user.role,
+        "is_admin": user.is_admin,
+        "is_primary_admin": user.is_primary_admin,
+        "is_active": user.is_active,
+        "created_at": user.created_at.isoformat() if user.created_at else None,
+        "has_profile_photo": bool(user.profile_photo_data),
+        "profile_photo_url": (
+            f"/api/v1/users/{user.id}/avatar" if user.profile_photo_data else None
+        ),
+    }
+
+
+@api_bp.route("/v1/profile", methods=("GET", "PUT", "PATCH"))
+@require_api_token
+def mobile_profile():
+    if request.method == "GET":
+        return jsonify(_profile_json(g.api_user))
+
+    data = request.get_json(silent=True) or {}
+    username = str(data.get("username") or "").strip()
+    if not username:
+        return jsonify({"error": "Username is required."}), 400
+    if len(username) > 50:
+        return jsonify({"error": "Username is too long."}), 400
+
+    existing = User.query.filter(
+        User.username == username,
+        User.id != g.api_user.id,
+    ).first()
+    if existing:
+        return jsonify({"error": "Username already exists."}), 400
+
+    user = g.api_user
+    user.username = username
+
+    if "password" in data and str(data.get("password") or ""):
+        password = str(data.get("password"))
+        if len(password) < 8:
+            return jsonify({"error": "Password must be at least 8 characters."}), 400
+        user.password_hash = generate_password_hash(password)
+        user.biometric_credential_hash = None
+        user.api_token = None
+        user.api_last_activity_at = None
+        # The caller must sign in again after changing the password.
+        db.session.commit()
+        return jsonify({
+            "reauth_required": True,
+            "profile": _profile_json(user),
+        })
+
+    if "profile_photo_base64" in data:
+        encoded = str(data.get("profile_photo_base64") or "").strip()
+        if encoded:
+            try:
+                raw = base64.b64decode(encoded, validate=True)
+                if len(raw) > 4 * 1024 * 1024:
+                    raise ValueError("Profile photo is too large.")
+                from PIL import Image
+                image = Image.open(io.BytesIO(raw)).convert("RGB")
+                image.thumbnail((256, 256), Image.Resampling.LANCZOS)
+                out = io.BytesIO()
+                image.save(out, format="JPEG", quality=72, optimize=True)
+                photo = out.getvalue()
+                if len(photo) > 220 * 1024:
+                    out = io.BytesIO()
+                    image.save(out, format="JPEG", quality=58, optimize=True)
+                    photo = out.getvalue()
+                user.profile_photo_data = photo
+                user.profile_photo_mimetype = "image/jpeg"
+                user.profile_photo_updated_at = datetime.utcnow()
+            except ValueError as exc:
+                db.session.rollback()
+                return jsonify({"error": str(exc)}), 400
+            except Exception:
+                db.session.rollback()
+                return jsonify({"error": "The profile photo is not a valid image."}), 400
+        else:
+            user.profile_photo_data = None
+            user.profile_photo_mimetype = None
+            user.profile_photo_updated_at = None
+
+    record_audit(
+        "profile.update",
+        target_type="user",
+        target_id=user.id,
+        details={"source": "mobile", "profile_photo_changed": "profile_photo_base64" in data},
+        user=user,
+    )
+    db.session.commit()
+    return jsonify(_profile_json(user))
+
+
+@api_bp.route("/v1/users/<int:user_id>/avatar", methods=("GET",))
+@require_api_token
+def mobile_user_avatar(user_id):
+    user = User.query.get_or_404(user_id)
+    if not user.profile_photo_data:
+        return jsonify({"error": "This user has no profile photo."}), 404
+    from flask import Response
+    response = Response(
+        user.profile_photo_data,
+        mimetype=user.profile_photo_mimetype or "image/jpeg",
+    )
+    response.headers["Cache-Control"] = "private, max-age=86400"
+    return response
+
+
 @api_bp.route("/v1/users", methods=("GET",))
 @require_api_token
 def mobile_users():
@@ -1630,6 +1751,8 @@ def mobile_users():
         'is_admin': u.is_admin, 'is_primary_admin': u.is_primary_admin,
         'is_active': u.is_active,
         'created_at': u.created_at.isoformat() if u.created_at else None,
+        'has_profile_photo': bool(u.profile_photo_data),
+        'profile_photo_url': f"/api/v1/users/{u.id}/avatar" if u.profile_photo_data else None,
     } for u in User.query.order_by(User.username).all()])
 
 @api_bp.route("/v1/users", methods=("POST",))
