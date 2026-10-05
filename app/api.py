@@ -1729,6 +1729,21 @@ def mobile_delete_user(user_id):
 # ---------------------------------------------------------------------------
 # TEAM CHAT
 # ---------------------------------------------------------------------------
+@api_bp.route("/v1/admin/chat/cleanup", methods=("POST",))
+def mobile_admin_chat_cleanup():
+    expected = __import__("os").environ.get("CHAT_CLEANUP_SECRET", "").strip()
+    provided = request.headers.get("X-Chat-Cleanup-Secret", "").strip()
+    if not expected or not provided or not secrets.compare_digest(provided, expected):
+        return jsonify({"error": "Unauthorized."}), 401
+
+    before = ChatMessage.query.filter(
+        ChatMessage.attachment_data.isnot(None),
+        ChatMessage.attachment_created_at < datetime.utcnow() - timedelta(days=30),
+    ).count()
+    _chat_cleanup_expired_photos()
+    return jsonify({"ok": True, "expired_photos": before})
+
+
 @api_bp.route("/v1/chat/messages", methods=("GET",))
 @require_api_token
 def mobile_chat_messages():
