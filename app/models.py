@@ -439,6 +439,27 @@ class ChatMessage(db.Model):
         index=True,
     )
     content = db.Column(db.Text, nullable=False)
+    # Immutable original is retained for moderation/audit. Normal users never
+    # receive it after an edit; the primary admin can inspect it.
+    original_content = db.Column(db.Text, nullable=True)
+    edited_at = db.Column(db.DateTime, nullable=True)
+    edited_by_user_id = db.Column(
+        db.Integer,
+        db.ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    deleted_at = db.Column(db.DateTime, nullable=True)
+    deleted_by_user_id = db.Column(
+        db.Integer,
+        db.ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    # Compressed JPEG/WEBP bytes live in Postgres so Render filesystem
+    # volatility cannot lose chat photos. They are purged after 30 days.
+    attachment_data = db.Column(db.LargeBinary, nullable=True)
+    attachment_mimetype = db.Column(db.String(50), nullable=True)
+    attachment_filename = db.Column(db.String(255), nullable=True)
+    attachment_created_at = db.Column(db.DateTime, nullable=True)
     reply_to_id = db.Column(
         db.Integer,
         db.ForeignKey("chat_messages.id", ondelete="SET NULL"),
@@ -452,6 +473,8 @@ class ChatMessage(db.Model):
         foreign_keys=[sender_user_id],
         backref=db.backref("chat_messages", lazy=True),
     )
+    edited_by = db.relationship("User", foreign_keys=[edited_by_user_id])
+    deleted_by = db.relationship("User", foreign_keys=[deleted_by_user_id])
     reply_to = db.relationship(
         "ChatMessage",
         remote_side=[id],
