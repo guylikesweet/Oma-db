@@ -426,7 +426,73 @@ class NotificationOutbox(db.Model):
 
 
 # ---------------------------------------------------------------------------
-# 7. STOCK_LOG
+# CHAT — shared internal team conversation.
+# ---------------------------------------------------------------------------
+class ChatMessage(db.Model):
+    __tablename__ = "chat_messages"
+
+    id = db.Column(db.Integer, primary_key=True)
+    sender_user_id = db.Column(
+        db.Integer,
+        db.ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    content = db.Column(db.Text, nullable=False)
+    reply_to_id = db.Column(
+        db.Integer,
+        db.ForeignKey("chat_messages.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False, index=True)
+
+    sender = db.relationship(
+        "User",
+        foreign_keys=[sender_user_id],
+        backref=db.backref("chat_messages", lazy=True),
+    )
+    reply_to = db.relationship(
+        "ChatMessage",
+        remote_side=[id],
+        foreign_keys=[reply_to_id],
+        backref=db.backref("replies", lazy=True),
+    )
+
+    def __repr__(self):
+        return f"<ChatMessage #{self.id} by {self.sender_user_id}>"
+
+
+class ChatMention(db.Model):
+    __tablename__ = "chat_mentions"
+
+    id = db.Column(db.Integer, primary_key=True)
+    message_id = db.Column(
+        db.Integer,
+        db.ForeignKey("chat_messages.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    user_id = db.Column(
+        db.Integer,
+        db.ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+
+    user = db.relationship(
+        "User",
+        backref=db.backref("chat_mentions", lazy=True),
+    )
+
+    __table_args__ = (
+        db.UniqueConstraint("message_id", "user_id", name="uq_chat_mention_message_user"),
+    )
+
+
+# ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
 # ---------------------------------------------------------------------------
 class StockLog(db.Model):
     __tablename__ = "stock_log"
