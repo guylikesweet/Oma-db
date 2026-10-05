@@ -268,11 +268,11 @@ class _ChatPageState extends State<ChatPage> {
     final result = await showDialog<String>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Edit message'),
-        content: TextField(controller: controller, autofocus: true, maxLines: 6),
+        title: Row(children: [Container(padding: const EdgeInsets.all(8), decoration: BoxDecoration(color: Theme.of(context).colorScheme.primaryContainer, shape: BoxShape.circle), child: const Icon(Icons.auto_fix_high_rounded)), const SizedBox(width: 10), const Text('Polish your message')]),
+        content: TextField(controller: controller, autofocus: true, maxLines: 6, decoration: InputDecoration(hintText: 'Make it better…', filled: true, border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none))),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
-          FilledButton(onPressed: () => Navigator.pop(context, controller.text.trim()), child: const Text('Save')),
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Keep it')),
+          FilledButton.icon(onPressed: () => Navigator.pop(context, controller.text.trim()), icon: const Icon(Icons.check_rounded), label: const Text('Update')),
         ],
       ),
     );
@@ -324,7 +324,7 @@ class _ChatPageState extends State<ChatPage> {
     final text = '${message['content'] ?? ''}';
     if (text.isEmpty) return;
     await Clipboard.setData(ClipboardData(text: text));
-    if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Message copied')));
+    if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Copied ✨'), behavior: SnackBarBehavior.floating));
   }
 
   Future<void> downloadPhoto(Map<String, dynamic> message) async {
@@ -739,6 +739,38 @@ class _ChatPageState extends State<ChatPage> {
     );
   }
 
+  Widget _chatAction({
+    required IconData icon,
+    required String label,
+    required bool mine,
+    required VoidCallback onTap,
+  }) {
+    final scheme = Theme.of(context).colorScheme;
+    final foreground = mine ? Colors.white : scheme.onSurfaceVariant;
+    return Tooltip(
+      message: label,
+      child: Material(
+        color: mine ? Colors.white.withOpacity(.12) : scheme.surface.withOpacity(.72),
+        borderRadius: BorderRadius.circular(999),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(999),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(icon, size: 14, color: foreground),
+                const SizedBox(width: 4),
+                Text(label, style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: foreground)),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _messageBubble(Map<String, dynamic> message) {
     final mine = message['sender_user_id'] == AppSession.userId;
     final status = '${message['_status'] ?? 'sent'}';
@@ -796,7 +828,12 @@ class _ChatPageState extends State<ChatPage> {
           padding: const EdgeInsets.fromLTRB(13, 10, 13, 9),
           decoration: BoxDecoration(
             gradient: bubbleGradient,
-            borderRadius: BorderRadius.circular(18),
+            borderRadius: BorderRadius.only(
+            topLeft: const Radius.circular(20),
+            topRight: const Radius.circular(20),
+            bottomLeft: Radius.circular(mine ? 20 : 5),
+            bottomRight: Radius.circular(mine ? 5 : 20),
+          ),
             border: Border.all(
               color: mine && !pending && !failed
                   ? Colors.white.withOpacity(.22)
@@ -824,27 +861,20 @@ class _ChatPageState extends State<ChatPage> {
             children: [
               Row(
                 children: [
-                  if (!mine)
-                    Expanded(child: Text(sender, style: TextStyle(fontWeight: FontWeight.bold, color: scheme.primary))),
-                  if (!pending && !failed)
-                    PopupMenuButton<String>(
-                      onSelected: (action) {
-                        if (action == 'reply') _replyTo(message);
-                        if (action == 'copy') copyMessage(message);
-                        if (action == 'edit') editMessage(message);
-                        if (action == 'delete') deleteMessage(message);
-                        if (action == 'react') showReactionPicker(message);
-                        if (action == 'photo') downloadPhoto(message);
-                      },
-                      itemBuilder: (_) => [
-                        if (!deleted) const PopupMenuItem(value: 'reply', child: Text('Reply')),
-                        if (!deleted) const PopupMenuItem(value: 'react', child: Text('React')),
-                        if (!deleted && '${message['content'] ?? ''}'.isNotEmpty) const PopupMenuItem(value: 'copy', child: Text('Copy')),
-                        if (canModify) const PopupMenuItem(value: 'edit', child: Text('Edit')),
-                        if (canModify) const PopupMenuItem(value: 'delete', child: Text('Delete')),
-                        if ('${message['attachment_url'] ?? ''}'.isNotEmpty || message['_attachment_bytes'] is Uint8List) const PopupMenuItem(value: 'photo', child: Text('Download photo')),
-                      ],
+                  if (!mine) ...[
+                    Container(
+                      width: 25,
+                      height: 25,
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(color: scheme.primaryContainer, shape: BoxShape.circle),
+                      child: Text(sender.trim().isEmpty ? '?' : sender.trim()[0].toUpperCase(),
+                        style: TextStyle(fontSize: 11, fontWeight: FontWeight.w900, color: scheme.onPrimaryContainer)),
                     ),
+                    const SizedBox(width: 7),
+                    Expanded(child: Text(sender, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: scheme.primary))),
+                  ],
+                  if (!pending && !failed)
+                    const SizedBox(width: 4),
                 ],
               ),
               if (deleted && !AppSession.isAdmin)
@@ -883,6 +913,28 @@ class _ChatPageState extends State<ChatPage> {
               ),
               if (message['edited'] == true && !deleted)
                 Text('edited', style: TextStyle(fontSize: 10, fontStyle: FontStyle.italic, color: mine ? Colors.white70 : scheme.onSurfaceVariant)),
+              if (!deleted && !pending && !failed)
+                Padding(
+                  padding: const EdgeInsets.only(top: 7),
+                  child: Align(
+                    alignment: mine ? Alignment.centerRight : Alignment.centerLeft,
+                    child: Wrap(
+                      spacing: 3,
+                      children: [
+                        _chatAction(icon: Icons.reply_rounded, label: 'Reply', mine: mine, onTap: () => _replyTo(message)),
+                        _chatAction(icon: Icons.add_reaction_rounded, label: 'React', mine: mine, onTap: () => showReactionPicker(message)),
+                        if (message['content']?.toString().trim().isNotEmpty == true)
+                          _chatAction(icon: Icons.content_copy_rounded, label: 'Copy', mine: mine, onTap: () => copyMessage(message)),
+                        if (canModify)
+                          _chatAction(icon: Icons.edit_rounded, label: 'Edit', mine: mine, onTap: () => editMessage(message)),
+                        if (canModify)
+                          _chatAction(icon: Icons.delete_outline_rounded, label: 'Delete', mine: mine, onTap: () => deleteMessage(message)),
+                        if (message['attachment_url']?.toString().isNotEmpty == true || message['_attachment_bytes'] is Uint8List)
+                          _chatAction(icon: Icons.download_rounded, label: 'Save', mine: mine, onTap: () => downloadPhoto(message)),
+                      ],
+                    ),
+                  ),
+                ),
               if (message['original_content'] != null && AppSession.isPrimaryAdmin && message['edited'] == true)
                 Container(margin: const EdgeInsets.only(top: 6), padding: const EdgeInsets.all(8), decoration: BoxDecoration(color: scheme.tertiaryContainer, borderRadius: BorderRadius.circular(9)), child: Text('Original: ${message['original_content']}')),
               if ((message['reactions'] as Map?)?.isNotEmpty == true)
