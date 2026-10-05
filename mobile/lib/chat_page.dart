@@ -147,11 +147,13 @@ class _ChatPageState extends State<ChatPage> {
 
   Future<void> send() async {
     final text = composer.text.trim();
-    if (text.isEmpty || sending) return;
+    if ((text.isEmpty && attachmentBytes == null) || sending) return;
 
     final replyId = replyTo?['id'];
     final localId = 'local-${++_localSequence}';
     final now = DateTime.now().toIso8601String();
+    final localPhoto = attachmentBytes;
+    final localName = attachmentName;
     final optimistic = <String, dynamic>{
       'id': localId,
       'sender_user_id': AppSession.userId,
@@ -160,6 +162,8 @@ class _ChatPageState extends State<ChatPage> {
       'created_at': now,
       'reply_to': replyTo,
       '_status': 'sending',
+      '_attachment_bytes': localPhoto,
+      'attachment_filename': localName,
     };
 
     setState(() {
@@ -167,6 +171,9 @@ class _ChatPageState extends State<ChatPage> {
       messages = [...messages, optimistic];
       composer.clear();
       replyTo = null;
+      attachmentBytes = null;
+      attachmentName = null;
+      emojiOpen = false;
     });
     _scrollToBottom();
 
@@ -174,6 +181,8 @@ class _ChatPageState extends State<ChatPage> {
       final sent = await widget.api.sendChatMessage(
         text,
         replyToId: replyId is int ? replyId : int.tryParse('$replyId'),
+        attachmentBase64: localPhoto == null ? null : base64Encode(localPhoto),
+        attachmentFilename: localName,
       );
 
       if (!mounted) return;
