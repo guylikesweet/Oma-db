@@ -52,13 +52,13 @@ class _ChatPageState extends State<ChatPage> {
         if (users.isEmpty) widget.api.users(),
       ]);
 
-      final nextMessages = List<dynamic>.from(results[0] as List);
+      final nextMessages = List<dynamic>.from(results[0]);
       final previousLastId =
           messages.isEmpty ? null : (messages.last as Map)['id'];
 
       final nextUsers = users.isEmpty
           ? List<Map<String, dynamic>>.from(
-              (results[1] as List)
+              results[1]
                   .whereType<Map>()
                   .map((x) => Map<String, dynamic>.from(x)),
             )
