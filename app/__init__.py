@@ -80,6 +80,9 @@ def create_app(config_object="config.Config"):
         from app.api import api_bp
         app.register_blueprint(api_bp)
 
+        from app.classic_chat import classic_chat_bp
+        app.register_blueprint(classic_chat_bp)
+
         from app.settings import settings_bp
         app.register_blueprint(settings_bp)
 
