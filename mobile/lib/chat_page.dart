@@ -25,6 +25,7 @@ class _ChatPageState extends State<ChatPage> {
   bool loading = true;
   bool sending = false;
   String? error;
+  int _localSequence = 0;
   Timer? poller;
 
   @override
@@ -115,25 +116,58 @@ class _ChatPageState extends State<ChatPage> {
     final text = composer.text.trim();
     if (text.isEmpty || sending) return;
 
-    setState(() => sending = true);
+    final replyId = replyTo?['id'];
+    final localId = 'local-${++_localSequence}';
+    final now = DateTime.now().toIso8601String();
+    final optimistic = <String, dynamic>{
+      'id': localId,
+      'sender_user_id': AppSession.userId,
+      'sender_username': AppSession.username ?? 'You',
+      'content': text,
+      'created_at': now,
+      'reply_to': replyTo,
+      '_status': 'sending',
+    };
+
+    setState(() {
+      sending = true;
+      messages = [...messages, optimistic];
+      composer.clear();
+      replyTo = null;
+    });
+    _scrollToBottom();
 
     try {
-      await widget.api.sendChatMessage(
+      final sent = await widget.api.sendChatMessage(
         text,
-        replyToId: replyTo?['id'] as int?,
+        replyToId: replyId is int ? replyId : int.tryParse('$replyId'),
       );
-      composer.clear();
-      setState(() => replyTo = null);
-      await load();
+
+      if (!mounted) return;
+      setState(() {
+        messages = messages
+            .map(
+              (message) => message['id'] == localId
+                  ? <String, dynamic>{...sent, '_status': 'sent'}
+                  : message,
+            )
+            .toList();
+        sending = false;
+      });
       _scrollToBottom();
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('${e}')),
-        );
-      }
-    } finally {
-      if (mounted) setState(() => sending = false);
+      if (!mounted) return;
+      setState(() {
+        messages = messages
+            .map(
+              (message) => message['id'] == localId
+                  ? <String, dynamic>{...message, '_status': 'failed'}
+                  : message,
+            )
+            .toList();
+        sending = false;
+      });
+      _scrollToBottom();
     }
   }
 
@@ -320,6 +354,9 @@ class _ChatPageState extends State<ChatPage> {
 
   Widget _messageBubble(Map<String, dynamic> message) {
     final mine = message['sender_user_id'] == AppSession.userId;
+    final status = '${message['_status'] ?? 'sent'}';
+    final pending = status == 'sending';
+    final failed = status == 'failed';
     final reply = message['reply_to'];
     final sender = '${message['sender_username'] ?? 'User'}';
     final created = '${message['created_at'] ?? ''}'
@@ -327,19 +364,64 @@ class _ChatPageState extends State<ChatPage> {
         .split('.')
         .first;
 
+    final scheme = Theme.of(context).colorScheme;
+    final bubbleGradient = mine
+        ? LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: pending || failed
+                ? [
+                    scheme.surfaceContainerHighest,
+                    scheme.surfaceContainer,
+                  ]
+                : [
+                    scheme.primary,
+                    scheme.primary.withOpacity(.78),
+                    scheme.primaryContainer,
+                  ],
+          )
+        : LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              scheme.surfaceContainerHighest,
+              scheme.surface,
+            ],
+          );
+
     return Align(
       alignment: mine ? Alignment.centerRight : Alignment.centerLeft,
       child: GestureDetector(
-        onLongPress: () => _replyTo(message),
-        child: Container(
+        onLongPress: failed ? null : () => _replyTo(message),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 280),
+          curve: Curves.easeOutCubic,
           constraints: const BoxConstraints(maxWidth: 520),
           margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-          padding: const EdgeInsets.fromLTRB(12, 9, 12, 8),
+          padding: const EdgeInsets.fromLTRB(13, 10, 13, 9),
           decoration: BoxDecoration(
-            color: mine
-                ? Theme.of(context).colorScheme.primaryContainer
-                : Theme.of(context).colorScheme.surfaceContainerHighest,
-            borderRadius: BorderRadius.circular(15),
+            gradient: bubbleGradient,
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(
+              color: mine && !pending && !failed
+                  ? Colors.white.withOpacity(.22)
+                  : scheme.outline.withOpacity(.45),
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(
+                  pending || failed ? .04 : .12,
+                ),
+                blurRadius: pending || failed ? 5 : 14,
+                offset: const Offset(0, 5),
+              ),
+              if (mine && !pending && !failed)
+                BoxShadow(
+                  color: Colors.white.withOpacity(.14),
+                  blurRadius: 1,
+                  offset: const Offset(0, -1),
+                ),
+            ],
           ),
           child: Column(
             crossAxisAlignment:
@@ -350,7 +432,7 @@ class _ChatPageState extends State<ChatPage> {
                   sender,
                   style: TextStyle(
                     fontWeight: FontWeight.bold,
-                    color: Theme.of(context).colorScheme.primary,
+                    color: scheme.primary,
                   ),
                 ),
               if (reply is Map)
@@ -359,36 +441,87 @@ class _ChatPageState extends State<ChatPage> {
                   margin: const EdgeInsets.only(top: 5, bottom: 7),
                   padding: const EdgeInsets.all(7),
                   decoration: BoxDecoration(
-                    color: Theme.of(context)
-                        .colorScheme
-                        .surface
-                        .withOpacity(.65),
-                    borderRadius: BorderRadius.circular(8),
+                    color: scheme.surface.withOpacity(.62),
+                    borderRadius: BorderRadius.circular(9),
                   ),
                   child: Text(
                     '${reply['sender_username'] ?? 'User'}: '
                     '${reply['content'] ?? ''}',
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontSize: 12),
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: scheme.onSurfaceVariant,
+                    ),
                   ),
                 ),
               Align(
                 alignment: Alignment.centerLeft,
                 child: Text(
                   '${message['content'] ?? ''}',
-                  style: const TextStyle(fontSize: 15),
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: mine ? FontWeight.w600 : FontWeight.w500,
+                    color: mine && !pending && !failed
+                        ? Colors.white
+                        : scheme.onSurface,
+                  ),
                 ),
               ),
-              const SizedBox(height: 4),
-              Text(
-                created,
-                style: TextStyle(
-                  fontSize: 10,
-                  color: Theme.of(context)
-                      .colorScheme
-                      .onSurfaceVariant,
-                ),
+              const SizedBox(height: 5),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (pending) ...[
+                    Icon(
+                      Icons.schedule_rounded,
+                      size: 13,
+                      color: scheme.onSurfaceVariant,
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      'Sending…',
+                      style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w700,
+                        color: scheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ] else if (failed) ...[
+                    Icon(
+                      Icons.error_outline_rounded,
+                      size: 13,
+                      color: scheme.error,
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      'Not sent',
+                      style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w700,
+                        color: scheme.error,
+                      ),
+                    ),
+                  ] else ...[
+                    Text(
+                      created,
+                      style: TextStyle(
+                        fontSize: 10,
+                        color: mine
+                            ? Colors.white.withOpacity(.78)
+                            : scheme.onSurfaceVariant,
+                      ),
+                    ),
+                    if (mine) ...[
+                      const SizedBox(width: 5),
+                      Icon(
+                        Icons.done_all_rounded,
+                        size: 13,
+                        color: Colors.white.withOpacity(.82),
+                      ),
+                    ],
+                  ],
+                ],
               ),
             ],
           ),
@@ -396,7 +529,6 @@ class _ChatPageState extends State<ChatPage> {
       ),
     );
   }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
