@@ -615,15 +615,19 @@ class _LoginPageState extends State<LoginPage> {
 class GlobalChatLauncher extends StatefulWidget {
   const GlobalChatLauncher({super.key, required this.api});
   final ApiClient api;
+
   @override
   State<GlobalChatLauncher> createState() => _GlobalChatLauncherState();
 }
 
 class _GlobalChatLauncherState extends State<GlobalChatLauncher>
     with SingleTickerProviderStateMixin {
+  static const _lastReadKey = 'team_chat_last_read_id';
+
   bool open = false;
-  bool unread = false;
+  int unreadCount = 0;
   int? _latestMessageId;
+  bool _initialised = false;
   Timer? _poller;
   late final AnimationController _pulseController;
 
@@ -632,13 +636,13 @@ class _GlobalChatLauncherState extends State<GlobalChatLauncher>
     super.initState();
     _pulseController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 1100),
+      duration: const Duration(milliseconds: 900),
     );
     _poller = Timer.periodic(
       const Duration(seconds: 4),
-      (_) => _checkForNewMessages(),
+      (_) => _checkForUnreadMessages(),
     );
-    _checkForNewMessages();
+    _checkForUnreadMessages();
   }
 
   @override
@@ -648,40 +652,97 @@ class _GlobalChatLauncherState extends State<GlobalChatLauncher>
     super.dispose();
   }
 
-  Future<void> _checkForNewMessages() async {
+  Future<void> _checkForUnreadMessages() async {
     if (open) return;
+
     try {
-      final rows = await widget.api.chatMessages(limit: 1);
-      if (rows.isEmpty || !mounted) return;
+      final rows = (await widget.api.chatMessages(limit: 100))
+          .whereType<Map>()
+          .map((row) => Map<String, dynamic>.from(row))
+          .toList();
+
+      if (!mounted || rows.isEmpty) return;
+
+      rows.sort(
+        (a, b) => (int.tryParse('${a['id']}') ?? 0)
+            .compareTo(int.tryParse('${b['id']}') ?? 0),
+      );
+
       final latest = int.tryParse('${rows.last['id']}');
       if (latest == null) return;
-      if (_latestMessageId == null) {
-        _latestMessageId = latest;
+
+      final stored = await LocalDatabase.instance.getMeta(_lastReadKey);
+      final lastRead = int.tryParse(stored ?? '');
+
+      if (!_initialised && lastRead == null) {
+        await LocalDatabase.instance.setMeta(_lastReadKey, '$latest');
+        if (!mounted) return;
+        setState(() {
+          _latestMessageId = latest;
+          unreadCount = 0;
+          _initialised = true;
+        });
         return;
       }
-      if (latest > _latestMessageId!) {
+
+      final effectiveLastRead = lastRead ?? 0;
+      final unreadRows = rows.where((message) {
+        final id = int.tryParse('${message['id']}') ?? 0;
+        final senderId = int.tryParse('${message['sender_user_id']}');
+        return id > effectiveLastRead && senderId != AppSession.userId;
+      }).toList();
+
+      final nextCount = unreadRows.length;
+      final hadNewerMessage = _latestMessageId != null &&
+          latest > _latestMessageId!;
+
+      if (!mounted) return;
+      setState(() {
         _latestMessageId = latest;
-        setState(() => unread = true);
-        if (!_pulseController.isAnimating) {
-          _pulseController.repeat(reverse: true);
-        }
+        unreadCount = nextCount;
+        _initialised = true;
+      });
+
+      if ((hadNewerMessage || nextCount > 0) &&
+          !_pulseController.isAnimating) {
+        _pulseController.repeat(reverse: true);
+      } else if (nextCount == 0) {
+        _pulseController.stop();
+        _pulseController.value = 0;
       }
     } catch (_) {}
   }
 
-  Future<void> _openChat() async {
-    setState(() {
-      open = true;
-      unread = false;
-    });
-    _pulseController.stop();
-    _pulseController.value = 0;
+  Future<void> _markChatRead() async {
     try {
-      final rows = await widget.api.chatMessages(limit: 1);
-      if (rows.isNotEmpty) {
-        _latestMessageId = int.tryParse('${rows.last['id']}');
-      }
+      final rows = (await widget.api.chatMessages(limit: 100))
+          .whereType<Map>()
+          .map((row) => Map<String, dynamic>.from(row))
+          .toList();
+      if (rows.isEmpty) return;
+
+      rows.sort(
+        (a, b) => (int.tryParse('${a['id']}') ?? 0)
+            .compareTo(int.tryParse('${b['id']}') ?? 0),
+      );
+
+      final latest = int.tryParse('${rows.last['id']}');
+      if (latest == null) return;
+
+      await LocalDatabase.instance.setMeta(_lastReadKey, '$latest');
+      if (!mounted) return;
+      setState(() {
+        _latestMessageId = latest;
+        unreadCount = 0;
+      });
+      _pulseController.stop();
+      _pulseController.value = 0;
     } catch (_) {}
+  }
+
+  Future<void> _openChat() async {
+    setState(() => open = true);
+    await _markChatRead();
 
     await showGeneralDialog<void>(
       context: context,
@@ -725,15 +786,18 @@ class _GlobalChatLauncherState extends State<GlobalChatLauncher>
         );
       },
     );
+
     if (mounted) {
       setState(() => open = false);
-      _checkForNewMessages();
+      await _markChatRead();
+      _checkForUnreadMessages();
     }
   }
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+
     return Positioned(
       right: 18,
       bottom: 94,
@@ -742,15 +806,15 @@ class _GlobalChatLauncherState extends State<GlobalChatLauncher>
         builder: (context, child) {
           final pulse = _pulseController.value;
           return Transform.scale(
-            scale: unread ? 1 + pulse * .055 : 1,
+            scale: unreadCount > 0 ? 1 + pulse * .055 : 1,
             child: Container(
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(18),
-                boxShadow: unread
+                boxShadow: unreadCount > 0
                     ? [
                         BoxShadow(
                           color: scheme.primary.withOpacity(.28 + pulse * .30),
-                          blurRadius: 12 + pulse * 12,
+                          blurRadius: 12 + pulse * 14,
                           spreadRadius: 2 + pulse * 3,
                         ),
                       ]
@@ -763,29 +827,56 @@ class _GlobalChatLauncherState extends State<GlobalChatLauncher>
         child: FloatingActionButton.extended(
           heroTag: 'global-team-chat',
           onPressed: open ? null : _openChat,
-          backgroundColor: unread ? scheme.primary : scheme.primaryContainer,
-          foregroundColor: unread ? scheme.onPrimary : scheme.onPrimaryContainer,
+          backgroundColor:
+              unreadCount > 0 ? scheme.primary : scheme.primaryContainer,
+          foregroundColor:
+              unreadCount > 0 ? scheme.onPrimary : scheme.onPrimaryContainer,
           icon: Stack(
             clipBehavior: Clip.none,
             children: [
               const Icon(Icons.forum_rounded),
-              if (unread)
+              if (unreadCount > 0)
                 Positioned(
-                  right: -6,
-                  top: -6,
+                  right: -10,
+                  top: -11,
                   child: Container(
-                    width: 10,
-                    height: 10,
+                    constraints: const BoxConstraints(minWidth: 22),
+                    height: 22,
+                    padding: const EdgeInsets.symmetric(horizontal: 5),
+                    alignment: Alignment.center,
                     decoration: BoxDecoration(
                       color: scheme.secondary,
                       shape: BoxShape.circle,
-                      border: Border.all(color: scheme.primary, width: 2),
+                      border: Border.all(
+                        color: unreadCount > 0
+                            ? scheme.primary
+                            : scheme.surface,
+                        width: 2,
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: scheme.secondary.withOpacity(.35),
+                          blurRadius: 8,
+                        ),
+                      ],
+                    ),
+                    child: Text(
+                      unreadCount > 99 ? '99+' : '$unreadCount',
+                      style: TextStyle(
+                        color: scheme.onSecondary,
+                        fontSize: 10,
+                        fontWeight: FontWeight.w900,
+                      ),
                     ),
                   ),
                 ),
             ],
           ),
-          label: Text(unread ? 'New chat' : 'Team chat'),
+          label: Text(
+            unreadCount > 0
+                ? '${unreadCount == 1 ? 'New chat' : 'New chats'}'
+                : 'Team chat',
+          ),
         ),
       ),
     );
