@@ -34,6 +34,12 @@ class User(db.Model, UserMixin):
     role = db.Column(db.String(20), nullable=False, default=ROLE_STAFF, server_default=ROLE_STAFF)
     is_primary_admin = db.Column(db.Boolean, nullable=False, default=False, server_default="false")
 
+    # Small square avatar used in team chat and notifications. Full-size
+    # profile images are never exposed by the API.
+    profile_photo_data = db.Column(db.LargeBinary, nullable=True)
+    profile_photo_mimetype = db.Column(db.String(50), nullable=True)
+    profile_photo_updated_at = db.Column(db.DateTime, nullable=True)
+
     @property
     def is_admin(self):
         return self.role == self.ROLE_ADMIN
