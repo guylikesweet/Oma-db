@@ -4,7 +4,7 @@ from flask import g, has_request_context, request, after_this_request
 from flask_login import current_user
 
 from app import db
-from app.models import AuditLog
+from app.models import AuditLog, User
 
 
 def _resolve_actor(user=None):
