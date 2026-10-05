@@ -750,27 +750,37 @@ class _GlobalChatLauncherState extends State<GlobalChatLauncher>
       barrierLabel: 'Close team chat',
       barrierColor: Colors.black.withOpacity(.35),
       transitionDuration: const Duration(milliseconds: 220),
-      pageBuilder: (context, animation, secondaryAnimation) => SafeArea(
-        child: Align(
-          alignment: Alignment.bottomRight,
-          child: Padding(
-            padding: const EdgeInsets.all(14),
-            child: Material(
-              color: Colors.transparent,
-              child: ConstrainedBox(
-                constraints: BoxConstraints(
-                  maxWidth: 560,
-                  maxHeight: MediaQuery.sizeOf(context).height * .88,
-                ),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(22),
-                  child: ChatPage(api: widget.api),
+      pageBuilder: (context, animation, secondaryAnimation) {
+        final mobile = MediaQuery.sizeOf(context).width < 700;
+        final chat = ChatPage(api: widget.api);
+        if (mobile) {
+          return Material(
+            color: Theme.of(context).scaffoldBackgroundColor,
+            child: SafeArea(child: chat),
+          );
+        }
+        return SafeArea(
+          child: Align(
+            alignment: Alignment.bottomRight,
+            child: Padding(
+              padding: const EdgeInsets.all(14),
+              child: Material(
+                color: Colors.transparent,
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(
+                    maxWidth: 560,
+                    maxHeight: MediaQuery.sizeOf(context).height * .88,
+                  ),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(22),
+                    child: chat,
+                  ),
                 ),
               ),
             ),
           ),
-        ),
-      ),
+        );
+      },
       transitionBuilder: (context, animation, secondaryAnimation, child) {
         final curved = CurvedAnimation(
           parent: animation,
