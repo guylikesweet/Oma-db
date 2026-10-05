@@ -19,6 +19,7 @@ import 'core/push_notifications.dart';
 import 'theme_settings_page.dart';
 import 'full_features.dart';
 import 'journey_widgets.dart';
+import 'chat_page.dart';
 
 @pragma('vm:entry-point')
 Future<void> omaFirebaseMessagingBackgroundHandler(RemoteMessage message) async {
@@ -611,6 +612,82 @@ class _LoginPageState extends State<LoginPage> {
       );
 }
 
+class GlobalChatLauncher extends StatefulWidget {
+  const GlobalChatLauncher({super.key, required this.api});
+
+  final ApiClient api;
+
+  @override
+  State<GlobalChatLauncher> createState() => _GlobalChatLauncherState();
+}
+
+class _GlobalChatLauncherState extends State<GlobalChatLauncher> {
+  bool open = false;
+
+  Future<void> _openChat() async {
+    setState(() => open = true);
+    await showGeneralDialog<void>(
+      context: context,
+      barrierDismissible: true,
+      barrierLabel: 'Close team chat',
+      barrierColor: Colors.black.withOpacity(.35),
+      transitionDuration: const Duration(milliseconds: 220),
+      pageBuilder: (context, animation, secondaryAnimation) {
+        return SafeArea(
+          child: Align(
+            alignment: Alignment.bottomRight,
+            child: Padding(
+              padding: const EdgeInsets.all(14),
+              child: Material(
+                color: Colors.transparent,
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(
+                    maxWidth: 560,
+                    maxHeight: MediaQuery.sizeOf(context).height * .88,
+                  ),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(22),
+                    child: ChatPage(api: widget.api),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+      transitionBuilder: (context, animation, secondaryAnimation, child) {
+        final curved = CurvedAnimation(
+          parent: animation,
+          curve: Curves.easeOutCubic,
+        );
+        return FadeTransition(
+          opacity: curved,
+          child: ScaleTransition(
+            scale: Tween<double>(begin: .94, end: 1).animate(curved),
+            alignment: Alignment.bottomRight,
+            child: child,
+          ),
+        );
+      },
+    );
+    if (mounted) setState(() => open = false);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Positioned(
+      right: 18,
+      bottom: 18,
+      child: FloatingActionButton.extended(
+        heroTag: 'global-team-chat',
+        onPressed: open ? null : _openChat,
+        icon: const Icon(Icons.forum_rounded),
+        label: const Text('Team chat'),
+      ),
+    );
+  }
+}
+
 class AppShell extends StatefulWidget {
   const AppShell({super.key, required this.api});
 
@@ -875,14 +952,26 @@ class _AppShellState extends State<AppShell> {
               ],
             ),
             const VerticalDivider(width: 1),
-            Expanded(child: content),
+            Expanded(
+              child: Stack(
+                children: [
+                  Positioned.fill(child: content),
+                  GlobalChatLauncher(api: widget.api),
+                ],
+              ),
+            ),
           ],
         ),
       );
     }
 
     return Scaffold(
-      body: content,
+      body: Stack(
+        children: [
+          Positioned.fill(child: content),
+          GlobalChatLauncher(api: widget.api),
+        ],
+      ),
       bottomNavigationBar: NavigationBar(
         selectedIndex: tab,
         onDestinationSelected: (i) => setState(() => tab = i),
