@@ -10,6 +10,7 @@ The older /api/products and /api/sales endpoints are kept for compatibility.
 New mobile development should use /api/v1/*.
 """
 import json
+import re
 import secrets
 from datetime import date, datetime, timedelta
 from decimal import Decimal, InvalidOperation
@@ -30,7 +31,12 @@ from app.services.sales import create_sale, SaleValidationError, shipping_cost_f
 from app.services.rates import get_rate_for_month, get_volume_rate, get_rate_per_kg, RateMissingError
 from app.services.delivery import check_consolidation, find_consolidation_groups
 from app.services.audit import record_audit
-from app.services.push_notifications import queue_batch_arrival, queue_user_notification, flush_outbox
+from app.services.push_notifications import (
+    queue_batch_arrival,
+    queue_user_notification,
+    queue_chat_message_notifications,
+    flush_outbox,
+)
 from app.services.dashboard import get_kpis, get_sales_last_30_days
 from app.services.shipment_batches import (
     mark_unarrived,
@@ -1650,6 +1656,119 @@ def mobile_delete_user(user_id):
     db.session.delete(u)
     db.session.commit()
     return jsonify({'ok':True,'id':user_id})
+
+
+# ---------------------------------------------------------------------------
+# TEAM CHAT
+# ---------------------------------------------------------------------------
+@api_bp.route("/v1/chat/messages", methods=("GET",))
+@require_api_token
+def mobile_chat_messages():
+    limit = min(max(request.args.get("limit", 100, type=int), 1), 200)
+    before_id = request.args.get("before_id", type=int)
+
+    query = ChatMessage.query
+    if before_id:
+        query = query.filter(ChatMessage.id < before_id)
+
+    rows = (
+        query
+        .order_by(ChatMessage.id.desc())
+        .limit(limit)
+        .all()
+    )
+    rows.reverse()
+    return jsonify([_chat_message_json(message) for message in rows])
+
+
+@api_bp.route("/v1/chat/messages", methods=("POST",))
+@require_api_token
+def mobile_create_chat_message():
+    data = request.get_json(silent=True) or {}
+    content = str(data.get("content") or "").strip()
+    if not content:
+        return jsonify({"error": "Message cannot be empty."}), 400
+    if len(content) > 4000:
+        return jsonify({"error": "Message is too long. Maximum is 4000 characters."}), 400
+
+    reply_to_id = data.get("reply_to_id")
+    try:
+        reply_to_id = int(reply_to_id) if reply_to_id not in (None, "", 0, "0") else None
+    except (TypeError, ValueError):
+        return jsonify({"error": "Invalid reply message."}), 400
+
+    try:
+        reply_to = None
+        if reply_to_id is not None:
+            reply_to = ChatMessage.query.get(reply_to_id)
+            if reply_to is None:
+                raise ValueError("The message you are replying to no longer exists.")
+
+        message = ChatMessage(
+            sender_user_id=g.api_user.id,
+            content=content,
+            reply_to_id=reply_to_id,
+        )
+        db.session.add(message)
+        db.session.flush()
+
+        active_users = User.query.filter(User.is_active.is_(True)).all()
+        users_by_name = {
+            user.username.casefold(): user
+            for user in active_users
+            if user.username
+        }
+
+        # Mentions use the same visible @username form the user types in chat.
+        mentioned_ids = set()
+        for match in re.finditer(r"(?<![A-Za-z0-9_])@([A-Za-z0-9_.-]{1,50})", content):
+            mentioned = users_by_name.get(match.group(1).casefold())
+            if mentioned is None or mentioned.id == g.api_user.id:
+                continue
+            if mentioned.id in mentioned_ids:
+                continue
+            mentioned_ids.add(mentioned.id)
+            db.session.add(
+                ChatMention(
+                    message_id=message.id,
+                    user_id=mentioned.id,
+                )
+            )
+
+        db.session.flush()
+
+        special_user_ids = set(mentioned_ids)
+        if reply_to is not None and reply_to.sender_user_id != g.api_user.id:
+            special_user_ids.add(reply_to.sender_user_id)
+
+        queue_chat_message_notifications(
+            message,
+            special_user_ids=special_user_ids,
+        )
+        record_audit(
+            "chat.message",
+            target_type="chat_message",
+            target_id=message.id,
+            details={
+                "reply_to_id": reply_to_id,
+                "mention_user_ids": sorted(mentioned_ids),
+            },
+            user=g.api_user,
+        )
+
+        db.session.commit()
+        try:
+            flush_outbox()
+        except Exception:
+            pass
+
+        return jsonify(_chat_message_json(message)), 201
+    except ValueError as exc:
+        db.session.rollback()
+        return jsonify({"error": str(exc)}), 400
+    except Exception:
+        db.session.rollback()
+        raise
 
 
 @api_bp.route("/v1/admin/sales/<int:sale_id>", methods=("DELETE",))
