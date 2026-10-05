@@ -335,15 +335,17 @@ jobs:
             -name 'MainActivity.java' \
             -delete || true
 
-          # Remove old generated Kotlin package.
+          # Remove old generated Kotlin packages (flutter create derives the
+          # package from --org + project name, which is not our final ID).
           rm -rf android/app/src/main/kotlin/io
+          rm -rf android/app/src/main/kotlin/com
 
           # Create our package.
           mkdir -p \
-            android/app/src/main/kotlin/com/example/oma_mobile
+            android/app/src/main/kotlin/com/omagroup/salesapp
 
-          cat > android/app/src/main/kotlin/com/example/oma_mobile/MainActivity.kt <<'EOF'
-          package com.example.oma_mobile
+          cat > android/app/src/main/kotlin/com/omagroup/salesapp/MainActivity.kt <<'EOF'
+          package com.omagroup.salesapp
 
           import android.app.NotificationChannel
           import android.app.NotificationManager
@@ -363,7 +365,7 @@ jobs:
 
                       // Resolve raw sounds by name at runtime instead of via the
                       // generated R class: R lives in the Gradle namespace package,
-                      // which is not guaranteed to match com.example.oma_mobile.
+                      // which is not guaranteed to match com.omagroup.salesapp.
                       val channels = listOf(
                           Triple("oma_scanner_v2", "Oma scanner", "scanner_beep"),
                           Triple("oma_arrival_sea_v2", "Sea shipment arrivals", "ship_horn"),
@@ -391,6 +393,60 @@ jobs:
               }
           }
           EOF
+
+          # --------------------------------------------------------
+          # Force final Android package name (namespace + applicationId)
+          # --------------------------------------------------------
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          NEW_PACKAGE = "com.omagroup.salesapp"
+
+          path = next(
+              (
+                  p for p in (
+                      Path("android/app/build.gradle"),
+                      Path("android/app/build.gradle.kts"),
+                  )
+                  if p.exists()
+              ),
+              None,
+          )
+          if path is None:
+              raise SystemExit("android/app/build.gradle was not generated.")
+
+          kts = path.suffix == ".kts"
+          s = path.read_text(encoding="utf-8")
+
+          for key in ("namespace", "applicationId"):
+              pattern = re.compile(
+                  r'(?m)^([ \t]*)' + key + r'(?:[ \t]*=[ \t]*|[ \t]+)["\'][^"\']*["\']'
+              )
+              replacement = (
+                  (lambda m, k=key: f'{m.group(1)}{k} = "{NEW_PACKAGE}"')
+                  if kts
+                  else (lambda m, k=key: f'{m.group(1)}{k} "{NEW_PACKAGE}"')
+              )
+              s, count = pattern.subn(replacement, s)
+              if count == 0:
+                  raise SystemExit(f"Could not find {key} in {path}.")
+
+          path.write_text(s, encoding="utf-8")
+
+          # Any leftover references in the generated Android project.
+          leftovers = [
+              str(f)
+              for f in Path("android").rglob("*")
+              if f.is_file()
+              and f.suffix in {".gradle", ".kts", ".xml", ".kt", ".java", ".properties"}
+              and "com.example" in f.read_text(encoding="utf-8", errors="ignore")
+          ]
+          if leftovers:
+              raise SystemExit(f"Old com.example package still referenced in: {leftovers}")
+
+          print(f"Android package set to {NEW_PACKAGE}")
+          PY
 
           # --------------------------------------------------------
           # Notification sounds + Android notification channels
@@ -584,7 +640,7 @@ jobs:
                   f"FIREBASE_GOOGLE_SERVICES_JSON is not valid JSON: {exc}"
               )
 
-          expected_package = "com.example.oma_mobile"
+          expected_package = "com.omagroup.salesapp"
           clients = config.get("client") or []
           matching = [
               client for client in clients
