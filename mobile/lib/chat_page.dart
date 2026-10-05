@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -574,7 +573,6 @@ class _ChatPageState extends State<ChatPage> {
                         )
                       : const Icon(Icons.send),
                 ),
-              ),
                 ],
               ),
             ],
