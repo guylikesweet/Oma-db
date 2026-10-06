@@ -4,6 +4,7 @@ import 'package:uuid/uuid.dart';
 
 import 'api_client.dart';
 import 'local_database.dart';
+import 'sync_policy.dart';
 import 'package:sqflite/sqflite.dart';
 
 class SyncRepository {
@@ -748,17 +749,8 @@ class SyncRepository {
 
         final errorText = e.toString();
 
-        final permanent =
-            errorText.startsWith('API 4');
-
-        final delay =
-            attempts <= 1
-                ? 15
-                : attempts <= 3
-                    ? 60
-                    : attempts <= 6
-                        ? 300
-                        : 900;
+        final permanent = SyncPolicy.isPermanentError(e);
+        final delay = SyncPolicy.retryDelay(attempts).inSeconds;
 
         await db.update(
           'sync_queue',
