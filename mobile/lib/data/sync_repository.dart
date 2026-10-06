@@ -4,6 +4,7 @@ import 'package:uuid/uuid.dart';
 
 import 'api_client.dart';
 import 'local_database.dart';
+import 'package:sqflite/sqflite.dart';
 
 class SyncRepository {
   SyncRepository(this.api, this.local);
@@ -540,6 +541,18 @@ class SyncRepository {
   }
 
   Future<SyncResult> syncOnce() async {
+    final lease = await _acquireSyncLease();
+    if (!lease.acquired) {
+      return SyncResult(completed: 0, downloaded: 0, cursor: lease.cursor);
+    }
+    try {
+      return await _syncOnceUnlocked();
+    } finally {
+      await _releaseSyncLease(lease.token);
+    }
+  }
+
+  Future<SyncResult> _syncOnceUnlocked() async {
     await bootstrapIfNeeded();
 
     final db = await local.db;
@@ -838,6 +851,69 @@ class SyncRepository {
     );
   }
 
+  Future<_SyncLease> _acquireSyncLease() async {
+    final db = await local.db;
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final until = now + const Duration(minutes: 10).inMilliseconds;
+    final token = now.toString() + '-' + _uuid.v4();
+
+    await db.transaction((txn) async {
+      await txn.insert(
+        'sync_meta',
+        {'key': 'sync_lease_until', 'value': '0'},
+        conflictAlgorithm: ConflictAlgorithm.ignore,
+      );
+      await txn.insert(
+        'sync_meta',
+        {'key': 'sync_lease_token', 'value': ''},
+        conflictAlgorithm: ConflictAlgorithm.ignore,
+      );
+    });
+
+    final claimed = await db.rawUpdate(
+      'UPDATE sync_meta SET value = ? WHERE key = ? AND CAST(value AS INTEGER) < ?',
+      [until.toString(), 'sync_lease_until', now],
+    );
+    if (claimed == 0) {
+      final cursor = int.tryParse(await local.getMeta('sync_cursor') ?? '') ?? 0;
+      return _SyncLease(acquired: false, token: token, cursor: cursor);
+    }
+
+    await db.update(
+      'sync_meta',
+      {'value': token},
+      where: 'key = ?',
+      whereArgs: ['sync_lease_token'],
+    );
+    return _SyncLease(acquired: true, token: token, cursor: 0);
+  }
+
+  Future<void> _releaseSyncLease(String token) async {
+    final db = await local.db;
+    await db.transaction((txn) async {
+      final rows = await txn.query(
+        'sync_meta',
+        columns: ['value'],
+        where: 'key = ?',
+        whereArgs: ['sync_lease_token'],
+        limit: 1,
+      );
+      if (rows.isEmpty || rows.first['value']?.toString() != token) return;
+      await txn.update(
+        'sync_meta',
+        {'value': '0'},
+        where: 'key = ?',
+        whereArgs: ['sync_lease_until'],
+      );
+      await txn.update(
+        'sync_meta',
+        {'value': ''},
+        where: 'key = ?',
+        whereArgs: ['sync_lease_token'],
+      );
+    });
+  }
+
   Future<int> pendingCount() async {
     return _count(
       "status IN ('pending','retry')",
@@ -905,6 +981,13 @@ class SyncRepository {
       where: "status = 'failed'",
     );
   }
+}
+
+class _SyncLease {
+  const _SyncLease({required this.acquired, required this.token, required this.cursor});
+  final bool acquired;
+  final String token;
+  final int cursor;
 }
 
 class SyncResult {
