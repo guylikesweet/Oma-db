@@ -88,4 +88,4 @@ Firebase Cloud Messaging is used for push delivery. Notification intent is writt
 
 ## Cloud Android build (phone/Chromebook friendly)
 
-The repository includes `.github/workflows/mobile-build.yml`. It builds the Flutter Android APK in GitHub Actions, so Android Studio/Flutter do not need to be installed locally. See `mobile/README_CLOUD_BUILD.md` for the exact phone/Chromebook procedure.
+The repository includes `.github/workflows/build-oma-apk.yml`. It builds the Flutter Android APK/AAB in GitHub Actions, so Android Studio/Flutter do not need to be installed locally. The workflow is manual (`workflow_dispatch`) and performs backend/migration/API compatibility checks before analyzing and building.
