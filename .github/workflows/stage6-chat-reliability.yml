@@ -1,0 +1,48 @@
+name: Stage 6 Chat Reliability Guard
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  chat-reliability:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Install backend dependencies
+        run: |
+          python3 -m pip install --disable-pip-version-check -q -r requirements.txt -r requirements-dev.txt
+
+      - name: Run backend tests
+        run: python3 -m pytest -q
+
+      - name: Install Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: '3.24.5'
+          cache: true
+
+      - name: Get Flutter dependencies
+        working-directory: mobile
+        run: flutter pub get
+
+      - name: Analyze Flutter
+        working-directory: mobile
+        run: flutter analyze
+
+      - name: Run architecture tests
+        working-directory: mobile
+        run: flutter test test/architecture_layers_test.dart
+
+      - name: Build Flutter Web chat client
+        working-directory: mobile
+        run: flutter build web --release --dart-define=API_BASE_URL=https://oma-db.onrender.com/api
