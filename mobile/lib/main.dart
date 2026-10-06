@@ -1826,9 +1826,29 @@ class _ProductDialogState extends State<ProductDialog> {
     text: widget.product?['sku']?.toString() ?? '',
   );
 
-  late final cost = TextEditingController(
+  late final supplierCost = TextEditingController(
+    text: widget.product?['supplier_cost']?.toString() ??
+            widget.product?['cost']?.toString() ?? '',
+  );
+
+  late final landedCost = TextEditingController(
     text: widget.product?['cost']?.toString() ?? '',
   );
+
+  late final markup = TextEditingController(
+    text: widget.product?['markup_percent']?.toString() ?? '0',
+  );
+
+  late final sellingPrice = TextEditingController(
+    text: widget.product?['selling_price']?.toString() ?? '',
+  );
+
+  late final shippingCost = TextEditingController(
+    text: widget.product?['inbound_shipping_cost']?.toString() ?? '0',
+  );
+
+  String shippingMode = 'sea';
+  bool calculating = false;
 
   late final l = TextEditingController(
     text: widget.product?['length_cm']?.toString() ?? '',
@@ -1858,7 +1878,11 @@ class _ProductDialogState extends State<ProductDialog> {
     for (final c in [
       name,
       sku,
-      cost,
+      supplierCost,
+      landedCost,
+      markup,
+      sellingPrice,
+      shippingCost,
       l,
       w,
       h,
@@ -1877,6 +1901,11 @@ class _ProductDialogState extends State<ProductDialog> {
       return;
     }
 
+    if (landedCost.text.trim().isEmpty) {
+      setState(() => error = 'Calculate the true landed cost before saving.');
+      return;
+    }
+
     setState(() => busy = true);
 
     try {
@@ -1884,7 +1913,11 @@ class _ProductDialogState extends State<ProductDialog> {
         await widget.repo.createProductOnline(
           name: name.text,
           sku: sku.text,
-          cost: cost.text,
+          cost: landedCost.text,
+          supplierCost: supplierCost.text,
+          inboundShippingCost: shippingCost.text,
+          markupPercent: markup.text,
+          sellingPrice: sellingPrice.text,
           lengthCm: l.text,
           widthCm: w.text,
           heightCm: h.text,
@@ -1897,7 +1930,11 @@ class _ProductDialogState extends State<ProductDialog> {
           {
             'name': name.text,
             'sku': sku.text,
-            'cost': cost.text,
+            'cost': landedCost.text,
+            'supplier_cost': supplierCost.text,
+            'inbound_shipping_cost': shippingCost.text,
+            'markup_percent': markup.text,
+            'selling_price': sellingPrice.text,
             'length_cm': l.text,
             'width_cm': w.text,
             'height_cm': h.text,
@@ -1917,6 +1954,32 @@ class _ProductDialogState extends State<ProductDialog> {
       if (mounted) {
         setState(() => busy = false);
       }
+    }
+  }
+
+  Future<void> calculateTrueCost() async {
+    setState(() {
+      calculating = true;
+      error = null;
+    });
+    try {
+      final result = await widget.api.calculateProductCost(
+        cost: supplierCost.text,
+        lengthCm: l.text,
+        widthCm: w.text,
+        heightCm: h.text,
+        actualWeightKg: weight.text,
+        markupPercent: markup.text,
+        mode: shippingMode,
+      );
+      landedCost.text = (result['landed_cost'] ?? 0).toString();
+      shippingCost.text = (result['shipping_cost'] ?? 0).toString();
+      sellingPrice.text = (result['selling_price'] ?? 0).toString();
+      if (mounted) setState(() {});
+    } catch (e) {
+      if (mounted) setState(() => error = 'Could not calculate cost: $e');
+    } finally {
+      if (mounted) setState(() => calculating = false);
     }
   }
 
@@ -1946,13 +2009,66 @@ class _ProductDialogState extends State<ProductDialog> {
                 ),
                 const SizedBox(height: 14),
                 TextField(
-                  controller: cost,
+                  controller: supplierCost,
                   keyboardType:
                       const TextInputType.numberWithOptions(
                     decimal: true,
                   ),
                   decoration: const InputDecoration(
-                    labelText: 'Cost',
+                    labelText: 'Supplier cost',
+                  ),
+                ),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: markup,
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  decoration: const InputDecoration(
+                    labelText: 'Markup %',
+                    helperText: 'Example: 30 means 30% above true cost',
+                  ),
+                ),
+                const SizedBox(height: 10),
+                DropdownButtonFormField<String>(
+                  value: shippingMode,
+                  decoration: const InputDecoration(labelText: 'Inbound shipping mode'),
+                  items: const [
+                    DropdownMenuItem(value: 'sea', child: Text('Sea')),
+                    DropdownMenuItem(value: 'air', child: Text('Air')),
+                  ],
+                  onChanged: calculating ? null : (v) {
+                    if (v != null) setState(() => shippingMode = v);
+                  },
+                ),
+                const SizedBox(height: 10),
+                FilledButton.icon(
+                  onPressed: calculating ? null : calculateTrueCost,
+                  icon: calculating
+                      ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                      : const Icon(Icons.calculate_rounded),
+                  label: Text(calculating ? 'Calculating…' : 'Calculate true cost'),
+                ),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: landedCost,
+                  readOnly: true,
+                  decoration: const InputDecoration(
+                    labelText: 'True landed cost / unit',
+                  ),
+                ),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: shippingCost,
+                  readOnly: true,
+                  decoration: const InputDecoration(
+                    labelText: 'Inbound shipping / unit',
+                  ),
+                ),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: sellingPrice,
+                  readOnly: true,
+                  decoration: const InputDecoration(
+                    labelText: 'Suggested selling price / unit',
                   ),
                 ),
                 const SizedBox(height: 14),
