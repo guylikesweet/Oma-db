@@ -17,7 +17,7 @@ class LocalDatabase {
     final path = kIsWeb ? 'oma_mobile.db' : p.join(await getDatabasesPath(), 'oma_mobile.db');
     _db = await openDatabase(
       path,
-      version: 7,
+      version: 8,
       onCreate: (database, version) => _create(database),
       onUpgrade: (database, oldVersion, newVersion) async {
         if (oldVersion < 2) {
@@ -47,6 +47,9 @@ class LocalDatabase {
         }
         if (oldVersion < 6) {
           await database.execute("ALTER TABLE sales ADD COLUMN sale_type TEXT NOT NULL DEFAULT 'preorder'");
+        }
+        if (oldVersion < 8) {
+          await _createPerformanceIndexes(database);
         }
       },
     );
@@ -83,6 +86,16 @@ class LocalDatabase {
     await database.execute('''CREATE TABLE batches (id INTEGER PRIMARY KEY, name TEXT, status TEXT, departed_at TEXT, arrived_at TEXT, notes TEXT, created_at TEXT)''');
     await database.execute('''CREATE TABLE deliveries (id INTEGER PRIMARY KEY, method TEXT, status TEXT, is_consolidated INTEGER DEFAULT 0, consolidation_type TEXT, delivery_address TEXT, notes TEXT, created_at TEXT, shipped_at TEXT, delivered_at TEXT, package_weight_kg TEXT, package_dimensions TEXT, remarks TEXT, sale_ids_json TEXT)''');
     await database.execute('''CREATE TABLE shipping (id INTEGER PRIMARY KEY, sale_id INTEGER, courier TEXT, tracking_number TEXT, chargeable_weight_kg TEXT, total_cbm TEXT, shipping_status TEXT, shipped_at TEXT, delivered_at TEXT, notes TEXT)''');
+    await _createPerformanceIndexes(database);
+  }
+
+  Future<void> _createPerformanceIndexes(Database database) async {
+    await database.execute('CREATE INDEX IF NOT EXISTS idx_products_stock ON products(stock)');
+    await database.execute('CREATE INDEX IF NOT EXISTS idx_sales_sale_date ON sales(sale_date)');
+    await database.execute('CREATE INDEX IF NOT EXISTS idx_sales_order_status ON sales(order_status)');
+    await database.execute('CREATE INDEX IF NOT EXISTS idx_sales_batch_id ON sales(batch_id)');
+    await database.execute('CREATE INDEX IF NOT EXISTS idx_sales_delivery_id ON sales(delivery_id)');
+    await database.execute('CREATE INDEX IF NOT EXISTS idx_sync_queue_status_next_attempt ON sync_queue(status, next_attempt_at)');
   }
 
   Future<String?> getMeta(String key) async {
