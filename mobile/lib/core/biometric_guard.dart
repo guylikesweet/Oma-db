@@ -32,7 +32,7 @@ class BiometricGuard {
   static Future<bool> authenticateForLogin({
     required String reason,
   }) async {
-    if (kIsWeb) return false;
+    if (isWebPlatform) return false;
     try {
       return await _auth.authenticate(
         localizedReason: reason,
@@ -106,7 +106,7 @@ class BiometricGuard {
 
     // kIsWeb is a compile-time constant on each Flutter target. This source
     // is shared with the web build, where this branch is required.
-    if (_isWebPlatform) return passwordFallback();
+    if (isWebPlatform) return passwordFallback();
 
     try {
       final supported = await _auth.isDeviceSupported();
