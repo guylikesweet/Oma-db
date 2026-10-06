@@ -473,6 +473,26 @@ class _WebProductsPageState extends State<WebProductsPage> {
 
       if (ok != true) return;
 
+      if (name.text.trim().isEmpty) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Product name is required.')),
+          );
+        }
+        return;
+      }
+
+      if (landedCost.text.trim().isEmpty) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Calculate the true landed cost before saving.'),
+            ),
+          );
+        }
+        return;
+      }
+
       if (!await BiometricGuard.require(
         context,
         reason: old == null
