@@ -4301,7 +4301,9 @@ class _ChangePasswordDialogState
   final confirm = TextEditingController();
 
   bool busy = false;
-  bool obscure = true;
+  bool obscureCurrent = true;
+  bool obscureNext = true;
+  bool obscureConfirm = true;
   String? error;
 
   Future<void> save() async {
@@ -4356,25 +4358,37 @@ class _ChangePasswordDialogState
           children: [
             TextField(
               controller: current,
-              obscureText: obscure,
-              decoration: const InputDecoration(
+              obscureText: obscureCurrent,
+              decoration: InputDecoration(
                 labelText: 'Current password',
+                suffixIcon: IconButton(
+                  onPressed: () => setState(() => obscureCurrent = !obscureCurrent),
+                  icon: Icon(obscureCurrent ? Icons.visibility : Icons.visibility_off),
+                ),
               ),
             ),
             const SizedBox(height: 14),
             TextField(
               controller: next,
-              obscureText: obscure,
-              decoration: const InputDecoration(
+              obscureText: obscureNext,
+              decoration: InputDecoration(
                 labelText: 'New password',
+                suffixIcon: IconButton(
+                  onPressed: () => setState(() => obscureNext = !obscureNext),
+                  icon: Icon(obscureNext ? Icons.visibility : Icons.visibility_off),
+                ),
               ),
             ),
             const SizedBox(height: 14),
             TextField(
               controller: confirm,
-              obscureText: obscure,
-              decoration: const InputDecoration(
+              obscureText: obscureConfirm,
+              decoration: InputDecoration(
                 labelText: 'Confirm new password',
+                suffixIcon: IconButton(
+                  onPressed: () => setState(() => obscureConfirm = !obscureConfirm),
+                  icon: Icon(obscureConfirm ? Icons.visibility : Icons.visibility_off),
+                ),
               ),
             ),
             Align(
