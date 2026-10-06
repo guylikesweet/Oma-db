@@ -654,6 +654,14 @@ class SyncRepository {
           );
         }
 
+        // A queued stock adjustment is applied optimistically to the local
+        // inventory before it reaches the server. If the server permanently
+        // rejects it, undo that optimistic change; otherwise local stock can
+        // remain wrong until a later full bootstrap.
+        if (permanent && type == 'stock_adjust') {
+          await rollbackFailedStockAdjustment(payload);
+        }
+
         if (!permanent) {
           break;
         }
@@ -724,6 +732,18 @@ class SyncRepository {
     );
 
     return (result.first['c'] as int?) ?? 0;
+  }
+
+  Future<void> rollbackFailedStockAdjustment(Map<String, dynamic> payload) async {
+    final productId = int.tryParse('${payload['product_id']}');
+    final changeQty = int.tryParse('${payload['change_qty']}');
+    if (productId == null || changeQty == null || changeQty == 0) return;
+
+    final db = await local.db;
+    await db.rawUpdate(
+      'UPDATE products SET stock = stock - ? WHERE id = ?',
+      [changeQty, productId],
+    );
   }
 
   Future<void> retryFailed() async {
