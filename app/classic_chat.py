@@ -5,7 +5,7 @@ Bearer API tokens. These routes deliberately bridge the classic session to the
 same ChatMessage API view functions so all three clients share the same data,
 permissions, reply/edit/delete/reaction rules and photo storage.
 """
-from flask import Blueprint, g, jsonify, request, session
+from flask import Blueprint, Response, g, jsonify, request, session
 from flask_login import current_user, login_required
 import secrets
 
@@ -102,3 +102,17 @@ def users():
         }
         for user in rows
     ])
+
+
+@classic_chat_bp.route("/users/<int:user_id>/avatar", methods=("GET",))
+@login_required
+def user_avatar(user_id):
+    user = User.query.get_or_404(user_id)
+    if not user.profile_photo_data:
+        return jsonify({"error": "This user has no profile photo."}), 404
+    response = Response(
+        user.profile_photo_data,
+        mimetype=user.profile_photo_mimetype or "image/jpeg",
+    )
+    response.headers["Cache-Control"] = "private, max-age=86400"
+    return response
