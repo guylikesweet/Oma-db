@@ -4,7 +4,7 @@ from werkzeug.security import generate_password_hash, check_password_hash
 import time
 import secrets
 
-from app import login_manager
+from app import login_manager, limiter
 from app.models import User
 from app import db
 from app.services.audit import record_audit
@@ -47,6 +47,7 @@ def load_user(user_id):
 
 
 @auth_bp.route("/login", methods=("GET", "POST"))
+@limiter.limit("10 per minute", methods=["POST"])
 def login():
     if current_user.is_authenticated:
         return redirect(url_for("classic_home"))
