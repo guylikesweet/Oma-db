@@ -2131,7 +2131,9 @@ def mobile_chat_messages():
             query
             .options(
                 joinedload(ChatMessage.sender),
+                joinedload(ChatMessage.edited_by),
                 joinedload(ChatMessage.reply_to).joinedload(ChatMessage.sender),
+                joinedload(ChatMessage.reply_to).joinedload(ChatMessage.edited_by),
                 selectinload(ChatMessage.reactions),
                 selectinload(ChatMessage.mentions),
             )
