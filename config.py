@@ -22,6 +22,10 @@ class Config:
 
     _admin_username = os.environ.get("ADMIN_USERNAME")
     _admin_password = os.environ.get("ADMIN_PASSWORD")
+    if _production_database and not _admin_username:
+        raise RuntimeError(
+            "ADMIN_USERNAME must be configured when DATABASE_URL is set."
+        )
     if _production_database and not _admin_password:
         raise RuntimeError(
             "ADMIN_PASSWORD must be configured when DATABASE_URL is set."
