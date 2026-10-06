@@ -83,7 +83,6 @@ class _OmaMobileAppState extends State<OmaMobileApp> with WidgetsBindingObserver
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    WidgetsBinding.instance.addObserver(this);
     _timer = Timer.periodic(
       const Duration(minutes: 1),
       (_) => OmaThemeController.refresh(
@@ -114,7 +113,6 @@ class _OmaMobileAppState extends State<OmaMobileApp> with WidgetsBindingObserver
 
   @override
   void dispose() {
-    WidgetsBinding.instance.removeObserver(this);
     WidgetsBinding.instance.removeObserver(this);
     _timer?.cancel();
     super.dispose();
