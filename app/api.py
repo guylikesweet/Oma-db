@@ -971,6 +971,7 @@ def mobile_product_cost_calculator():
             "selling_price": float(selling),
             "gross_profit": float(gross_profit),
             "gross_margin_percent": float(gross_margin),
+            "break_even_price": float(landed),
         })
     except (ValueError, TypeError, InvalidOperation, RateMissingError) as e:
         return jsonify({"error": str(e)}), 400
