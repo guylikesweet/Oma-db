@@ -797,8 +797,9 @@ class _ChatPageState extends State<ChatPage> {
       );
       attachmentBytes = localAttachment is Uint8List ? localAttachment : null;
       attachmentName = filename;
-      replyTo = message['reply_to'] is Map
-          ? Map<String, dynamic>.from(message['reply_to'] as Map)
+      final reply = message['reply_to'];
+      replyTo = reply is Map
+          ? Map<String, dynamic>.from(reply)
           : null;
     });
 
