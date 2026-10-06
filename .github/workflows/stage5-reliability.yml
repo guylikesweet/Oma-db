@@ -1,0 +1,51 @@
+name: Stage 5 Synchronization Reliability Guard
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  sync-reliability:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Install backend dependencies
+        run: |
+          python3 -m pip install --disable-pip-version-check -q -r requirements.txt -r requirements-dev.txt
+
+      - name: Compile backend
+        run: python3 -m compileall -q app migrations run.py
+
+      - name: Run backend tests
+        run: python3 -m pytest -q
+
+      - name: Install Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: '3.24.5'
+          cache: true
+
+      - name: Get Flutter dependencies
+        working-directory: mobile
+        run: flutter pub get
+
+      - name: Analyze Flutter
+        working-directory: mobile
+        run: flutter analyze
+
+      - name: Run Stage 3 architecture tests
+        working-directory: mobile
+        run: flutter test test/architecture_layers_test.dart
+
+      - name: Run Stage 5 synchronization tests
+        working-directory: mobile
+        run: flutter test test/sync_reliability_test.dart
