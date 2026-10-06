@@ -304,6 +304,15 @@ def flush_outbox(limit=100):
                     android=messaging.AndroidConfig(
                         priority="high",
                     ),
+                    apns=messaging.APNSConfig(
+                        headers={
+                            "apns-push-type": "background",
+                            "apns-priority": "5",
+                        },
+                        payload=messaging.APNSPayload(
+                            aps=messaging.Aps(content_available=True),
+                        ),
+                    ),
                 )
                 messaging.send(message, app=app)
                 device.last_seen_at = datetime.utcnow()
