@@ -20,7 +20,8 @@ from decimal import Decimal, InvalidOperation
 from functools import wraps
 
 from flask import Blueprint, request, jsonify, g, current_app
-from werkzeug.security import check_password_hash, generate_password_hash, secure_filename
+from werkzeug.security import check_password_hash, generate_password_hash
+from werkzeug.utils import secure_filename
 from werkzeug.exceptions import RequestEntityTooLarge
 from sqlalchemy import inspect as sa_inspect, text as sa_text
 
