@@ -259,6 +259,13 @@ def _product_json(p):
         "name": p.name,
         "sku": p.sku,
         "cost": float(p.cost) if p.cost is not None else None,
+        "supplier_cost": float(p.supplier_cost) if p.supplier_cost is not None else None,
+        "inbound_shipping_cost": float(p.inbound_shipping_cost) if p.inbound_shipping_cost is not None else None,
+        "landed_cost": float(p.cost) if p.cost is not None else None,
+        "markup_percent": float(p.markup_percent) if p.markup_percent is not None else None,
+        "selling_price": float(p.selling_price) if p.selling_price is not None else None,
+        "gross_profit": float((p.selling_price or Decimal('0')) - (p.cost or Decimal('0'))),
+        "gross_margin_percent": float((((p.selling_price or Decimal('0')) - (p.cost or Decimal('0'))) / p.selling_price * Decimal('100')) if p.selling_price else Decimal('0')),
         "length_cm": float(p.length_cm) if p.length_cm is not None else None,
         "width_cm": float(p.width_cm) if p.width_cm is not None else None,
         "height_cm": float(p.height_cm) if p.height_cm is not None else None,
@@ -910,6 +917,65 @@ def mobile_stock_log():
     return jsonify([_stock_log_json(x) for x in rows])
 
 
+@api_bp.route("/v1/products/cost-calculator", methods=("POST",))
+@require_api_token
+def mobile_product_cost_calculator():
+    """Calculate true unit landed cost and suggested selling price using Oma's
+    existing inbound shipping formulas. This endpoint never changes inventory."""
+    data = request.get_json(silent=True) or {}
+    try:
+        supplier_cost = Decimal(str(data.get("cost") or data.get("supplier_cost") or "0"))
+        length = Decimal(str(data.get("length_cm") or "0"))
+        width = Decimal(str(data.get("width_cm") or "0"))
+        height = Decimal(str(data.get("height_cm") or "0"))
+        actual_weight = Decimal(str(data.get("actual_weight_kg") or "0"))
+        markup = Decimal(str(data.get("markup_percent") or "0"))
+        mode = str(data.get("mode") or "sea").lower()
+
+        if supplier_cost < 0 or length < 0 or width < 0 or height < 0 or actual_weight < 0 or markup < 0:
+            raise ValueError("Costs, dimensions, weight and markup cannot be negative.")
+        if mode not in {"sea", "air"}:
+            raise ValueError("Shipping mode must be sea or air.")
+
+        cbm = (length * width * height) / Decimal("1000000")
+        volumetric_kg = (length * width * height) / Decimal("5000")
+        volume_rate = (
+            get_rate_for_month(date.today())
+            if mode == "sea"
+            else __import__("app.services.rates", fromlist=["get_air_rate_for_month"]).get_air_rate_for_month(date.today())
+        )
+        if volume_rate is None:
+            raise RateMissingError("No shipping rate is configured for this month.")
+        packing_rate = get_rate_per_kg()
+        volume_charge = (cbm if mode == "sea" else volumetric_kg) * volume_rate
+        weight_charge = actual_weight * packing_rate
+        shipping = volume_charge + weight_charge
+        landed = supplier_cost + shipping
+        selling = landed * (Decimal("1") + markup / Decimal("100"))
+        gross_profit = selling - landed
+        gross_margin = (gross_profit / selling * Decimal("100")) if selling else Decimal("0")
+
+        return jsonify({
+            "mode": mode,
+            "supplier_cost": float(supplier_cost),
+            "cbm": float(cbm),
+            "volumetric_kg": float(volumetric_kg),
+            "actual_weight_kg": float(actual_weight),
+            "volume_rate": float(volume_rate),
+            "packing_rate_per_kg": float(packing_rate),
+            "volume_shipping_cost": float(volume_charge),
+            "weight_shipping_cost": float(weight_charge),
+            "shipping_cost": float(shipping),
+            "landed_cost": float(landed),
+            "markup_percent": float(markup),
+            "selling_price": float(selling),
+            "gross_profit": float(gross_profit),
+            "gross_margin_percent": float(gross_margin),
+        })
+    except (ValueError, TypeError, InvalidOperation, RateMissingError) as e:
+        return jsonify({"error": str(e)}), 400
+
+
 @api_bp.route("/v1/products", methods=("POST",))
 @require_api_token
 def mobile_create_product():
@@ -920,7 +986,11 @@ def mobile_create_product():
         name = str(data.get("name") or "").strip()
         if not name: raise ValueError("Product name is required.")
         p = Product(name=name, sku=(str(data.get("sku") or "").strip() or None),
-                    cost=Decimal(str(data.get("cost") or "0")),
+                    cost=Decimal(str(data.get("cost") or data.get("landed_cost") or "0")),
+                    supplier_cost=Decimal(str(data.get("supplier_cost") or data.get("cost") or "0")),
+                    inbound_shipping_cost=Decimal(str(data.get("inbound_shipping_cost") or "0")),
+                    markup_percent=Decimal(str(data.get("markup_percent") or "0")),
+                    selling_price=Decimal(str(data.get("selling_price") or "0")),
                     length_cm=data.get("length_cm"), width_cm=data.get("width_cm"),
                     height_cm=data.get("height_cm"), actual_weight_kg=data.get("actual_weight_kg"),
                     stock=int(data.get("stock") or 0))
@@ -941,7 +1011,7 @@ def mobile_update_product(product_id):
         op, existing = _mobile_operation(data)
         if existing: return _mobile_replay(existing)
         p = Product.query.get_or_404(product_id)
-        for f in ("name", "sku", "cost", "length_cm", "width_cm", "height_cm", "actual_weight_kg"):
+        for f in ("name", "sku", "cost", "supplier_cost", "inbound_shipping_cost", "markup_percent", "selling_price", "length_cm", "width_cm", "height_cm", "actual_weight_kg"):
             if f in data:
                 value = data[f]
                 if f == "sku": value = str(value or "").strip() or None
