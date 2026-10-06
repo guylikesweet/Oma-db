@@ -774,6 +774,9 @@ class _GlobalChatLauncherState extends State<GlobalChatLauncher>
     setState(() => open = true);
     await _markChatRead();
 
+    final targetMessageId = _pendingChatMessageId;
+    _pendingChatMessageId = null;
+
     await showGeneralDialog<void>(
       context: context,
       barrierDismissible: true,
@@ -782,7 +785,7 @@ class _GlobalChatLauncherState extends State<GlobalChatLauncher>
       transitionDuration: const Duration(milliseconds: 220),
       pageBuilder: (context, animation, secondaryAnimation) {
         final mobile = MediaQuery.sizeOf(context).width < 700;
-        final chat = ChatPage(api: widget.api, initialMessageId: _pendingChatMessageId);
+        final chat = ChatPage(api: widget.api, initialMessageId: targetMessageId);
         if (mobile) {
           return Material(
             color: Theme.of(context).scaffoldBackgroundColor,
