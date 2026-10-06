@@ -21,6 +21,7 @@ from functools import wraps
 
 from flask import Blueprint, request, jsonify, g, current_app
 from werkzeug.security import check_password_hash, generate_password_hash, secure_filename
+from werkzeug.exceptions import RequestEntityTooLarge
 from sqlalchemy import inspect as sa_inspect, text as sa_text
 
 from app import db, limiter
@@ -49,6 +50,20 @@ from app.services.shipment_batches import (
 )
 
 api_bp = Blueprint("api", __name__, url_prefix="/api")
+
+@api_bp.errorhandler(RequestEntityTooLarge)
+def api_request_too_large(error):
+    return jsonify({"error": "Request is too large.", "message": "Reduce the upload size and try again."}), 413
+
+
+@api_bp.errorhandler(429)
+def api_rate_limited(error):
+    retry_after = getattr(error, "retry_after", None)
+    response = {"error": "Too many requests.", "message": "Please wait and try again."}
+    if retry_after is not None:
+        response["retry_after"] = retry_after
+    return jsonify(response), 429
+
 
 
 # ---------------------------------------------------------------------------
