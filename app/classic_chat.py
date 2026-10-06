@@ -53,6 +53,14 @@ def messages():
     return view()
 
 
+@classic_chat_bp.route("/messages/<int:message_id>", methods=("GET",))
+@login_required
+def get_message(message_id):
+    _as_api_user()
+    from app.api import mobile_chat_message
+    return mobile_chat_message.__wrapped__(message_id)
+
+
 @classic_chat_bp.route("/messages/<int:message_id>", methods=("PUT", "PATCH", "DELETE"))
 @login_required
 def modify_message(message_id):
