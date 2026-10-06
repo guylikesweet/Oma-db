@@ -53,17 +53,38 @@ api_bp = Blueprint("api", __name__, url_prefix="/api")
 
 @api_bp.errorhandler(RequestEntityTooLarge)
 def api_request_too_large(error):
-    return jsonify({"error": "Request is too large.", "message": "Reduce the upload size and try again."}), 413
+    request_id = getattr(g, "request_id", "unknown")
+    current_app.logger.warning("API request rejected as too large request_id=%s", request_id)
+    return jsonify({
+        "error": "Request is too large.",
+        "message": "Reduce the upload size and try again.",
+        "request_id": request_id,
+    }), 413
 
 
 @api_bp.errorhandler(429)
 def api_rate_limited(error):
+    request_id = getattr(g, "request_id", "unknown")
     retry_after = getattr(error, "retry_after", None)
-    response = {"error": "Too many requests.", "message": "Please wait and try again."}
+    response = {
+        "error": "Too many requests.",
+        "message": "Please wait and try again.",
+        "request_id": request_id,
+    }
     if retry_after is not None:
         response["retry_after"] = retry_after
     return jsonify(response), 429
 
+
+@api_bp.errorhandler(500)
+def api_internal_server_error(error):
+    request_id = getattr(g, "request_id", "unknown")
+    current_app.logger.exception("Unhandled API exception request_id=%s", request_id)
+    return jsonify({
+        "error": "Internal server error.",
+        "message": "The server could not complete this request.",
+        "request_id": request_id,
+    }), 500
 
 
 # ---------------------------------------------------------------------------
