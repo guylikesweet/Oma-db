@@ -686,6 +686,9 @@ def _create_sale_api(require_operation_id):
     if operation_id and (len(operation_id) < 8 or len(operation_id) > 64):
         return jsonify({"error": "operation_id must be between 8 and 64 characters."}), 400
 
+    # Serialize concurrent retries before checking/creating the idempotency record.
+    if operation_id:
+        _lock_mobile_operation(operation_id)
     # If the phone is retrying an operation whose response was lost, return the
     # original response instead of creating a second sale.
     if operation_id:
@@ -750,12 +753,24 @@ def _create_sale_api(require_operation_id):
 # ---------------------------------------------------------------------------
 # Complete website-parity mobile endpoints
 # ---------------------------------------------------------------------------
+def _lock_mobile_operation(operation_id):
+    """Serialize concurrent retries of the same mobile operation on PostgreSQL."""
+    if not operation_id:
+        return
+    if db.engine.dialect.name == "postgresql":
+        db.session.execute(
+            sa_text("SELECT pg_advisory_xact_lock(hashtextextended(:operation_key, 0))"),
+            {"operation_key": f"{g.api_user.id}:{operation_id}"},
+        )
+
+
 def _mobile_operation(data):
     op = str((data or {}).get("operation_id") or "").strip()
     if op and not 8 <= len(op) <= 64:
         raise ValueError("operation_id must be between 8 and 64 characters.")
     if not op:
         op = secrets.token_hex(16)
+    _lock_mobile_operation(op)
     existing = MobileOperation.query.filter_by(user_id=g.api_user.id, operation_id=op).first()
     return op, existing
 
