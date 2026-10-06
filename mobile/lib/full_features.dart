@@ -105,7 +105,7 @@ class _WebsiteFeaturesPageState extends State<WebsiteFeaturesPage> {
             Icons.receipt_long,
             'Manage sales',
             'Shipping settlement requires biometric verification.',
-            () => open(WebSalesPage(api: widget.api)),
+            () => open(WebSalesPage(api: widget.api, repo: widget.repo)),
           ),
 
           _tile(
@@ -780,9 +780,10 @@ Future<void> openArrivalNotice(
 }
 
 class WebSalesPage extends StatefulWidget {
-  const WebSalesPage({super.key, required this.api});
+  const WebSalesPage({super.key, required this.api, required this.repo});
 
   final ApiClient api;
+  final SyncRepository repo;
 
   @override
   State<WebSalesPage> createState() => _WebSalesPageState();
@@ -980,6 +981,31 @@ class _WebSalesPageState extends State<WebSalesPage> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Sales'),
+        actions: [
+          IconButton(
+            tooltip: 'New stock sale',
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => NewSalePage(
+                  repo: widget.repo,
+                  stocked: true,
+                ),
+              ),
+            ).then((_) => load()),
+            icon: const Icon(Icons.inventory_2_outlined),
+          ),
+          IconButton(
+            tooltip: 'New preorder sale',
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => NewSalePage(repo: widget.repo),
+              ),
+            ).then((_) => load()),
+            icon: const Icon(Icons.add_shopping_cart),
+          ),
+        ],
       ),
       body: RefreshIndicator(
         onRefresh: load,
