@@ -12,9 +12,10 @@ import 'data/api_client.dart';
 import 'data/app_session.dart';
 
 class ChatPage extends StatefulWidget {
-  const ChatPage({super.key, required this.api});
+  const ChatPage({super.key, required this.api, this.initialMessageId});
 
   final ApiClient api;
+  final int? initialMessageId;
 
   @override
   State<ChatPage> createState() => _ChatPageState();
@@ -47,6 +48,7 @@ class _ChatPageState extends State<ChatPage> {
   Timer? poller;
   List<Map<String, dynamic>> mentionOptions = [];
   bool mentionOpen = false;
+  bool _initialMessageHandled = false;
 
   @override
   void initState() {
@@ -121,7 +123,18 @@ class _ChatPageState extends State<ChatPage> {
       final nextLastId =
           nextMessages.isEmpty ? null : nextMessages.last['id'];
 
-      if (previousLastId == null) {
+      if (widget.initialMessageId != null && !_initialMessageHandled) {
+        final target = widget.initialMessageId!;
+        final exists = nextMessages.any((message) => _asInt(message['id']) == target);
+        if (exists) {
+          _initialMessageHandled = true;
+          WidgetsBinding.instance.addPostFrameCallback((_) async {
+            if (mounted) await _jumpToMessage(target);
+          });
+        } else if (previousLastId == null) {
+          _scrollToBottom(animated: false);
+        }
+      } else if (previousLastId == null) {
         _scrollToBottom(animated: false);
       } else if (nextLastId != previousLastId && wasNearBottom) {
         _scrollToBottom();
