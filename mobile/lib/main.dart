@@ -650,6 +650,14 @@ class _GlobalChatLauncherState extends State<GlobalChatLauncher>
     OmaPushNotifications.chatOpenRequest.addListener(_pushListener!);
     _checkForUnreadMessages();
     _handlePushRequest(OmaPushNotifications.chatOpenRequest.value);
+    if (kIsWeb) {
+      final messageId = Uri.base.queryParameters['chat_message_id'];
+      if (messageId != null && messageId.isNotEmpty) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted && !open) _openChat();
+        });
+      }
+    }
   }
 
   void _handlePushRequest(Map<String, dynamic>? data) {
