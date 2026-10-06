@@ -358,9 +358,59 @@ class LocalDatabase {
     // A successful sync replaces the matching negative local sale by operation id.
     final opId = s['client_operation_id']?.toString();
     if (opId != null && opId.isNotEmpty) {
-      final locals = await txn.query('sales', columns: ['id'], where: 'client_operation_id = ? AND id < 0', whereArgs: [opId]);
+      final locals = await txn.query(
+        'sales',
+        columns: ['id'],
+        where: 'client_operation_id = ? AND id < 0',
+        whereArgs: [opId],
+      );
       for (final row in locals) {
-        final localId = row['id'];
+        final localId = row['id'] as int;
+
+        // Rebind every queued child operation before removing the temporary
+        // sale row. This is what makes "create sale offline -> change status
+        // offline -> reconnect" safe: the child must use the real server ID.
+        final queued = await txn.query(
+          'sync_queue',
+          columns: ['operation_id', 'payload_json'],
+          where: 'local_sale_id = ?',
+          whereArgs: [localId],
+        );
+        for (final queueRow in queued) {
+          Map<String, dynamic> payload = {};
+          try {
+            payload = Map<String, dynamic>.from(
+              jsonDecode(queueRow['payload_json'] as String) as Map,
+            );
+          } catch (_) {
+            // A malformed queue entry must remain visible for the normal
+            // retry/error path rather than being silently discarded.
+            continue;
+          }
+
+          if (payload['sale_id'] == localId) {
+            payload['sale_id'] = serverId;
+          }
+
+          final saleIds = payload['sale_ids'];
+          if (saleIds is List) {
+            payload['sale_ids'] = saleIds
+                .map((value) => value is int && value == localId ? serverId : value)
+                .toList();
+          }
+
+          await txn.update(
+            'sync_queue',
+            {
+              'payload_json': jsonEncode(payload),
+              'local_sale_id': null,
+              'updated_at': DateTime.now().toUtc().toIso8601String(),
+            },
+            where: 'operation_id = ?',
+            whereArgs: [queueRow['operation_id']],
+          );
+        }
+
         await txn.delete('sale_items', where: 'sale_id = ?', whereArgs: [localId]);
         await txn.delete('sales', where: 'id = ?', whereArgs: [localId]);
       }
