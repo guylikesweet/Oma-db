@@ -1,0 +1,59 @@
+name: Stage 2 Regression Guard
+
+on:
+  push:
+    branches:
+      - stage2-protection
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  regression:
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Install Python dependencies
+        run: |
+          python3 -m pip install --disable-pip-version-check -q -r requirements.txt -r requirements-dev.txt
+
+      - name: Compile backend and migrations
+        run: |
+          python3 -m compileall -q app migrations run.py
+
+      - name: Run backend regression tests
+        run: |
+          python3 -m pytest -q
+
+      - name: Install Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: '3.24.5'
+          cache: true
+
+      - name: Get Flutter dependencies
+        working-directory: mobile
+        run: flutter pub get
+
+      - name: Analyze Flutter code
+        working-directory: mobile
+        run: flutter analyze
+
+      - name: Run Flutter tests when present
+        working-directory: mobile
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -d test ] && find test -type f -name '*_test.dart' -print -quit | grep -q .; then
+            flutter test
+          else
+            echo "No Dart tests found; skipping flutter test."
+          fi

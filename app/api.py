@@ -990,7 +990,12 @@ def mobile_stock_adjust():
     try:
         op, existing = _mobile_operation(data)
         if existing: return _mobile_replay(existing)
-        product = Product.query.get(int(data["product_id"]))
+        product = (
+            Product.query
+            .filter_by(id=int(data["product_id"]))
+            .with_for_update()
+            .first()
+        )
         if not product: raise ValueError("Product not found.")
         change = int(data["change_qty"])
         if change == 0 or product.stock + change < 0: raise ValueError("Invalid stock adjustment.")

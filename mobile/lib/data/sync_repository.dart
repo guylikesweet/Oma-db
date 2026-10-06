@@ -62,7 +62,7 @@ class SyncRepository {
     final pending = await db.query(
       'sync_queue',
       columns: ['local_id'],
-      where: "status IN ('pending', 'retry')",
+      where: "status IN ('pending', 'retry', 'failed')",
       limit: 1,
     );
     if (pending.isNotEmpty) {
@@ -112,15 +112,14 @@ class SyncRepository {
       'items': items,
     };
 
+    // Persist the optimistic sale and its durable sync operation in the
+    // same SQLite transaction. A process kill between two separate writes
+    // must never leave a local sale without a queue entry.
     final localId = await local.createLocalSale(
       payload,
       items,
-    );
-
-    await enqueue(
-      'create_sale',
-      payload,
-      localSaleId: '$localId',
+      queuePayload: payload,
+      queueOperationType: 'create_sale',
     );
 
     return localId;
