@@ -78,6 +78,8 @@ jobs:
               "/v1/auth/change-password",
               "/v1/auth/change-username",
               "/v1/auth/logout",
+              "/v1/profile",
+              "/v1/users/<int:user_id>/avatar",
 
               # Bootstrap/sync endpoints.
               "/v1/bootstrap",
