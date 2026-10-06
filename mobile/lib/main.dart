@@ -1417,7 +1417,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
   @override
   Widget build(BuildContext context) {
     final dashboard = ref.watch(dashboardControllerProvider);
-    final data = dashboard.valueOrNull?.data;
+    final data = dashboard.valueOrNull?.data ?? <String, dynamic>{};
     final pending =
         dashboard.valueOrNull?.pendingOperations ?? 0;
 
@@ -1550,7 +1550,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
                       ),
                     ),
                     const SizedBox(height: 14),
-                    if (data != null)
+                    if (dashboard.hasValue)
                       GridView.count(
                         crossAxisCount:
                             MediaQuery.sizeOf(context).width > 600
