@@ -9,7 +9,7 @@ from sqlalchemy.orm import selectinload
 
 from app import db
 from app.models import Sale, Product, Shipping, ShipmentBatch, MobileOperation
-from app.services.journey import STAGES
+from app.services.journey import STAGES, current_stage_key
 
 LOW_STOCK_THRESHOLD = 5
 
@@ -71,7 +71,6 @@ def get_kpis():
     )
     for sale in journey_sales:
         try:
-            from app.services.journey import current_stage_key
             key = current_stage_key(sale)
         except Exception:
             key = "confirmed"
