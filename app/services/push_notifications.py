@@ -273,10 +273,10 @@ def send_test_notification(user_id):
                         title="OmaSales push test",
                         body="Push notifications are working on this device.",
                         **(
-                            {"channel_id": "oma_scanner_v2"}
+                            {"channel_id": "oma_scanner_v3"}
                             if (
                                 device.platform == "android"
-                                and device.notification_channel_version == "v2"
+                                and device.notification_channel_version == "v3"
                             )
                             else {}
                         ),
@@ -381,16 +381,16 @@ def flush_outbox(limit=100):
                 android_channel_id = None
                 if (
                     device.platform == "android"
-                    and device.notification_channel_version == "v2"
+                    and device.notification_channel_version == "v3"
                 ):
                     if event_type == "chat_message":
-                        android_channel_id = "oma_chat_v1"
+                        android_channel_id = "oma_chat_v3"
                     elif mode == "air":
-                        android_channel_id = "oma_arrival_air_v2"
+                        android_channel_id = "oma_arrival_air_v3"
                     elif mode == "sea":
-                        android_channel_id = "oma_arrival_sea_v2"
+                        android_channel_id = "oma_arrival_sea_v3"
                     else:
-                        android_channel_id = "oma_scanner_v2"
+                        android_channel_id = "oma_scanner_v3"
 
                 message = messaging.Message(
                     token=device.token,
