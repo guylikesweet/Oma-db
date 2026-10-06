@@ -55,7 +55,7 @@ class OmaBackgroundSync {
       _periodicSyncName,
       omaBackgroundSyncTask,
       frequency: const Duration(minutes: 15),
-      constraints: const Constraints(
+      constraints: Constraints(
         networkType: NetworkType.connected,
       ),
       backoffPolicy: BackoffPolicy.exponential,
