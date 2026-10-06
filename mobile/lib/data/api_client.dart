@@ -5,15 +5,21 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/http.dart' as http;
 
 import '../core/config.dart';
+import '../core/network_errors.dart';
 
 class ApiException implements Exception {
-  ApiException(this.statusCode, this.message);
+  ApiException(this.statusCode, this.message, {this.cause});
 
   final int statusCode;
   final String message;
+  final Object? cause;
 
   @override
-  String toString() => 'API $statusCode: $message';
+  String toString() {
+    final network = cause == null ? null : classifyNetworkError(cause!);
+    if (network != null) return network.message;
+    return 'API $statusCode: $message';
+  }
 }
 
 class ApiClient {
@@ -97,60 +103,68 @@ class ApiClient {
 
     final encodedBody = body == null ? null : jsonEncode(body);
 
-    switch (method.toUpperCase()) {
-      case 'GET':
-        response = await _client
-            .get(
-              uri,
-              headers: headers,
-            )
-            .timeout(timeout);
-        break;
-
-      case 'POST':
-        response = await _client
-            .post(
-              uri,
-              headers: headers,
-              body: encodedBody,
-            )
-            .timeout(timeout);
-        break;
-
-      case 'PUT':
-        response = await _client
-            .put(
-              uri,
-              headers: headers,
-              body: encodedBody,
-            )
-            .timeout(timeout);
-        break;
-
-      case 'PATCH':
-        response = await _client
-            .patch(
-              uri,
-              headers: headers,
-              body: encodedBody,
-            )
-            .timeout(timeout);
-        break;
-
-      case 'DELETE':
-        response = await _client
-            .delete(
-              uri,
-              headers: headers,
-              body: encodedBody,
-            )
-            .timeout(timeout);
-        break;
-
-      default:
-        throw ArgumentError(
-          'Unsupported HTTP method: $method',
-        );
+    try {
+          switch (method.toUpperCase()) {
+            case 'GET':
+              response = await _client
+                  .get(
+                    uri,
+                    headers: headers,
+                  )
+                  .timeout(timeout);
+              break;
+      
+            case 'POST':
+              response = await _client
+                  .post(
+                    uri,
+                    headers: headers,
+                    body: encodedBody,
+                  )
+                  .timeout(timeout);
+              break;
+      
+            case 'PUT':
+              response = await _client
+                  .put(
+                    uri,
+                    headers: headers,
+                    body: encodedBody,
+                  )
+                  .timeout(timeout);
+              break;
+      
+            case 'PATCH':
+              response = await _client
+                  .patch(
+                    uri,
+                    headers: headers,
+                    body: encodedBody,
+                  )
+                  .timeout(timeout);
+              break;
+      
+            case 'DELETE':
+              response = await _client
+                  .delete(
+                    uri,
+                    headers: headers,
+                    body: encodedBody,
+                  )
+                  .timeout(timeout);
+              break;
+      
+            default:
+              throw ArgumentError(
+                'Unsupported HTTP method: $method',
+              );
+          }
+    } on TimeoutException catch (e) {
+      throw ApiException(0, 'Network request timed out.', cause: e);
+    } on SocketException catch (e) {
+      throw ApiException(0, 'Network connection failed.', cause: e);
+    } on http.ClientException catch (e) {
+      throw ApiException(0, 'Network connection failed.', cause: e);
     }
 
     dynamic decoded;
