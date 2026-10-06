@@ -103,7 +103,7 @@ class _WebsiteFeaturesPageState extends State<WebsiteFeaturesPage> {
             Icons.inventory_2,
             'Manage products',
             'Admin changes require biometric verification (stock adjustments remain routine).',
-            () => open(WebProductsPage(api: widget.api)),
+            () => open(WebProductsPage(api: widget.api, repo: widget.repo)),
           ),
 
           _tile(
@@ -242,9 +242,14 @@ class _WebsiteFeaturesPageState extends State<WebsiteFeaturesPage> {
 }
 
 class WebProductsPage extends StatefulWidget {
-  const WebProductsPage({super.key, required this.api});
+  const WebProductsPage({
+    super.key,
+    required this.api,
+    required this.repo,
+  });
 
   final ApiClient api;
+  final SyncRepository repo;
 
   @override
   State<WebProductsPage> createState() => _WebProductsPageState();
@@ -262,14 +267,18 @@ class _WebProductsPageState extends State<WebProductsPage> {
 
   Future<void> load() async {
     try {
-      rows = await widget.api.products();
+      if (kIsWeb) {
+        rows = await widget.api.products();
+      } else {
+        final db = await LocalDatabase.instance.db;
+        rows = await db.query('products', orderBy: 'name ASC');
+      }
     } catch (_) {}
 
     if (mounted) {
       setState(() => busy = false);
     }
   }
-
   Future<void> form([Map<String, dynamic>? old]) async {
     final name = TextEditingController(text: '${old?['name'] ?? ''}');
     final sku = TextEditingController(text: '${old?['sku'] ?? ''}');
@@ -597,11 +606,20 @@ class _WebProductsPageState extends State<WebProductsPage> {
     }
 
     try {
-      await widget.api.stockAdjust({
-        'product_id': product['id'],
-        'change_qty': change,
-        'reason': 'Mobile stock adjustment',
-      });
+      if (kIsWeb) {
+        await widget.api.stockAdjust({
+          'product_id': product['id'],
+          'change_qty': change,
+          'reason': 'Mobile stock adjustment',
+        });
+      } else {
+        await widget.repo.saveStockAdjustment(
+          productId: product['id'] as int,
+          changeQty: change,
+          reason: 'Mobile stock adjustment',
+        );
+        await widget.repo.syncOnce();
+      }
 
       await load();
     } catch (e) {
