@@ -1124,22 +1124,26 @@ class _ChatPageState extends State<ChatPage> {
   Widget _messageBubble(Map<String, dynamic> message) {
     final reactions = message['reactions'];
     final mine = message['sender_user_id'] == AppSession.userId;
-    final status = '${message['_status'] ?? 'sent'${';
+    final status = message['_status']?.toString() ?? 'sent';
     final pending = status == 'sending';
     final failed = status == 'failed';
     final reply = message['reply_to'];
-    final sender = mine ? 'Me' : '${message['sender_username'] ?? 'User'${';
-
+    final sender = mine
+        ? 'Me'
+        : (message['sender_username']?.toString() ?? 'User');
+    final senderId = message['sender_user_id']?.toString() ?? '';
     final messageIndex = messages.indexOf(message);
     final previousMessage =
         messageIndex > 0 ? messages[messageIndex - 1] : null;
     final sameSender = previousMessage != null &&
-        '${previousMessage['sender_user_id'] ?? ''${' ==
-            '${message['sender_user_id'] ?? ''${';
+        (previousMessage['sender_user_id']?.toString() ?? '') == senderId;
     final showSenderMeta = !sameSender;
 
     final created = _lagosTime(message['created_at']);
     final deleted = message['deleted'] == true;
+    final content = message['content']?.toString() ?? '';
+    final attachmentUrl = message['attachment_url']?.toString() ?? '';
+    final originalContent = message['original_content']?.toString();
     final scheme = Theme.of(context).colorScheme;
 
     final bubbleGradient = mine
@@ -1339,7 +1343,7 @@ class _ChatPageState extends State<ChatPage> {
                                     ),
                                   ),
                                 if (!deleted || AppSession.isAdmin) ...[
-                                  if ('${message['attachment_url'] ?? ''${'.isNotEmpty ||
+                                  if (attachmentUrl.isNotEmpty ||
                                       message['_attachment_bytes'] is Uint8List)
                                     _photoWidget(message),
                                   if (reply is Map)
@@ -1347,9 +1351,9 @@ class _ChatPageState extends State<ChatPage> {
                                       Map<String, dynamic>.from(reply),
                                       replyAuthor: sender,
                                     ),
-                                  if ('${message['content'] ?? ''${'.isNotEmpty)
+                                  if (content.isNotEmpty)
                                     _mentionText(
-                                      '${message['content'] ?? ''${',
+                                      content,
                                       mine: mine,
                                       defaultColor:
                                           mine && !pending && !failed
@@ -1367,7 +1371,7 @@ class _ChatPageState extends State<ChatPage> {
                                             : scheme.onSurfaceVariant,
                                       ),
                                     ),
-                                  if (message['original_content'] != null &&
+                                  if (originalContent != null &&
                                       AppSession.isPrimaryAdmin &&
                                       message['edited'] == true)
                                     Container(
@@ -1378,7 +1382,7 @@ class _ChatPageState extends State<ChatPage> {
                                         borderRadius: BorderRadius.circular(9),
                                       ),
                                       child: Text(
-                                        'Original: ${message['original_content']${',
+                                        'Original: ' + originalContent,
                                       ),
                                     ),
                                   if (reactions is Map && reactions.isNotEmpty)
@@ -1389,11 +1393,13 @@ class _ChatPageState extends State<ChatPage> {
                                             (entry) => ActionChip(
                                               visualDensity:
                                                   VisualDensity.compact,
-                                              avatar: Text('${entry.key${'),
-                                              label: Text('${entry.value${'),
+                                              avatar:
+                                                  Text(entry.key.toString()),
+                                              label:
+                                                  Text(entry.value.toString()),
                                               onPressed: () => react(
                                                 message,
-                                                '${entry.key${',
+                                                entry.key.toString(),
                                               ),
                                             ),
                                           )
