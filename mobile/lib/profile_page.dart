@@ -46,7 +46,7 @@ class _ProfilePageState extends State<ProfilePage> {
     try {
       final profile = await widget.api.getProfile();
       if (!mounted) return;
-      username.text = '\${profile['username'] ?? AppSession.username}';
+      username.text = '${profile['username'] ?? AppSession.username}';
       currentPhotoUrl = profile['profile_photo_url']?.toString();
       if (currentPhotoUrl != null && currentPhotoUrl!.isNotEmpty) {
         try {
@@ -57,7 +57,7 @@ class _ProfilePageState extends State<ProfilePage> {
       }
       setState(() => loading = false);
     } catch (e) {
-      if (mounted) setState(() { loading = false; error = '\$e'; });
+      if (mounted) setState(() { loading = false; error = '$e'; });
     }
   }
 
