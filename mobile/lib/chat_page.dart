@@ -1010,6 +1010,7 @@ class _ChatPageState extends State<ChatPage> {
     final created = _lagosTime(message['created_at']);
     final deleted = message['deleted'] == true;
     final canModify = !pending && !failed && !deleted && (mine || AppSession.isAdmin);
+    final reactions = message['reactions'];
 
     final scheme = Theme.of(context).colorScheme;
     final bubbleGradient = mine
