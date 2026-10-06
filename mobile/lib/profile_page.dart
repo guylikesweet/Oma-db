@@ -25,7 +25,8 @@ class _ProfilePageState extends State<ProfilePage> {
   Uint8List? currentPhotoBytes;
   bool loading = true;
   bool saving = false;
-  bool obscure = true;
+  bool obscurePassword = true;
+  bool obscureConfirm = true;
   String? error;
 
   @override
@@ -154,13 +155,13 @@ class _ProfilePageState extends State<ProfilePage> {
           TextField(
             controller: password,
             enabled: !saving,
-            obscureText: obscure,
+            obscureText: obscurePassword,
             decoration: InputDecoration(
               labelText: 'New password (optional)',
               prefixIcon: const Icon(Icons.lock_outline),
               suffixIcon: IconButton(
-                onPressed: () => setState(() => obscure = !obscure),
-                icon: Icon(obscure ? Icons.visibility : Icons.visibility_off),
+                onPressed: () => setState(() => obscurePassword = !obscurePassword),
+                icon: Icon(obscurePassword ? Icons.visibility : Icons.visibility_off),
               ),
             ),
           ),
@@ -168,8 +169,14 @@ class _ProfilePageState extends State<ProfilePage> {
           TextField(
             controller: confirm,
             enabled: !saving,
-            obscureText: obscure,
-            decoration: const InputDecoration(labelText: 'Confirm new password'),
+            obscureText: obscureConfirm,
+            decoration: InputDecoration(
+              labelText: 'Confirm new password',
+              suffixIcon: IconButton(
+                onPressed: () => setState(() => obscureConfirm = !obscureConfirm),
+                icon: Icon(obscureConfirm ? Icons.visibility : Icons.visibility_off),
+              ),
+            ),
           ),
           if (error != null) ...[
             const SizedBox(height: 14),
