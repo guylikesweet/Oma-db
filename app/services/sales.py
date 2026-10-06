@@ -146,11 +146,22 @@ def create_sale(customer_name, customer_phone, customer_address, customer_state,
         if qty <= 0:
             raise SaleValidationError("Quantity must be greater than zero for every line.")
 
-        product = Product.query.get(line["product_id"])
+        product_id = line["product_id"]
+        requested[product_id] = requested.get(product_id, 0) + qty
+
+    # Stock-changing sales must serialize against every other stock writer.
+    # Lock products in deterministic ID order to avoid deadlocks when two
+    # multi-product sales arrive concurrently.
+    for product_id in sorted(requested):
+        product = (
+            Product.query
+            .filter_by(id=product_id)
+            .with_for_update()
+            .first()
+        )
         if not product:
-            raise SaleValidationError(f"Product id {line['product_id']} does not exist.")
-        products[line["product_id"]] = product
-        requested[line["product_id"]] = requested.get(line["product_id"], 0) + qty
+            raise SaleValidationError(f"Product id {product_id} does not exist.")
+        products[product_id] = product
 
     # Preorders are for goods still to be shipped in, so stock is irrelevant:
     # the quantity is simply what the customer asked for. Only stocked sales check it.
@@ -274,7 +285,12 @@ def update_sale_status(sale_id, new_status):
     Handles New -> Packed -> Cancelled (and further transitions for Shipped/Delivered).
     Cancelling a sale that hasn't already been cancelled restocks every line item and logs it.
     """
-    sale = Sale.query.get(sale_id)
+    sale = (
+        Sale.query
+        .filter_by(id=sale_id)
+        .with_for_update()
+        .first()
+    )
     if not sale:
         raise SaleValidationError("Sale not found.")
 
@@ -285,7 +301,12 @@ def update_sale_status(sale_id, new_status):
     if new_status == "Cancelled" and sale.order_status != "Cancelled" and sale.is_stock_sale:
         # Only stocked sales deducted stock, so only they restock.
         for item in sale.items:
-            product = Product.query.get(item.product_id)
+            product = (
+                Product.query
+                .filter_by(id=item.product_id)
+                .with_for_update()
+                .first()
+            )
             if product:
                 product.stock += item.qty
                 db.session.add(StockLog(
