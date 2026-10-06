@@ -175,6 +175,18 @@ class OmaPushNotifications {
                 ? 'Sea shipment arrivals'
                 : 'Oma notifications';
 
+    AndroidBitmap<Object>? largeIcon;
+    final avatarUrl = '${data['sender_avatar_url'] ?? ''}'.trim();
+    if (isChat && avatarUrl.isNotEmpty && !kIsWeb) {
+      try {
+        final bytes = await ApiClient().downloadChatAttachment(avatarUrl);
+        if (bytes.isNotEmpty) {
+          largeIcon = ByteArrayAndroidBitmap(bytes);
+        }
+      } catch (_) {
+        // Avatar loading is best-effort; the notification must still appear.
+      }
+    }
     final details = AndroidNotificationDetails(
       channelId,
       channelName,
@@ -184,6 +196,7 @@ class OmaPushNotifications {
       playSound: true,
       sound: RawResourceAndroidNotificationSound(soundName),
       enableVibration: true,
+      largeIcon: largeIcon,
     );
 
     final notificationDetails = NotificationDetails(
