@@ -1163,9 +1163,14 @@ class _ChatPageState extends State<ChatPage> {
       alignment: mine ? Alignment.centerRight : Alignment.centerLeft,
       child: GestureDetector(
         onLongPress: failed ? null : () => _showMessageActions(message),
-        child: Stack(
-          clipBehavior: Clip.none,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment:
+              mine ? CrossAxisAlignment.end : CrossAxisAlignment.start,
           children: [
+            Stack(
+              clipBehavior: Clip.none,
+              children: [
             Positioned(
               bottom: 10,
                 left: mine ? null : 5,
@@ -1256,27 +1261,7 @@ class _ChatPageState extends State<ChatPage> {
                       ),
                     ),
                   ),
-                  if (!pending && !failed)
-                    Padding(
-                      padding: const EdgeInsets.only(left: 2),
-                      child: SizedBox(
-                        width: 26,
-                        height: 26,
-                        child: IconButton(
-                          padding: EdgeInsets.zero,
-                          visualDensity: VisualDensity.compact,
-                          tooltip: 'Message actions',
-                          onPressed: () => _showMessageActions(message),
-                          icon: Icon(
-                            Icons.more_horiz_rounded,
-                            size: 17,
-                            color: mine
-                                ? Colors.white.withOpacity(.88)
-                                : scheme.onSurfaceVariant,
-                          ),
-                        ),
-                      ),
-                    ),
+
                 ],
               ),
               if (deleted && !AppSession.isAdmin)
@@ -1404,7 +1389,34 @@ class _ChatPageState extends State<ChatPage> {
             ),
           ),
         ),
-      ],
+              ],
+            ),
+            if (!pending && !failed)
+              Padding(
+                padding: EdgeInsets.only(
+                  left: mine ? 0 : 12,
+                  right: mine ? 12 : 0,
+                ),
+                child: SizedBox(
+                  height: 18,
+                  child: IconButton(
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(
+                      minWidth: 24,
+                      minHeight: 18,
+                    ),
+                    visualDensity: VisualDensity.compact,
+                    tooltip: 'Message actions',
+                    onPressed: () => _showMessageActions(message),
+                    icon: Icon(
+                      Icons.more_horiz_rounded,
+                      size: 16,
+                      color: scheme.onSurfaceVariant.withOpacity(.62),
+                    ),
+                  ),
+                ),
+              ),
+          ],
         ),
       ),
     );
