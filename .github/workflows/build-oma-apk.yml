@@ -97,6 +97,7 @@ jobs:
 
               # Shipment/batch/delivery/shipping endpoints.
               "/v1/batches",
+              "/v1/batches/<int:batch_id>",
               "/v1/deliveries",
               "/v1/deliveries/ready",
               "/v1/deliveries/<int:delivery_id>/label.pdf",
