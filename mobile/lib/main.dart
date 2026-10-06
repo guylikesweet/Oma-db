@@ -1390,7 +1390,7 @@ class DashboardPage extends ConsumerStatefulWidget {
   final int refreshKey;
 
   @override
-  State<DashboardPage> createState() => _DashboardPageState();
+  ConsumerState<DashboardPage> createState() => _DashboardPageState();
 }
 
 class _DashboardPageState extends ConsumerState<DashboardPage> {
@@ -1565,43 +1565,43 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
                           _Kpi(
                             title: 'Sales today',
                             value:
-                                '₦${_money(data!['sales_today'])}',
+                                '₦${_money(data['sales_today'])}',
                             icon: Icons.payments,
                           ),
                           _Kpi(
                             title: 'Profit today',
                             value:
-                                '₦${_money(data!['profit_today'])}',
+                                '₦${_money(data['profit_today'])}',
                             icon: Icons.trending_up,
                           ),
                           _Kpi(
                             title: 'Pending shipments',
                             value:
-                                '${data!['pending_shipments'] ?? 0}',
+                                '${data['pending_shipments'] ?? 0}',
                             icon: Icons.local_shipping,
                           ),
                           _Kpi(
                             title: 'Low stock',
                             value:
-                                '${data!['low_stock_count'] ?? 0}',
+                                '${data['low_stock_count'] ?? 0}',
                             icon: Icons.warning_amber,
                           ),
                           _Kpi(
                             title: 'Shipping owed',
                             value:
-                                '₦${data!['shipping_owed'] ?? 0}',
+                                '₦${data['shipping_owed'] ?? 0}',
                             icon: Icons.account_balance_wallet_outlined,
                           ),
                           _Kpi(
                             title: 'Batches in transit',
                             value:
-                                '${data!['batches_in_transit'] ?? 0}',
+                                '${data['batches_in_transit'] ?? 0}',
                             icon: Icons.flight_takeoff,
                           ),
                           _Kpi(
                             title: 'Sync exceptions',
                             value:
-                                '${data!['sync_exceptions'] ?? 0}',
+                                '${data['sync_exceptions'] ?? 0}',
                             icon: Icons.sync_problem,
                           ),
                         ],
@@ -1632,7 +1632,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
                               ),
                               const SizedBox(height: 8),
                               ...List<dynamic>.from(
-                                data!['low_stock_products'],
+                                data['low_stock_products'],
                               ).take(8).map(
                                     (x) => ListTile(
                                       contentPadding:
