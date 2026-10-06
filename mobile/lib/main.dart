@@ -1002,7 +1002,11 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
 
     connectivity = Connectivity()
         .onConnectivityChanged
-        .listen((_) => sync(silent: true));
+        .listen((results) {
+          if (results.any((result) => result != ConnectivityResult.none)) {
+            sync(silent: true);
+          }
+        });
 
     sync(silent: true);
   }
