@@ -428,7 +428,6 @@ class _ChatPageState extends State<ChatPage> {
       context: context,
       showDragHandle: true,
       builder: (context) {
-        final scheme = Theme.of(context).colorScheme;
         Widget item({
           required String value,
           required IconData icon,
@@ -1109,7 +1108,6 @@ class _ChatPageState extends State<ChatPage> {
     final sender = mine ? 'Me' : '${message['sender_username'] ?? 'User'}';
     final created = _lagosTime(message['created_at']);
     final deleted = message['deleted'] == true;
-    final canModify = !pending && !failed && !deleted && (mine || AppSession.isAdmin);
     final scheme = Theme.of(context).colorScheme;
     final bubbleGradient = mine
         ? LinearGradient(
