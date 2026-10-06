@@ -291,7 +291,7 @@ class _NewSalePageState extends State<NewSalePage> {
       }
     } catch (e) {
       if (mounted) {
-        toast(e.toString());
+        toast(userFacingError(e));
       }
     } finally {
       if (mounted) {
