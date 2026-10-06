@@ -94,6 +94,7 @@ def logout():
 
 
 @auth_bp.route("/reauthenticate", methods=("GET", "POST"))
+@limiter.limit("20 per minute", methods=["POST"])
 @login_required
 def reauthenticate():
     next_url = request.args.get("next") or request.form.get("next") or url_for("classic_home")
@@ -111,6 +112,7 @@ def reauthenticate():
 
 
 @auth_bp.route("/change-password", methods=("GET", "POST"))
+@limiter.limit("10 per minute", methods=["POST"])
 @login_required
 def change_password():
     if request.method == "POST":
