@@ -440,7 +440,6 @@ class _ChatPageState extends State<ChatPage> {
                     icon: Icons.download_rounded,
                     label: 'Save photo',
                   ),
-                if (action == null) const SizedBox(height: 2),
               ],
             ),
           ),
@@ -962,28 +961,6 @@ class _ChatPageState extends State<ChatPage> {
       duration: const Duration(milliseconds: 420),
       curve: Curves.easeOutCubic,
       alignment: .35,
-    );
-  }
-
-  Widget _chatAction({
-    required IconData icon,
-    required String label,
-    required bool mine,
-    required VoidCallback onTap,
-  }) {
-    final scheme = Theme.of(context).colorScheme;
-    final foreground = mine ? Colors.white : scheme.onSurfaceVariant;
-    return Tooltip(
-      message: label,
-      child: Material(
-        color: mine ? Colors.white.withOpacity(.12) : scheme.surface.withOpacity(.72),
-        shape: const CircleBorder(),
-        child: InkWell(
-          onTap: onTap,
-          customBorder: const CircleBorder(),
-          child: SizedBox(width: 28, height: 28, child: Icon(icon, size: 14, color: foreground)),
-        ),
-      ),
     );
   }
 
