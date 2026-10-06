@@ -1407,6 +1407,7 @@ class _ChatPageState extends State<ChatPage> {
             ),
           ),
         ),
+              ),
               ],
             ),
             if (!pending && !failed)
@@ -1436,6 +1437,7 @@ class _ChatPageState extends State<ChatPage> {
               ),
           ],
         ),
+      ],
       ),
     );
   }
