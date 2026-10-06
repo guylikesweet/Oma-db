@@ -2240,9 +2240,9 @@ class _DeliveriesPageState
                   leading: const Icon(Icons.error_outline),
                   title: const Text('Could not load deliveries'),
                   subtitle: Text(loadError!),
-                  trailing: IconButton(
+                  trailing: TextButton(
                     onPressed: load,
-                    icon: const Icon(Icons.refresh),
+                    child: const Text('Try Again'),
                   ),
                 ),
               ),
