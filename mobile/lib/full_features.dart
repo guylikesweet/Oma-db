@@ -4842,7 +4842,7 @@ class _AuditLogPageState extends State<AuditLogPage> {
       final result = await widget.api.auditLog();
       if (mounted) setState(() { rows = result; error = null; });
     } catch (e) {
-      if (mounted) setState(() => error = e.toString());
+      if (mounted) setState(() => error = userFacingError(e));
     } finally {
       if (mounted) setState(() => busy = false);
     }
