@@ -5,7 +5,7 @@ class SyncPolicy {
 
   static bool isPermanentError(Object error) {
     if (error is ApiException) {
-      return error.statusCode >= 400 && error.statusCode < 500;
+      return const {400, 403, 404, 409, 410, 422}.contains(error.statusCode);
     }
     return false;
   }
