@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'brand_loader.dart';
 import 'data/local_database.dart';
 import 'data/sync_repository.dart';
+import 'core/network_errors.dart';
 
 class NewSalePage extends StatefulWidget {
   const NewSalePage({
