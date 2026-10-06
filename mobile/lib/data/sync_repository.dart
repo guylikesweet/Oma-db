@@ -314,8 +314,8 @@ class SyncRepository {
     String? dependency;
     int? localSaleId;
 
+    final db = await local.db;
     if (saleId < 0) {
-      final db = await local.db;
       final rows = await db.query(
         'sales',
         columns: ['client_operation_id'],
@@ -333,20 +333,48 @@ class SyncRepository {
       localSaleId = saleId;
     }
 
-    final op = await enqueue(
-      payload.containsKey('status') ? 'sale_status' : 'sale_status',
-      payload,
-      localSaleId: localSaleId,
-      dependsOn: dependency,
-    );
+    // The optimistic local mutation and its durable queue entry are one
+    // SQLite transaction. A process kill cannot leave a changed sale with no
+    // corresponding server operation (or a queue entry with no local state).
+    final op = _uuid.v4();
+    final queuedPayload = <String, dynamic>{
+      ...payload,
+      'operation_id': op,
+      'offline_origin': true,
+    };
+    final now = DateTime.now().toUtc().toIso8601String();
 
-    final db = await local.db;
-    await db.update(
-      'sales',
-      localFields,
-      where: 'id = ?',
-      whereArgs: [saleId],
-    );
+    await db.transaction((txn) async {
+      final exists = await txn.query(
+        'sales',
+        columns: ['id'],
+        where: 'id = ?',
+        whereArgs: [saleId],
+        limit: 1,
+      );
+      if (exists.isEmpty) {
+        throw StateError('The sale no longer exists locally.');
+      }
+
+      await txn.update(
+        'sales',
+        localFields,
+        where: 'id = ?',
+        whereArgs: [saleId],
+      );
+
+      await txn.insert('sync_queue', {
+        'operation_id': op,
+        'operation_type': 'sale_status',
+        'payload_json': jsonEncode(queuedPayload),
+        'local_sale_id': localSaleId,
+        'status': 'pending',
+        'attempts': 0,
+        'created_at': now,
+        'updated_at': now,
+        'depends_on_operation_id': dependency,
+      });
+    });
 
     return op;
   }
@@ -359,7 +387,6 @@ class SyncRepository {
     String? notes,
   }) async {
     final dependencies = <String>[];
-    final localSaleIds = <int>[];
     final db = await local.db;
 
     for (final saleId in saleIds) {
@@ -379,7 +406,6 @@ class SyncRepository {
         throw StateError('A selected local sale has no sync operation.');
       }
       dependencies.add(dep);
-      localSaleIds.add(saleId);
     }
 
     // The queue schema has one dependency slot. A delivery involving
