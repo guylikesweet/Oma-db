@@ -42,6 +42,7 @@ from app.services.push_notifications import (
     queue_batch_arrival,
     queue_user_notification,
     queue_chat_message_notifications,
+    queue_chat_reaction_notification,
     flush_outbox,
 )
 from app.services.dashboard import get_kpis, get_sales_last_30_days
@@ -2410,8 +2411,23 @@ def mobile_react_chat_message(message_id):
     elif reaction:
         db.session.delete(reaction)
     else:
-        db.session.add(ChatReaction(message_id=message.id, user_id=g.api_user.id, emoji=emoji))
+        reaction = ChatReaction(
+            message_id=message.id,
+            user_id=g.api_user.id,
+            emoji=emoji,
+        )
+        db.session.add(reaction)
+        # The notification is part of the same transaction as the reaction.
+        # Never notify the message author about their own reaction.
+        if message.sender_user_id != g.api_user.id:
+            message._reaction_emoji = emoji
+            queue_chat_reaction_notification(
+                message,
+                actor_user_id=g.api_user.id,
+            )
     db.session.commit()
+    if request.method == "POST" and reaction is not None:
+        _schedule_outbox_flush()
     return jsonify(_chat_message_json(message))
 
 
