@@ -43,6 +43,7 @@ SALES_CSV_HEADERS = [
     "id", "order_id", "sale_date", "customer_name", "customer_phone", "customer_state",
     "order_status", "payment_status", "subtotal_amount", "estimated_shipping_cost",
     "actual_shipping_cost", "shipping_payment_settled", "total_amount",
+    "cogs", "gross_profit", "gross_margin_percent", "net_profit",
 ]
 
 
@@ -53,10 +54,14 @@ def sales_csv_rows(start_date=None, end_date=None):
         start_date = end_date - timedelta(days=3650)  # effectively "all time" if unset
 
     for s in get_sales_in_range(start_date, end_date):
+        cogs = sum((item.unit_cost or 0) * (item.qty or 0) for item in s.items)
+        gross_profit = (s.subtotal_amount or 0) - cogs
+        gross_margin = (gross_profit / s.subtotal_amount * 100) if s.subtotal_amount else 0
         yield [
             s.id, s.order_id, s.sale_date, s.customer_name, s.customer_phone, s.customer_state,
             s.order_status, s.payment_status, s.subtotal_amount, s.estimated_shipping_cost,
             s.actual_shipping_cost, s.shipping_payment_settled, s.total_amount,
+            cogs, gross_profit, gross_margin, s.profit,
         ]
 
 
