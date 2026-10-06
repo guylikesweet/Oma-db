@@ -25,6 +25,8 @@ import 'journey_widgets.dart';
 import 'chat_page.dart';
 import 'profile_page.dart';
 import 'presentation/controllers/dashboard_controller.dart';
+import 'presentation/controllers/session_controller.dart';
+import 'presentation/providers/app_providers.dart';
 
 @pragma('vm:entry-point')
 Future<void> omaFirebaseMessagingBackgroundHandler(RemoteMessage message) async {
@@ -287,17 +289,20 @@ ThemeData brandTheme(Brightness brightness) {
   );
 }
 
-class SessionGate extends StatefulWidget {
+class SessionGate extends ConsumerStatefulWidget {
   const SessionGate({super.key});
-  @override State<SessionGate> createState() => _SessionGateState();
+
+  @override
+  ConsumerState<SessionGate> createState() => _SessionGateState();
 }
 
-class _SessionGateState extends State<SessionGate> {
-  final api = ApiClient();
+class _SessionGateState extends ConsumerState<SessionGate> {
+  late final ApiClient api;
 
   @override
   void initState() {
     super.initState();
+    api = ref.read(apiClientProvider);
     BiometricGuard.passwordVerifier = (password) async {
       try {
         final result = await api.verifyPassword(password);
@@ -317,20 +322,19 @@ class _SessionGateState extends State<SessionGate> {
   }
 
   @override
-  Widget build(BuildContext context) => FutureBuilder<String?>(
-        future: api.token(),
-        builder: (_, snapshot) {
-          if (snapshot.connectionState != ConnectionState.done) {
-            return const Scaffold(
-              body: Center(child: BrandLoader()),
-            );
-          }
+  Widget build(BuildContext context) {
+    final session = ref.watch(sessionControllerProvider);
 
-          return snapshot.data?.isNotEmpty == true
-              ? _AuthenticatedShell(api: api)
-              : LoginPage(api: api);
-        },
-      );
+    return session.when(
+      loading: () => const Scaffold(
+        body: Center(child: BrandLoader()),
+      ),
+      error: (_, __) => LoginPage(api: api),
+      data: (state) => state.authenticated
+          ? _AuthenticatedShell(api: api)
+          : LoginPage(api: api),
+    );
+  }
 }
 
 class _AuthenticatedShell extends StatefulWidget {
