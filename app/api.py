@@ -802,7 +802,10 @@ def mobile_change_password():
     if len(new) < 8:
         return jsonify({"error": "New password must be at least 8 characters."}), 400
     g.api_user.password_hash = generate_password_hash(new)
-    g.api_user.api_token = secrets.token_hex(32)
+    # Rotate the API session and keep only its digest at rest. The raw token
+    # is returned once so the current device can continue without re-login.
+    new_token = secrets.token_hex(32)
+    g.api_user.api_token = hashlib.sha256(new_token.encode("utf-8")).hexdigest()
     g.api_user.biometric_credential_hash = None
     record_audit(
         "password.change",
@@ -812,7 +815,7 @@ def mobile_change_password():
         user=g.api_user,
     )
     db.session.commit()
-    return jsonify({"ok": True, "token": g.api_user.api_token})
+    return jsonify({"ok": True, "token": new_token})
 
 
 @api_bp.route("/v1/auth/change-username", methods=("POST",))
