@@ -2143,6 +2143,7 @@ class _ProductDialogState extends State<ProductDialog> {
                           _financeRow('Weight + packaging', costResult!['weight_shipping_cost']),
                           const Divider(),
                           _financeRow('True landed cost', costResult!['landed_cost'], bold: true),
+                          _financeRow('Break-even price', costResult!['break_even_price'], bold: true),
                           _financeRow('Markup', '${costResult!['markup_percent'] ?? 0}%'),
                           _financeRow('Selling price', costResult!['selling_price'], bold: true),
                           _financeRow('Gross profit / unit', costResult!['gross_profit'], bold: true),
