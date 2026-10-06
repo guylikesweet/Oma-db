@@ -3231,8 +3231,15 @@ class _SaleLine {
     if (stocked) {
       final cost = double.tryParse('${product['cost'] ?? ''}');
       if (cost != null) {
-        markup = stockMarkupPercent(cost);
-        suggestedPrice = suggestedStockPrice(cost);
+        final savedMarkup = double.tryParse(
+          '\${product['markup_percent'] ?? ''}',
+        );
+        markup = savedMarkup != null && savedMarkup >= 0
+            ? savedMarkup.round()
+            : stockMarkupPercent(cost);
+        suggestedPrice = markup == null
+            ? null
+            : (cost * (100 + markup!) / 100).roundToDouble();
         if (suggestedPrice != null) {
           price.text = suggestedPrice!.round().toString();
         }
