@@ -73,9 +73,10 @@ Firebase Cloud Messaging is used for push delivery. Notification intent is writt
    - `SECRET_KEY` — any random string
    - `DATABASE_URL` — your Neon connection string
    - `ADMIN_USERNAME`, `ADMIN_PASSWORD`
-4. Deploy. The build command runs `flask db upgrade` automatically on every deploy
+4. Deploy. The build command runs `flask db upgrade oma20261006_final` automatically on every deploy
    (safe — already-applied migrations are skipped).
-5. Open the Render Shell tab once and run `flask seed-admin` to create your admin login.
+5. On a new database only, open the Render Shell and run `flask seed-admin` once to create the configured admin.
+   Use `flask seed-admin --reset` only when you explicitly want to reset that admin password.
 6. Visit your Render URL. The Flutter Web application is served from `/`; `/webapp/` is also available for the compiled SPA assets. `/healthz` returns `{"status": "ok"}` for uptime monitoring.
 
 ## Notes
