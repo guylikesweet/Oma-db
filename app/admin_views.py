@@ -201,6 +201,14 @@ class ProductView(SecureModelView):
         product = Product.query.get_or_404(product_id)
 
         if request.method == "POST":
+            # Re-read under a row lock so concurrent stock writers cannot
+            # both validate against the same starting quantity.
+            product = (
+                Product.query
+                .filter_by(id=product_id)
+                .with_for_update()
+                .first_or_404()
+            )
             try:
                 change_qty = int(request.form.get("change_qty", "0"))
             except ValueError:
@@ -264,7 +272,12 @@ class SaleView(SecureModelView):
             raise Exception("A sale with settled shipping cannot be deleted.")
         if model.is_stock_sale:
             for item in model.items:
-                product = Product.query.get(item.product_id)
+                product = (
+                    Product.query
+                    .filter_by(id=item.product_id)
+                    .with_for_update()
+                    .first()
+                )
                 if product:
                     product.stock += item.qty
                     db.session.add(
