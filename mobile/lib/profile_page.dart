@@ -62,7 +62,7 @@ class _ProfilePageState extends State<ProfilePage> {
       }
       setState(() => loading = false);
     } catch (e) {
-      if (mounted) setState(() { loading = false; error = '$e'; });
+      if (mounted) setState(() { loading = false; error = userFacingError(e); });
     }
   }
 
