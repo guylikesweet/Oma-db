@@ -6,6 +6,7 @@ import 'package:printing/printing.dart';
 import 'package:share_plus/share_plus.dart';
 
 import 'data/api_client.dart';
+import 'core/network_errors.dart';
 
 /// Opens an "Invoice ready" popup for one sale with Share and Print buttons.
 ///
@@ -97,14 +98,10 @@ class _InvoiceDialogState extends State<_InvoiceDialog> {
       }
 
       if (mounted) setState(() => bytes = data);
-    } on TimeoutException {
-      if (mounted) {
-        setState(() => error =
-            'The server took too long to respond. Check your '
-            'connection and tap Try again.');
-      }
     } catch (e) {
-      if (mounted) setState(() => error = '$e');
+      if (mounted) {
+        setState(() => error = userFacingError(e));
+      }
     } finally {
       slowTimer?.cancel();
     }
