@@ -8,6 +8,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'brand_loader.dart';
 import 'core/biometric_guard.dart';
 import 'data/api_client.dart';
+import 'core/network_errors.dart';
 import 'data/app_session.dart';
 import 'data/local_database.dart';
 import 'data/sync_repository.dart';
@@ -322,7 +323,7 @@ class _WebProductsPageState extends State<WebProductsPage> {
                 } catch (e) {
                   if (dialogContext.mounted) {
                     ScaffoldMessenger.of(dialogContext).showSnackBar(
-                      SnackBar(content: Text('Could not calculate cost: ${e}')),
+                      SnackBar(content: Text(userFacingError(e))),
                     );
                   }
                 } finally {
@@ -529,7 +530,7 @@ class _WebProductsPageState extends State<WebProductsPage> {
       await load();
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${e}')));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(userFacingError(e))));
       }
     } finally {
       for (final controller in [
@@ -604,7 +605,7 @@ class _WebProductsPageState extends State<WebProductsPage> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('$e')),
+          SnackBar(content: Text(userFacingError(e))),
         );
       }
     }
@@ -652,7 +653,7 @@ class _WebProductsPageState extends State<WebProductsPage> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('$e')),
+          SnackBar(content: Text(userFacingError(e))),
         );
       }
     }
@@ -877,7 +878,7 @@ class _WebSalesPageState extends State<WebSalesPage> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('$e')),
+          SnackBar(content: Text(userFacingError(e))),
         );
       }
     }
@@ -946,7 +947,7 @@ class _WebSalesPageState extends State<WebSalesPage> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('$e')),
+          SnackBar(content: Text(userFacingError(e))),
         );
       }
     }
@@ -964,7 +965,7 @@ class _WebSalesPageState extends State<WebSalesPage> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('$e')),
+          SnackBar(content: Text(userFacingError(e))),
         );
       }
     }
@@ -1266,7 +1267,7 @@ class _BatchesPageState extends State<BatchesPage> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('$e')),
+          SnackBar(content: Text(userFacingError(e))),
         );
       }
     }
@@ -1336,7 +1337,7 @@ class _BatchesPageState extends State<BatchesPage> {
               } catch (e) {
                 if (sheetContext.mounted) {
                   ScaffoldMessenger.of(sheetContext).showSnackBar(
-                    SnackBar(content: Text('${e}')),
+                    SnackBar(content: Text(userFacingError(e))),
                   );
                 }
               }
@@ -1559,7 +1560,7 @@ class _BatchesPageState extends State<BatchesPage> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('$e')),
+          SnackBar(content: Text(userFacingError(e))),
         );
       }
     }
@@ -1606,7 +1607,7 @@ class _BatchesPageState extends State<BatchesPage> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('$e')),
+          SnackBar(content: Text(userFacingError(e))),
         );
       }
     }
@@ -1645,7 +1646,7 @@ class _BatchesPageState extends State<BatchesPage> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('$e')),
+          SnackBar(content: Text(userFacingError(e))),
         );
       }
     }
@@ -1684,7 +1685,7 @@ class _BatchesPageState extends State<BatchesPage> {
     } catch (e) {
       if (sheetContext.mounted) {
         ScaffoldMessenger.of(sheetContext).showSnackBar(
-          SnackBar(content: Text('$e')),
+          SnackBar(content: Text(userFacingError(e))),
         );
       }
     }
@@ -2043,7 +2044,7 @@ class _DeliveriesPageState
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('$e')),
+          SnackBar(content: Text(userFacingError(e))),
         );
       }
     }
@@ -2137,7 +2138,7 @@ class _DeliveriesPageState
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('$e')),
+          SnackBar(content: Text(userFacingError(e))),
         );
       }
     }
@@ -2161,7 +2162,7 @@ class _DeliveriesPageState
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('$e')),
+          SnackBar(content: Text(userFacingError(e))),
         );
       }
     }
@@ -2182,7 +2183,7 @@ class _DeliveriesPageState
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('$e')),
+          SnackBar(content: Text(userFacingError(e))),
         );
       }
     }
@@ -2202,7 +2203,7 @@ class _DeliveriesPageState
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('$e')),
+          SnackBar(content: Text(userFacingError(e))),
         );
       }
     }
@@ -2496,7 +2497,7 @@ class _DeliveryDetailPageState
   void _snack(Object e) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('$e')),
+      SnackBar(content: Text(userFacingError(e))),
     );
   }
 
@@ -3078,7 +3079,7 @@ class _RateListState extends State<_RateList> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('$e')),
+          SnackBar(content: Text(userFacingError(e))),
         );
       }
     }
@@ -3191,7 +3192,7 @@ class _RateListState extends State<_RateList> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('$e')),
+          SnackBar(content: Text(userFacingError(e))),
         );
       }
     }
@@ -3220,7 +3221,7 @@ class _RateListState extends State<_RateList> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('$e')),
+          SnackBar(content: Text(userFacingError(e))),
         );
       }
     }
@@ -3835,7 +3836,7 @@ class _SettingsPageState
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('$e')),
+          SnackBar(content: Text(userFacingError(e))),
         );
       }
     }
@@ -3897,7 +3898,7 @@ class _SettingsPageState
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(userFacingError(e))));
       }
     }
   }
@@ -3958,7 +3959,7 @@ class _SettingsPageState
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(userFacingError(e))));
       }
     }
   }
@@ -4171,7 +4172,7 @@ class _ChangePasswordPageState
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('$e')),
+          SnackBar(content: Text(userFacingError(e))),
         );
       }
     }
@@ -4228,7 +4229,7 @@ class _ChangePasswordPageState
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('$e')),
+          SnackBar(content: Text(userFacingError(e))),
         );
       }
     }
@@ -4404,7 +4405,7 @@ class _UsersPageState
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('$e')),
+          SnackBar(content: Text(userFacingError(e))),
         );
       }
     }
@@ -4490,7 +4491,7 @@ class _UsersPageState
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('$e')),
+          SnackBar(content: Text(userFacingError(e))),
         );
       }
     }
@@ -4547,7 +4548,7 @@ class _UsersPageState
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('$e')),
+          SnackBar(content: Text(userFacingError(e))),
         );
       }
     }
@@ -4735,7 +4736,7 @@ class _ClearDataPageState
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('$e')),
+          SnackBar(content: Text(userFacingError(e))),
         );
       }
     }
