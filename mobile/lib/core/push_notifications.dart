@@ -166,7 +166,13 @@ class OmaPushNotifications {
         _firebaseReady = true;
       }
       await _local.initialize(_initSettings, onDidReceiveNotificationResponse: _handleLocalNotificationTap);
-      await _showAndRepeat(message.data);
+      // Android/iOS now receive a native visible notification from FCM for
+      // background/terminated delivery. Do not create a second local copy.
+      // Data-only messages (older server/client combinations) still use the
+      // local notification fallback.
+      if (message.notification == null) {
+        await _showAndRepeat(message.data);
+      }
     } catch (_) {
       // A notification failure must never crash the background isolate.
     }
