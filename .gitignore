@@ -1,0 +1,46 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.pytest_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+# Local configuration and secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.jks
+*.keystore
+google-services.json
+GoogleService-Info.plist
+
+# Local databases / runtime files
+*.db
+*.sqlite
+*.sqlite3
+instance/
+
+# Flask / tooling
+.venv/
+venv/
+*.log
+
+# Flutter / Dart
+mobile/.dart_tool/
+mobile/.packages
+mobile/.flutter-plugins
+mobile/.flutter-plugins-dependencies
+mobile/.flutter_tool_state
+mobile/build/
+mobile/.pub-cache/
+
+# Generated native projects used by CI
+mobile/android/
+mobile/ios/
+
+# Generated web output is rebuilt by CI and committed separately when deployed.
+# Keep the source web platform files in mobile/web/ tracked.
