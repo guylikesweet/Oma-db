@@ -115,6 +115,20 @@ class LocalDatabase {
   Future<void> applyBootstrap(Map<String, dynamic> data) async {
     final database = await db;
     await database.transaction((txn) async {
+      // Defensive guard: a bootstrap replaces the server-owned snapshot.
+      // Never allow it to run while local operations are still queued.
+      final pending = await txn.query(
+        'sync_queue',
+        columns: ['local_id'],
+        where: "status IN ('pending', 'retry')",
+        limit: 1,
+      );
+      if (pending.isNotEmpty) {
+        throw StateError(
+          'Cannot bootstrap while offline operations are pending.',
+        );
+      }
+
       // Never wipe unsynced work during a bootstrap.
       await txn.delete('sale_items', where: 'sale_id >= 0');
       await txn.delete('sales', where: 'id >= 0');
