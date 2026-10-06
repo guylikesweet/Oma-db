@@ -88,12 +88,11 @@ class _ChatPageState extends State<ChatPage> {
     if (_loadInFlight) return;
     _loadInFlight = true;
     try {
-      final results = await Future.wait([
-        widget.api.chatMessages(limit: 100),
-        if (users.isEmpty) widget.api.users(),
-      ]);
-
-      final serverMessages = results[0]
+      // Opening chat must not wait for the team directory. The message
+      // timeline is the critical path; the directory is loaded independently
+      // for mentions and avatars.
+      final rawMessages = await widget.api.chatMessages(limit: 100);
+      final serverMessages = rawMessages
           .whereType<Map>()
           .map((message) => Map<String, dynamic>.from(message))
           .toList();
@@ -120,12 +119,7 @@ class _ChatPageState extends State<ChatPage> {
       final wasNearBottom = !scroll.hasClients ||
           scroll.position.maxScrollExtent - scroll.position.pixels <= 120;
 
-      final nextUsers = users.isEmpty
-          ? results[1]
-              .whereType<Map>()
-              .map((user) => Map<String, dynamic>.from(user))
-              .toList()
-          : users;
+      final nextUsers = users;
 
       _consecutiveLoadFailures = 0;
       if (!mounted) return;
@@ -1206,45 +1200,16 @@ class _ChatPageState extends State<ChatPage> {
               crossAxisAlignment: CrossAxisAlignment.end,
               textDirection: mine ? TextDirection.rtl : TextDirection.ltr,
               children: [
-                if (showSenderMeta) ...[
-                  _senderAvatar(message, sender),
-                  const SizedBox(width: 4),
-                ],
+                if (!mine)
+                  SizedBox(
+                    width: 30,
+                    child: showSenderMeta
+                        ? _senderAvatar(message, sender)
+                        : const SizedBox.shrink(),
+                  ),
+                const SizedBox(width: 4),
                 Flexible(
-                  child: Stack(
-                    clipBehavior: Clip.none,
-                    children: [
-                      if (showSenderMeta)
-                        Positioned(
-                          bottom: 10,
-                          left: mine ? null : 0,
-                          right: mine ? 0 : null,
-                          child: IgnorePointer(
-                            child: Transform.rotate(
-                              angle: 0.785398,
-                              child: Container(
-                                width: 12,
-                                height: 12,
-                                decoration: BoxDecoration(
-                                  gradient: bubbleGradient,
-                                  border: Border(
-                                    right: BorderSide(
-                                      color: mine && !pending && !failed
-                                          ? Colors.white.withOpacity(.22)
-                                          : scheme.outline.withOpacity(.45),
-                                    ),
-                                    bottom: BorderSide(
-                                      color: mine && !pending && !failed
-                                          ? Colors.white.withOpacity(.22)
-                                          : scheme.outline.withOpacity(.45),
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ConstrainedBox(
+                  child: ConstrainedBox(
                         constraints: BoxConstraints(maxWidth: maxBubbleWidth),
                         child: IntrinsicWidth(
                           child: AnimatedContainer(
@@ -1502,8 +1467,6 @@ class _ChatPageState extends State<ChatPage> {
                           ),
                         ),
                       ),
-                    ],
-                  ),
                 ),
                 if (!pending && !failed)
                   Padding(
