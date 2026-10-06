@@ -1032,7 +1032,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
       if (!silent && mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Sync unavailable: $e'),
+            content: Text('Sync unavailable: ${userFacingError(e)}'),
           ),
         );
       }
@@ -3667,7 +3667,7 @@ class MorePage extends StatelessWidget {
                     }
                   } catch (e) {
                     messenger.showSnackBar(
-                      SnackBar(content: Text('Push test failed: $e')),
+                      SnackBar(content: Text('Push test failed: ${userFacingError(e)}')),
                     );
                   }
                 },
