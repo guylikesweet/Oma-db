@@ -220,13 +220,42 @@ class LocalDatabase {
   Future<void> removeLocalSaleAndRestoreStock(int localSaleId) async {
     final database = await db;
     await database.transaction((txn) async {
-      final items = await txn.query('sale_items', where: 'sale_id = ?', whereArgs: [localSaleId]);
-      for (final item in items) {
-        await txn.rawUpdate('UPDATE products SET stock = stock + ? WHERE id = ?', [item['qty'], item['product_id']]);
+      final saleRows = await txn.query(
+        'sales',
+        columns: ['sale_type'],
+        where: 'id = ?',
+        whereArgs: [localSaleId],
+        limit: 1,
+      );
+      final saleType = saleRows.isEmpty ? null : saleRows.first['sale_type']?.toString();
+      final items = await txn.query(
+        'sale_items',
+        where: 'sale_id = ?',
+        whereArgs: [localSaleId],
+      );
+
+      // Only a stocked sale deducted inventory locally. A preorder must not
+      // add its quantities back when a failed local sale is discarded.
+      if (saleType == 'stock') {
+        for (final item in items) {
+          await txn.rawUpdate(
+            'UPDATE products SET stock = stock + ? WHERE id = ?',
+            [item['qty'], item['product_id']],
+          );
+        }
       }
+
       await txn.delete('sale_items', where: 'sale_id = ?', whereArgs: [localSaleId]);
       await txn.delete('sales', where: 'id = ?', whereArgs: [localSaleId]);
     });
+  }
+
+  Future<void> deleteSyncOperation(String operationId) async {
+    await (await db).delete(
+      'sync_queue',
+      where: 'operation_id = ?',
+      whereArgs: [operationId],
+    );
   }
 
   /// Inserts/updates one sale straight from a plain API response (e.g. the
