@@ -99,6 +99,8 @@ class _ChatPageState extends State<ChatPage> {
 
       final previousLastId =
           messages.isEmpty ? null : messages.last['id'];
+      final wasNearBottom = !scroll.hasClients ||
+          scroll.position.maxScrollExtent - scroll.position.pixels <= 120;
 
       final nextUsers = users.isEmpty
           ? results[1]
@@ -121,7 +123,7 @@ class _ChatPageState extends State<ChatPage> {
 
       if (previousLastId == null) {
         _scrollToBottom(animated: false);
-      } else if (nextLastId != previousLastId) {
+      } else if (nextLastId != previousLastId && wasNearBottom) {
         _scrollToBottom();
       }
     } catch (e) {
