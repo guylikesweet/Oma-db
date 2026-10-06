@@ -24,15 +24,14 @@ cp .env.example .env
 #   ADMIN_PASSWORD=<your choice>
 
 export FLASK_APP=run.py         # Windows: set FLASK_APP=run.py
-flask db upgrade                # creates all 7 tables on your database
+flask db upgrade                # applies the current Alembic migration chain
 flask seed-admin                # creates the admin login if missing
-flask seed-admin --reset         # explicitly reset the configured admin password
+flask seed-admin --reset        # explicitly reset the configured admin password
 
 flask run
 ```
 
-Visit `http://127.0.0.1:5000/` — it redirects to `/admin/`, which redirects to
-`/login` if you're not signed in yet.
+Visit `http://127.0.0.1:5000/` for the Flutter Web application. The legacy Flask/Jinja interface is available under `/classic`.
 
 ## What's built
 
