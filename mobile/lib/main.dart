@@ -1030,10 +1030,10 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
       }
     } catch (e) {
       if (!silent && mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Sync unavailable: ${userFacingError(e)}'),
-          ),
+        showNetworkError(
+          context,
+          e,
+          onRetry: () => sync(silent: false),
         );
       }
 
