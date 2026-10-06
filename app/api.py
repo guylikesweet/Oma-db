@@ -853,6 +853,7 @@ def register_push_device():
             user_id=g.api_user.id,
             token=token,
             platform=platform,
+            notification_channel_version=channel_version,
             enabled=True,
             last_seen_at=datetime.utcnow(),
         )
@@ -860,6 +861,7 @@ def register_push_device():
     else:
         device.user_id = g.api_user.id
         device.platform = platform
+        device.notification_channel_version = channel_version
         device.enabled = True
         device.last_seen_at = datetime.utcnow()
 
