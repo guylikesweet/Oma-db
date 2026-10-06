@@ -664,7 +664,7 @@ class _GlobalChatLauncherState extends State<GlobalChatLauncher>
 
   void _handlePushRequest(Map<String, dynamic>? data) {
     if (!mounted || data == null || data['type'] != 'chat_message') return;
-    final messageId = int.tryParse('\${data['chat_message_id'] ?? ''}');
+        final messageId = int.tryParse('${data['chat_message_id'] ?? ''}');
     _pendingChatMessageId = messageId;
     OmaPushNotifications.chatOpenRequest.value = null;
     WidgetsBinding.instance.addPostFrameCallback((_) {
