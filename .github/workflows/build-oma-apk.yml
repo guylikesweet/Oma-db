@@ -407,10 +407,10 @@ jobs:
                       // generated R class: R lives in the Gradle namespace package,
                       // which is not guaranteed to match com.omagroup.salesapp.
                       val channels = listOf(
-                          Triple("oma_scanner_v2", "Oma scanner", "scanner_beep"),
-                          Triple("oma_arrival_sea_v2", "Sea shipment arrivals", "ship_horn"),
-                          Triple("oma_arrival_air_v2", "Air shipment arrivals", "airport_arrival"),
-                          Triple("oma_chat_v1", "Oma team chat", "chat_message"),
+                          Triple("oma_scanner_v3", "Oma scanner", "scanner_beep"),
+                          Triple("oma_arrival_sea_v3", "Sea shipment arrivals", "ship_horn"),
+                          Triple("oma_arrival_air_v3", "Air shipment arrivals", "airport_arrival"),
+                          Triple("oma_chat_v3", "Oma team chat", "chat_message"),
                       )
 
                       val manager = getSystemService(NotificationManager::class.java)
