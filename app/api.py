@@ -15,7 +15,6 @@ import hashlib
 import json
 import re
 import secrets
-import threading
 from datetime import date, datetime, timedelta
 from decimal import Decimal, InvalidOperation
 from functools import wraps
@@ -35,7 +34,7 @@ from app.models import (
 from app.services.sales import create_sale, SaleValidationError, shipping_cost_for_items
 from app.services.rates import get_rate_for_month, get_air_rate_for_month, get_volume_rate, get_rate_per_kg, RateMissingError
 from app.services.delivery import check_consolidation, find_consolidation_groups
-from app.services.audit import record_audit
+from app.services.audit import record_audit, _schedule_outbox_flush
 from app.services.push_notifications import (
     queue_batch_arrival,
     queue_user_notification,
@@ -2159,44 +2158,18 @@ def mobile_create_chat_message():
             user=g.api_user,
         )
 
-        # Commit the actual message first. Push delivery is deliberately moved
-        # out of the request path so a slow FCM/device response cannot make a
-        # chat message feel slow to the sender.
+        # Queue the push in the SAME transaction as the chat message. The
+        # outbox must never depend on a daemon thread that can disappear when
+        # the request worker is recycled or the Render instance sleeps.
+        queue_chat_message_notifications(
+            message,
+            special_user_ids=special_user_ids,
+        )
+        _schedule_outbox_flush()
+
+        # The message and its durable push outbox rows commit together. FCM
+        # delivery is attempted by the response callback after this commit.
         db.session.commit()
-
-        app_obj = current_app._get_current_object()
-        message_id = message.id
-        notification_user_ids = tuple(special_user_ids)
-
-        def _deliver_chat_pushes():
-            try:
-                with app_obj.app_context():
-                    background_message = ChatMessage.query.get(message_id)
-                    if background_message is None:
-                        return
-                    queue_chat_message_notifications(
-                        background_message,
-                        special_user_ids=set(notification_user_ids),
-                    )
-                    db.session.commit()
-                    flush_outbox()
-            except Exception:
-                try:
-                    db.session.rollback()
-                except Exception:
-                    pass
-                app_obj.logger.exception("Background team chat push delivery failed")
-            finally:
-                try:
-                    db.session.remove()
-                except Exception:
-                    pass
-
-        threading.Thread(
-            target=_deliver_chat_pushes,
-            name="oma-chat-push",
-            daemon=True,
-        ).start()
 
         return jsonify(_chat_message_json(message)), 201
     except ValueError as exc:
