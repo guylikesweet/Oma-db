@@ -12,6 +12,7 @@ import 'login_background.dart';
 import 'data/api_client.dart';
 import 'core/network_errors.dart';
 import 'data/app_session.dart';
+import 'data/background_sync.dart';
 import 'data/local_database.dart';
 import 'data/sale_kind.dart';
 import 'data/sync_repository.dart';
@@ -45,6 +46,8 @@ Future<void> _initializeOma() async {
   await LocalDatabase.instance.db;
   await OmaThemeController.initialize(LocalDatabase.instance);
   await OmaPushNotifications.requestInitialPermissions(LocalDatabase.instance);
+  await OmaBackgroundSync.initialize();
+  await OmaBackgroundSync.requestStartupSync();
 }
 
 void main() {
