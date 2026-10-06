@@ -1,4 +1,5 @@
 from flask import Flask, redirect, url_for, render_template, session, request, flash
+import click
 from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
 from flask_login import LoginManager, login_required
@@ -131,8 +132,13 @@ def create_app(config_object="config.Config"):
 
 def register_cli(app):
     @app.cli.command("seed-admin")
-    def seed_admin():
-        """Create (or reset) the admin user from ADMIN_USERNAME / ADMIN_PASSWORD env vars."""
+    @click.option(
+        "--reset",
+        is_flag=True,
+        help="Reset the existing configured admin password and invalidate its sessions.",
+    )
+    def seed_admin(reset=False):
+        """Create the configured admin if missing; only reset it when explicitly requested."""
         from werkzeug.security import generate_password_hash
         from app.models import User
 
@@ -141,8 +147,14 @@ def register_cli(app):
 
         user = User.query.filter_by(username=username).first()
         if user:
-            user.password_hash = generate_password_hash(password)
-            print(f"Updated password for existing admin user '{username}'.")
+            if reset:
+                user.password_hash = generate_password_hash(password)
+                user.api_token = None
+                user.api_last_activity_at = None
+                user.biometric_credential_hash = None
+                print(f"Reset password for existing admin user '{username}'.")
+            else:
+                print(f"Admin user '{username}' already exists; leaving its password unchanged.")
         else:
             is_first_ever = User.query.count() == 0
             user = User(
