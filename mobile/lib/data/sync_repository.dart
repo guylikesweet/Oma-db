@@ -262,41 +262,93 @@ class SyncRepository {
   Future<String> queueSaleStatus(
     int saleId,
     String status,
-  ) {
-    return enqueue(
-      'sale_status',
+  ) async {
+    return _queueSaleMutation(
+      saleId,
       {
         'sale_id': saleId,
         'status': status,
       },
+      localFields: {'order_status': status},
     );
   }
 
   Future<String> queuePaymentStatus(
     int saleId,
     String paymentStatus,
-  ) {
-    // Reuses the same 'sale_status' operation type — the backend endpoint
-    // already accepts payment_status alongside (or instead of) status, and
-    // api.updateSaleStatus forwards the whole payload through as-is.
-    return enqueue(
-      'sale_status',
+  ) async {
+    // Payment status is part of the same server mutation endpoint, but it
+    // must also be reflected locally immediately when the sale has not
+    // reached the server yet.
+    return _queueSaleMutation(
+      saleId,
       {
         'sale_id': saleId,
         'payment_status': paymentStatus,
       },
+      localFields: {'payment_status': paymentStatus},
     );
   }
 
   Future<String> queueSettleShipping(
     int saleId,
-  ) {
-    return enqueue(
-      'settle_shipping',
+  ) async {
+    return _queueSaleMutation(
+      saleId,
       {
         'sale_id': saleId,
       },
+      localFields: {'shipping_payment_settled': 1},
     );
+  }
+
+  /// Queue a sale mutation against a possibly-temporary negative local sale
+  /// ID. The create_sale operation is recorded as a dependency so the child
+  /// operation cannot reach the server until its parent has produced a real
+  /// sale ID. The payload is rebound to that real ID during reconciliation.
+  Future<String> _queueSaleMutation(
+    int saleId,
+    Map<String, dynamic> payload, {
+    required Map<String, dynamic> localFields,
+  }) async {
+    String? dependency;
+    int? localSaleId;
+
+    if (saleId < 0) {
+      final db = await local.db;
+      final rows = await db.query(
+        'sales',
+        columns: ['client_operation_id'],
+        where: 'id = ?',
+        whereArgs: [saleId],
+        limit: 1,
+      );
+      if (rows.isEmpty) {
+        throw StateError('The local sale no longer exists.');
+      }
+      dependency = rows.first['client_operation_id']?.toString();
+      if (dependency == null || dependency.isEmpty) {
+        throw StateError('The local sale has no sync operation.');
+      }
+      localSaleId = saleId;
+    }
+
+    final op = await enqueue(
+      payload.containsKey('status') ? 'sale_status' : 'sale_status',
+      payload,
+      localSaleId: localSaleId,
+      dependsOn: dependency,
+    );
+
+    final db = await local.db;
+    await db.update(
+      'sales',
+      localFields,
+      where: 'id = ?',
+      whereArgs: [saleId],
+    );
+
+    return op;
   }
 
   Future<String> queueCreateDelivery({
@@ -305,7 +357,36 @@ class SyncRepository {
     String? consolidationType,
     String? address,
     String? notes,
-  }) {
+  }) async {
+    final dependencies = <String>[];
+    final localSaleIds = <int>[];
+    final db = await local.db;
+
+    for (final saleId in saleIds) {
+      if (saleId >= 0) continue;
+      final rows = await db.query(
+        'sales',
+        columns: ['client_operation_id'],
+        where: 'id = ?',
+        whereArgs: [saleId],
+        limit: 1,
+      );
+      if (rows.isEmpty) {
+        throw StateError('A selected local sale no longer exists.');
+      }
+      final dep = rows.first['client_operation_id']?.toString();
+      if (dep == null || dep.isEmpty) {
+        throw StateError('A selected local sale has no sync operation.');
+      }
+      dependencies.add(dep);
+      localSaleIds.add(saleId);
+    }
+
+    // The queue schema has one dependency slot. A delivery involving
+    // multiple unsynced sales depends on the latest parent; all earlier
+    // parents are already ordered before it in the queue and therefore must
+    // complete first.
+    final dependency = dependencies.isEmpty ? null : dependencies.last;
     return enqueue(
       'create_delivery',
       {
@@ -315,6 +396,7 @@ class SyncRepository {
         'delivery_address': address,
         'notes': notes,
       },
+      dependsOn: dependency,
     );
   }
 
@@ -450,8 +532,18 @@ class SyncRepository {
 
     int completed = 0;
 
-    for (final row in rows) {
-      final op = row['operation_id'].toString();
+    for (final queuedRow in rows) {
+      final op = queuedRow['operation_id'].toString();
+
+      final currentRows = await db.query(
+        'sync_queue',
+        where: 'operation_id = ?',
+        whereArgs: [op],
+        limit: 1,
+      );
+      if (currentRows.isEmpty) continue;
+      final row = currentRows.first;
+      if (row['status'] == 'synced') continue;
 
       final dependency =
           row['depends_on_operation_id']?.toString();
