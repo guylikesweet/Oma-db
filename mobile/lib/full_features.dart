@@ -2410,6 +2410,7 @@ class _DeliveriesPageState
                         MaterialPageRoute(
                           builder: (_) => DeliveryDetailPage(
                             api: widget.api,
+                            repo: widget.repo,
                             delivery: delivery,
                           ),
                         ),
