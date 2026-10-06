@@ -77,14 +77,28 @@ def shipping_csv_rows():
 
 
 INVENTORY_CSV_HEADERS = [
-    "id", "name", "sku", "length_cm", "width_cm", "height_cm",
-    "cbm", "volumetric_kg", "actual_weight_kg", "stock",
+    "id", "name", "sku",
+    "supplier_cost", "inbound_shipping_cost", "landed_cost",
+    "markup_percent", "selling_price", "gross_profit_per_unit",
+    "gross_margin_percent", "stock", "inventory_cost_value",
+    "potential_sales_value", "potential_gross_profit",
+    "length_cm", "width_cm", "height_cm",
+    "cbm", "volumetric_kg", "actual_weight_kg",
 ]
 
 
 def inventory_csv_rows():
     for p in Product.query.order_by(Product.name).all():
+        landed = p.cost or 0
+        selling = p.selling_price or 0
+        gross_profit = selling - landed
+        gross_margin = (gross_profit / selling * 100) if selling else 0
+        stock = p.stock or 0
         yield [
-            p.id, p.name, p.sku, p.length_cm, p.width_cm, p.height_cm,
-            p.cbm, p.volumetric_kg, p.actual_weight_kg, p.stock,
+            p.id, p.name, p.sku,
+            p.supplier_cost or 0, p.inbound_shipping_cost or 0, landed,
+            p.markup_percent or 0, selling, gross_profit, gross_margin,
+            stock, landed * stock, selling * stock, gross_profit * stock,
+            p.length_cm, p.width_cm, p.height_cm,
+            p.cbm, p.volumetric_kg, p.actual_weight_kg,
         ]
