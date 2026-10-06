@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
@@ -7,6 +9,8 @@ import '../data/api_client.dart';
 import '../data/local_database.dart';
 import 'package:location/location.dart';
 
+import 'web_push_foreground.dart';
+
 class OmaPushNotifications {
   OmaPushNotifications._();
 
@@ -14,21 +18,22 @@ class OmaPushNotifications {
   static bool _tokenRefreshAttached = false;
   static bool _foregroundListenerAttached = false;
 
+  static final ValueNotifier<Map<String, dynamic>?> chatOpenRequest = ValueNotifier<Map<String, dynamic>?>(null);
+
   static final FlutterLocalNotificationsPlugin _local =
       FlutterLocalNotificationsPlugin();
 
   static const AndroidInitializationSettings _androidInit =
       AndroidInitializationSettings('@mipmap/ic_launcher');
 
-  static const InitializationSettings _initSettings =
-      InitializationSettings(android: _androidInit);
+  static const InitializationSettings _initSettings = InitializationSettings(android: _androidInit, iOS: DarwinInitializationSettings(), macOS: DarwinInitializationSettings());
 
   static Future<void> requestInitialPermissions(LocalDatabase local) async {
     const key = 'initial_permissions_prompted';
     if (await local.getMeta(key) == '1') return;
 
     try {
-      await _local.initialize(_initSettings);
+      await _local.initialize(_initSettings, onDidReceiveNotificationResponse: _handleLocalNotificationTap);
 
       final android = _local
           .resolvePlatformSpecificImplementation<
@@ -77,9 +82,14 @@ class OmaPushNotifications {
       }
 
       final vapid = const String.fromEnvironment('FCM_WEB_VAPID_KEY');
-      final token = kIsWeb
-          ? await messaging.getToken(vapidKey: vapid)
-          : await messaging.getToken();
+      if (!kIsWeb && defaultTargetPlatform == TargetPlatform.iOS) {
+        for (var attempt = 0; attempt < 10; attempt++) {
+          if (await messaging.getAPNSToken() != null) break;
+          await Future<void>.delayed(const Duration(milliseconds: 300));
+        }
+      }
+
+      final token = kIsWeb ? await messaging.getToken(vapidKey: vapid) : await messaging.getToken();
 
       if (token != null && token.isNotEmpty) {
         await api.registerPushDevice(
@@ -106,7 +116,10 @@ class OmaPushNotifications {
 
       if (!_foregroundListenerAttached) {
         FirebaseMessaging.onMessage.listen((message) async {
-          if (kIsWeb) return;
+          if (kIsWeb) {
+            await showWebForegroundPush(message.data);
+            return;
+          }
           await _showAndRepeat(message.data);
         });
         _foregroundListenerAttached = true;
@@ -136,7 +149,7 @@ class OmaPushNotifications {
         }
         _firebaseReady = true;
       }
-      await _local.initialize(_initSettings);
+      await _local.initialize(_initSettings, onDidReceiveNotificationResponse: _handleLocalNotificationTap);
       await _showAndRepeat(message.data);
     } catch (_) {
       // A notification failure must never crash the background isolate.
@@ -209,14 +222,8 @@ class OmaPushNotifications {
     final id =
         rawId ?? DateTime.now().millisecondsSinceEpoch.remainder(2147483647);
 
-    await _local.show(
-      id,
-      title,
-      body,
-      notificationDetails,
-      payload: data['batch_id']?.toString() ??
-          '${data['operation_id'] ?? ''}',
-    );
+    final payload = jsonEncode(data);
+    await _local.show(id, title, body, notificationDetails, payload: payload);
 
     // Business notifications keep the existing two-hour reminder.
     // Chat messages intentionally do not repeat: a busy team chat should not
@@ -229,10 +236,29 @@ class OmaPushNotifications {
       body,
       const Duration(hours: 2),
       notificationDetails,
-      payload: data['batch_id']?.toString() ??
-          '${data['operation_id'] ?? ''}',
+      payload: payload,
       androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
     );
+  }
+
+  static void _handleLocalNotificationTap(NotificationResponse response) {
+    final raw = response.payload;
+    if (raw == null || raw.isEmpty) return;
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is Map) chatOpenRequest.value = Map<String, dynamic>.from(decoded);
+    } catch (_) {}
+  }
+
+  static Future<void> restoreNotificationLaunch() async {
+    try {
+      final details = await _local.getNotificationAppLaunchDetails();
+      final raw = details?.notificationResponse?.payload;
+      if (details?.didNotificationLaunchApp == true && raw != null && raw.isNotEmpty) {
+        final decoded = jsonDecode(raw);
+        if (decoded is Map) chatOpenRequest.value = Map<String, dynamic>.from(decoded);
+      }
+    } catch (_) {}
   }
 
   static Future<void> clearPendingReminders() async {
