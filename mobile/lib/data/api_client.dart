@@ -1132,6 +1132,10 @@ class ApiClient {
     );
   }
 
+  Future<Map<String, dynamic>> chatMessage(int id) {
+    return _map('GET', '/v1/chat/messages/$id');
+  }
+
   Future<Map<String, dynamic>> sendChatMessage(
     String content, {
     int? replyToId,
