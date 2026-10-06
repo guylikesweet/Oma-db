@@ -69,7 +69,10 @@ class OmaPushNotifications {
       }
       final messaging = FirebaseMessaging.instance;
 
-      await _local.initialize(_initSettings);
+      await _local.initialize(
+        _initSettings,
+        onDidReceiveNotificationResponse: _handleLocalNotificationTap,
+      );
 
       final permission = await messaging.requestPermission(
         alert: true,
@@ -215,6 +218,18 @@ class OmaPushNotifications {
 
     final notificationDetails = NotificationDetails(
       android: details,
+      iOS: const DarwinNotificationDetails(
+        presentAlert: true,
+        presentBadge: true,
+        presentSound: true,
+        sound: 'default',
+      ),
+      macOS: const DarwinNotificationDetails(
+        presentAlert: true,
+        presentBadge: true,
+        presentSound: true,
+        sound: 'default',
+      ),
     );
 
     final rawId = int.tryParse(
