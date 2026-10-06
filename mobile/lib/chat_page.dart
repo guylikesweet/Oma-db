@@ -965,17 +965,17 @@ class _ChatPageState extends State<ChatPage> {
                 children: [
                   IconButton(
                     tooltip: 'Emoji',
-                    onPressed: sending ? null : () => setState(() => emojiOpen = !emojiOpen),
+                    onPressed: () => setState(() => emojiOpen = !emojiOpen),
                     icon: const Icon(Icons.emoji_emotions_outlined),
                   ),
                   IconButton(
                     tooltip: 'Photo',
-                    onPressed: sending ? null : pickPhoto,
+                    onPressed: pickPhoto,
                     icon: const Icon(Icons.photo_outlined),
                   ),
                   const Spacer(),
                   IconButton.filled(
-                  onPressed: sending ? null : send,
+                  onPressed: send,
                   icon: sending
                       ? const SizedBox(
                           width: 20,
