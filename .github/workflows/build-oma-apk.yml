@@ -1242,6 +1242,7 @@ jobs:
 
           flutter build apk \
             --release \
+            --build-number="${{ github.run_number }}" \
             --dart-define=API_BASE_URL="$API_URL" \
             --dart-define=FCM_API_KEY="$FCM_API_KEY" \
             --dart-define=FCM_APP_ID="$FCM_APP_ID" \
@@ -1255,6 +1256,7 @@ jobs:
 
           flutter build appbundle \
             --release \
+            --build-number="${{ github.run_number }}" \
             --dart-define=API_BASE_URL="$API_URL" \
             --dart-define=FCM_API_KEY="$FCM_API_KEY" \
             --dart-define=FCM_APP_ID="$FCM_APP_ID" \
