@@ -787,8 +787,10 @@ class _WebSalesPageState extends State<WebSalesPage> {
     }
   }
 
-  Future<void> changeStatus(int id) async {
-    String selected = 'New';
+  Future<void> changeStatus(int id, String current) async {
+    String selected = const ['New', 'Packed', 'Shipped', 'Delivered', 'Cancelled'].contains(current)
+        ? current
+        : 'New';
 
     final ok = await showDialog<bool>(
       context: context,
@@ -1001,6 +1003,7 @@ class _WebSalesPageState extends State<WebSalesPage> {
                           if (value == 'status') {
                             await changeStatus(
                               sale['id'] as int,
+                              '${sale['order_status'] ?? ''}',
                             );
                           }
 
