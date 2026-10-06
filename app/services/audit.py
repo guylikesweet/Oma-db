@@ -249,7 +249,6 @@ def _change_notification_for_audit(
         ]
 
     return {
-        "actor_user_id": actor_id,
         "recipient_user_ids": recipient_user_ids,
         "event_type": event_type,
         "title": title,
