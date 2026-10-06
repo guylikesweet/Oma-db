@@ -172,7 +172,7 @@ class _WebsiteFeaturesPageState extends State<WebsiteFeaturesPage> {
             Icons.lock_reset,
             'My account',
             'Change your username or password',
-            () => open(ChangePasswordPage(api: widget.api)),
+            () => open(ProfilePage(api: widget.api)),
           ),
 
           _tile(
