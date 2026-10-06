@@ -296,6 +296,7 @@ class _WebProductsPageState extends State<WebProductsPage> {
     try {
       final ok = await showDialog<bool>(
         context: context,
+        barrierDismissible: false,
         builder: (dialogContext) {
           return StatefulBuilder(
             builder: (context, setDialogState) {
