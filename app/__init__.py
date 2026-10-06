@@ -65,7 +65,22 @@ def create_app(config_object="config.Config"):
     # build fails before it even reaches these routes. Every /api/* route
     # authenticates via an Authorization: Bearer <token> header, not
     # cookies, so an open origin policy here doesn't expose any session.
-    CORS(app, resources={r"/api/*": {"origins": "*"}})
+    cors_env = os.environ.get("OMA_CORS_ORIGINS", "").strip()
+    if cors_env:
+        cors_origins = [
+            origin.strip()
+            for origin in cors_env.split(",")
+            if origin.strip()
+        ]
+    elif os.environ.get("DATABASE_URL"):
+        # Production Flutter Web is served by this Flask application, so it
+        # does not need cross-origin API access. Require explicit origins for
+        # any separately hosted web client.
+        cors_origins = []
+    else:
+        cors_origins = "*"
+
+    CORS(app, resources={r"/api/*": {"origins": cors_origins}})
 
     with app.app_context():
         from app import models  # noqa: F401  (register models for migrations)
