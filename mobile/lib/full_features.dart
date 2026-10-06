@@ -14,6 +14,7 @@ import 'data/sync_repository.dart';
 import 'data/sale_kind.dart';
 import 'invoice_actions.dart';
 import 'journey_widgets.dart';
+import 'profile_page.dart';
 import 'chat_page.dart';
 
 class WebsiteFeaturesPage extends StatefulWidget {
@@ -112,7 +113,14 @@ class _WebsiteFeaturesPageState extends State<WebsiteFeaturesPage> {
             Icons.receipt_long,
             'Manage sales',
             'Shipping settlement requires biometric verification.',
-            () => open(WebSalesPage(api: widget.api)),
+            () => open(
+              SalesPage(
+                api: widget.api,
+                local: widget.local,
+                repo: widget.repo,
+                refreshKey: widget.refreshKey,
+              ),
+            ),
           ),
 
           _tile(
@@ -179,7 +187,7 @@ class _WebsiteFeaturesPageState extends State<WebsiteFeaturesPage> {
             Icons.lock_reset,
             'My account',
             'Change your username or password',
-            () => open(ChangePasswordPage(api: widget.api)),
+            () => open(ProfilePage(api: widget.api)),
           ),
 
           _tile(
