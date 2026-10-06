@@ -18,6 +18,7 @@ class ProfilePage extends StatefulWidget {
 
 class _ProfilePageState extends State<ProfilePage> {
   final username = TextEditingController();
+  final currentPassword = TextEditingController();
   final password = TextEditingController();
   final confirm = TextEditingController();
   Uint8List? photo;
@@ -38,6 +39,7 @@ class _ProfilePageState extends State<ProfilePage> {
   @override
   void dispose() {
     username.dispose();
+    currentPassword.dispose();
     password.dispose();
     confirm.dispose();
     super.dispose();
@@ -82,16 +84,31 @@ class _ProfilePageState extends State<ProfilePage> {
     }
     setState(() { saving = true; error = null; });
     try {
+      Map<String, dynamic>? passwordResult;
+      if (password.text.isNotEmpty) {
+        if (currentPassword.text.isEmpty) {
+          throw Exception('Enter your current password to set a new password.');
+        }
+        passwordResult = await widget.api.changePassword(
+          currentPassword.text,
+          password.text,
+        );
+        await widget.api.clearBiometricCredential();
+      }
+
       final payload = <String, dynamic>{'username': username.text.trim()};
-      if (password.text.isNotEmpty) payload['password'] = password.text;
       if (photo != null) payload['profile_photo_base64'] = base64Encode(photo!);
       final result = await widget.api.updateProfile(payload);
+      if (passwordResult != null && passwordResult['token'] != null) {
+        await widget.api.saveToken('${passwordResult['token']}');
+      }
       if (result['profile_photo_url'] != null) {
         currentPhotoUrl = result['profile_photo_url'].toString();
         try {
           currentPhotoBytes = await widget.api.downloadChatAttachment(currentPhotoUrl!);
         } catch (_) {}
       }
+      currentPassword.clear();
       password.clear();
       confirm.clear();
       await AppSession.refresh(widget.api);
@@ -150,6 +167,16 @@ class _ProfilePageState extends State<ProfilePage> {
             controller: username,
             enabled: !saving,
             decoration: const InputDecoration(labelText: 'Username', prefixIcon: Icon(Icons.person_outline)),
+          ),
+          const SizedBox(height: 14),
+          TextField(
+            controller: currentPassword,
+            enabled: !saving,
+            obscureText: true,
+            decoration: const InputDecoration(
+              labelText: 'Current password (required when changing it)',
+              prefixIcon: Icon(Icons.lock_outline),
+            ),
           ),
           const SizedBox(height: 14),
           TextField(
