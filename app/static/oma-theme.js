@@ -69,6 +69,43 @@
     }
   }
 
+
+  function installPasswordToggles() {
+    var inputs = document.querySelectorAll('input[type="password"]');
+    inputs.forEach(function (input) {
+      if (input.dataset.omaPasswordToggle === '1') return;
+
+      var parent = input.parentElement;
+      if (!parent) return;
+
+      var wrap;
+      if (parent.classList.contains('oma-password-wrap')) {
+        wrap = parent;
+      } else {
+        wrap = document.createElement('div');
+        wrap.className = 'oma-password-wrap';
+        parent.insertBefore(wrap, input);
+        wrap.appendChild(input);
+      }
+
+      var button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'oma-password-toggle';
+      button.setAttribute('aria-label', 'Show password');
+      button.setAttribute('title', 'Show password');
+      button.textContent = '◉';
+      button.addEventListener('click', function () {
+        var hidden = input.type === 'password';
+        input.type = hidden ? 'text' : 'password';
+        button.textContent = hidden ? '○' : '◉';
+        button.setAttribute('aria-label', hidden ? 'Hide password' : 'Show password');
+        button.setAttribute('title', hidden ? 'Hide password' : 'Show password');
+      });
+      wrap.appendChild(button);
+      input.dataset.omaPasswordToggle = '1';
+    });
+  }
+
   function applyTheme() {
     var pref = preference();
     var theme = LIGHT;
@@ -104,6 +141,7 @@
 
     document.documentElement.setAttribute('data-oma-theme', theme);
     updateControl();
+    installPasswordToggles();
   }
 
   function updateControl() {
@@ -148,6 +186,7 @@
 
   window.addEventListener('DOMContentLoaded', function () {
     installControl();
+    installPasswordToggles();
     applyTheme();
   });
 })();
