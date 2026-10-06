@@ -175,7 +175,7 @@ class _InvoiceDialogState extends State<_InvoiceDialog> {
     try {
       await Printing.sharePdf(bytes: data, filename: fileName);
     } catch (e) {
-      say('Could not save: $e');
+      say('Could not save: ${userFacingError(e)}');
     }
   }
 
