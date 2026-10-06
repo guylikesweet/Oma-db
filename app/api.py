@@ -14,6 +14,7 @@ import io
 import json
 import re
 import secrets
+import threading
 from datetime import date, datetime, timedelta
 from decimal import Decimal, InvalidOperation
 from functools import wraps
@@ -2104,15 +2105,6 @@ def mobile_create_chat_message():
         special_user_ids = set(mentioned_ids)
         if reply_to is not None and reply_to.sender_user_id != g.api_user.id:
             special_user_ids.add(reply_to.sender_user_id)
-        # Chat delivery must not fail just because the optional push-notification
-        # subsystem has a problem. The message itself is the primary operation.
-        try:
-            queue_chat_message_notifications(message, special_user_ids=special_user_ids)
-        except Exception:
-            db.session.rollback()
-            db.session.add(message)
-            db.session.flush()
-
         record_audit(
             "chat.message",
             target_type="chat_message",
@@ -2120,11 +2112,39 @@ def mobile_create_chat_message():
             details={"reply_to_id": reply_to_id, "mention_user_ids": sorted(mentioned_ids), "has_photo": bool(attachment)},
             user=g.api_user,
         )
+
+        # Commit the actual message first. Push delivery is deliberately moved
+        # out of the request path so a slow FCM/device response cannot make a
+        # chat message feel slow to the sender.
         db.session.commit()
+
         try:
-            flush_outbox()
+            queue_chat_message_notifications(message, special_user_ids=special_user_ids)
+            db.session.commit()
         except Exception:
-            pass
+            db.session.rollback()
+            current_app.logger.exception("Team chat push queue failed")
+
+        app_obj = current_app._get_current_object()
+
+        def _flush_chat_pushes():
+            try:
+                with app_obj.app_context():
+                    flush_outbox()
+            except Exception:
+                app_obj.logger.exception("Background team chat push flush failed")
+            finally:
+                try:
+                    db.session.remove()
+                except Exception:
+                    pass
+
+        threading.Thread(
+            target=_flush_chat_pushes,
+            name="oma-chat-push",
+            daemon=True,
+        ).start()
+
         return jsonify(_chat_message_json(message)), 201
     except ValueError as exc:
         db.session.rollback()
