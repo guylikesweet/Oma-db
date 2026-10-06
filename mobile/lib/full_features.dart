@@ -462,8 +462,8 @@ class _WebProductsPageState extends State<WebProductsPage> {
                   ),
                 ),
                 actions: [
-                  TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('Cancel')),
-                  FilledButton(onPressed: () => Navigator.pop(dialogContext, true), child: const Text('Save')),
+                  TextButton(onPressed: calculating ? null : () => Navigator.pop(dialogContext, false), child: const Text('Cancel')),
+                  FilledButton(onPressed: calculating ? null : () => Navigator.pop(dialogContext, true), child: const Text('Save')),
                 ],
               );
             },
