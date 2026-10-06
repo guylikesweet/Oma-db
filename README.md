@@ -25,7 +25,8 @@ cp .env.example .env
 
 export FLASK_APP=run.py         # Windows: set FLASK_APP=run.py
 flask db upgrade                # creates all 7 tables on your database
-flask seed-admin                # creates/resets the admin login from .env
+flask seed-admin                # creates the admin login if missing
+flask seed-admin --reset         # explicitly reset the configured admin password
 
 flask run
 ```
