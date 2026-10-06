@@ -12,7 +12,7 @@ concurrency:
 
 jobs:
   build:
-    if: github.event_name == 'pull_request' || github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
     permissions:
       contents: write
@@ -124,6 +124,23 @@ jobs:
           # not mobile/web/ (that resolved to mobile/mobile/web).
           mkdir -p web
           cat > web/firebase-messaging-sw.js <<EOF
+          self.addEventListener('notificationclick', function(event) {
+            event.notification.close();
+            const data = event.notification.data || {};
+            const messageId = data.chat_message_id || '';
+            const url = '/webapp/' + (messageId ? '?chat_message_id=' + encodeURIComponent(messageId) : '');
+            event.waitUntil(clients.matchAll({type: 'window', includeUncontrolled: true}).then(function(clientList) {
+              for (const client of clientList) {
+                if ('focus' in client) {
+                  return client.focus().then(function() {
+                    if (messageId && 'navigate' in client) return client.navigate(url);
+                  });
+                }
+              }
+              return clients.openWindow(url);
+            }));
+          });
+
           importScripts("https://www.gstatic.com/firebasejs/11.6.1/firebase-app-compat.js");
           importScripts("https://www.gstatic.com/firebasejs/11.6.1/firebase-messaging-compat.js");
 
@@ -148,22 +165,6 @@ jobs:
               data: data
             };
             self.registration.showNotification(title, options);
-          });
-          self.addEventListener('notificationclick', function(event) {
-            event.notification.close();
-            const data = event.notification.data || {};
-            const messageId = data.chat_message_id || '';
-            const url = '/webapp/' + (messageId ? '?chat_message_id=' + encodeURIComponent(messageId) : '');
-            event.waitUntil(clients.matchAll({type: 'window', includeUncontrolled: true}).then(function(clientList) {
-              for (const client of clientList) {
-                if ('focus' in client) {
-                  return client.focus().then(function() {
-                    if (messageId && 'navigate' in client) return client.navigate(url);
-                  });
-                }
-              }
-              return clients.openWindow(url);
-            }));
           });
           EOF
       - name: Build web (release)
@@ -230,7 +231,7 @@ jobs:
       # this workflow's own "app/**" trigger and re-run itself forever.
       # ------------------------------------------------------------
       - name: Commit compiled web app
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        if: github.ref == 'refs/heads/main'
         shell: bash
         run: |
           set -euo pipefail
