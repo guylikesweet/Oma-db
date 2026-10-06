@@ -4,7 +4,7 @@ services:
     env: python
     plan: free
     buildCommand: >-
-      pip install -r requirements.txt && flask db upgrade oma20261006_final && flask db current && flask db heads && flask seed-admin
+      pip install -r requirements.txt && flask db upgrade oma20261006_final && flask db current && flask db heads
     startCommand: "gunicorn run:app"
     healthCheckPath: /healthz
     envVars:
@@ -17,4 +17,4 @@ services:
       - key: ADMIN_USERNAME
         sync: false
       - key: ADMIN_PASSWORD
-        sync: false          # used only when creating the configured admin or explicitly resetting it
+        sync: false          # used by the manual flask seed-admin command
