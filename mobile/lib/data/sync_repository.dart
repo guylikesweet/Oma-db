@@ -224,13 +224,15 @@ class SyncRepository {
 
   Future<String> queueCreateBatch(
     String name,
-    String notes,
-  ) {
+    String notes, {
+    String transportMode = 'sea',
+  }) {
     return enqueue(
       'create_batch',
       {
         'name': name.trim(),
         'notes': notes.trim(),
+        'transport_mode': transportMode,
       },
     );
   }
