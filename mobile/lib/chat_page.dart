@@ -699,7 +699,39 @@ class _ChatPageState extends State<ChatPage> {
     }
 
     final before = text.substring(0, cursor);
-    final match = RegExp(r'(^|\s)@([A-Za-z0-9_.-]*)    Map<String, dynamic> user,
+    final match = RegExp(r'(^|\s)@([A-Za-z0-9_.-]*)$').firstMatch(before);
+
+    if (match == null) {
+      if (mentionOpen) {
+        setState(() {
+          mentionOpen = false;
+          mentionOptions = [];
+        });
+      }
+      return;
+    }
+
+    final query = (match.group(2) ?? '').toLowerCase();
+    final filtered = users
+        .where((user) => user['is_active'] != false)
+        .where((user) {
+          final username = (user['username'] ?? '').toString().toLowerCase();
+          return username.startsWith(query);
+        })
+        .where((user) => user['id'] != AppSession.userId)
+        .take(8)
+        .map((user) => Map<String, dynamic>.from(user))
+        .toList();
+
+    if (!mounted) return;
+    setState(() {
+      mentionOptions = filtered;
+      mentionOpen = filtered.isNotEmpty;
+    });
+  }
+
+  void _selectMention(
+    Map<String, dynamic> user,
     TextEditingController controller,
   ) {
     final text = controller.text;
@@ -722,12 +754,38 @@ class _ChatPageState extends State<ChatPage> {
         offset: start + replacement.length,
       ),
     );
+
     if (mounted) {
       setState(() {
         mentionOpen = false;
         mentionOptions = [];
       });
     }
+  }
+
+  Future<void> _retryFailedMessage(Map<String, dynamic> message) async {
+    if (sending) return;
+
+    final content = '${message['content'] ?? ''}';
+    final localAttachment = message['_attachment_bytes'];
+    final filename = message['attachment_filename']?.toString();
+
+    setState(() {
+      messages = messages
+          .where((item) => item['id'] != message['id'])
+          .toList();
+      composer.text = content;
+      composer.selection = TextSelection.collapsed(
+        offset: composer.text.length,
+      );
+      attachmentBytes = localAttachment is Uint8List ? localAttachment : null;
+      attachmentName = filename;
+      replyTo = message['reply_to'] is Map
+          ? Map<String, dynamic>.from(message['reply_to'] as Map)
+          : null;
+    });
+
+    await send();
   }
 
   Widget _composer() {
@@ -1241,6 +1299,25 @@ class _ChatPageState extends State<ChatPage> {
                         fontSize: 10,
                         fontWeight: FontWeight.w700,
                         color: scheme.error,
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    InkWell(
+                      onTap: () => _retryFailedMessage(message),
+                      borderRadius: BorderRadius.circular(8),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 5,
+                          vertical: 2,
+                        ),
+                        child: Text(
+                          'Retry',
+                          style: TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w900,
+                            color: scheme.primary,
+                          ),
+                        ),
                       ),
                     ),
                   ] else ...[
