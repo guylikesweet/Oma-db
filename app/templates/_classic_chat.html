@@ -135,8 +135,7 @@ window.omaClassicChatUserId = {{ current_user.id|tojson }};
     var id=Number(targetMessageId);
     if(!Number.isInteger(id)||id<1)return;
     try{
-      var targetRows=await api('/classic/chat/messages?limit=1&before_id='+(id+1));
-      var target=targetRows.find(function(m){return String(m.id)===String(targetMessageId)});
+      var target=await api('/classic/chat/messages/'+encodeURIComponent(id));
       if(target){
         messages=messages.concat([target]).filter(function(m,i,a){return a.findIndex(function(x){return String(x.id)===String(m.id)})===i}).sort(function(a,b){return Number(a.id)-Number(b.id)});
         render();
