@@ -1,22 +1,8 @@
 name: Build OmaSales Mobile
 
 on:
-  pull_request:
-    paths:
-      - 'app/**'
-      - 'mobile/**'
-      - 'migrations/**'
-      - 'requirements.txt'
-      - '.github/workflows/build-oma-apk.yml'
-
-  push:
-    paths:
-      - 'app/**'
-      - 'mobile/**'
-      - 'migrations/**'
-      - 'requirements.txt'
-      - '.github/workflows/build-oma-apk.yml'
-
+  # Automatic push/PR builds are intentionally disabled.
+  # Builds must be started manually from the Actions tab.
   workflow_dispatch:
     inputs:
       api_url:
