@@ -31,7 +31,7 @@ from app.models import (
     ChatMessage, ChatMention, ChatReaction,
 )
 from app.services.sales import create_sale, SaleValidationError, shipping_cost_for_items
-from app.services.rates import get_rate_for_month, get_volume_rate, get_rate_per_kg, RateMissingError
+from app.services.rates import get_rate_for_month, get_air_rate_for_month, get_volume_rate, get_rate_per_kg, RateMissingError
 from app.services.delivery import check_consolidation, find_consolidation_groups
 from app.services.audit import record_audit
 from app.services.push_notifications import (
@@ -942,7 +942,7 @@ def mobile_product_cost_calculator():
         volume_rate = (
             get_rate_for_month(date.today())
             if mode == "sea"
-            else __import__("app.services.rates", fromlist=["get_air_rate_for_month"]).get_air_rate_for_month(date.today())
+            else get_air_rate_for_month(date.today())
         )
         if volume_rate is None:
             raise RateMissingError("No shipping rate is configured for this month.")
