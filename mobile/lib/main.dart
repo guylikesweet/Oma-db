@@ -1849,6 +1849,7 @@ class _ProductDialogState extends State<ProductDialog> {
 
   String shippingMode = 'sea';
   bool calculating = false;
+  Map<String, dynamic>? costResult;
 
   late final l = TextEditingController(
     text: widget.product?['length_cm']?.toString() ?? '',
@@ -1975,6 +1976,7 @@ class _ProductDialogState extends State<ProductDialog> {
       landedCost.text = (result['landed_cost'] ?? 0).toString();
       shippingCost.text = (result['shipping_cost'] ?? 0).toString();
       sellingPrice.text = (result['selling_price'] ?? 0).toString();
+      costResult = result;
       if (mounted) setState(() {});
     } catch (e) {
       if (mounted) setState(() => error = 'Could not calculate cost: $e');
@@ -1983,6 +1985,19 @@ class _ProductDialogState extends State<ProductDialog> {
     }
   }
 
+  Widget _financeRow(String label, dynamic value, {bool bold = false}) {
+    final display = value is num ? value.toStringAsFixed(2) : '$value';
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 3),
+      child: Row(
+        children: [
+          Expanded(child: Text(label)),
+          const SizedBox(width: 12),
+          Text(display, style: TextStyle(fontWeight: bold ? FontWeight.w900 : FontWeight.w600)),
+        ],
+      ),
+    );
+  }
   @override
   Widget build(BuildContext context) => AlertDialog(
         title: Text(
@@ -2113,6 +2128,33 @@ class _ProductDialogState extends State<ProductDialog> {
                     labelText: 'Actual weight kg',
                   ),
                 ),
+                if (costResult != null) ...[
+                  const SizedBox(height: 12),
+                  Card(
+                    child: Padding(
+                      padding: const EdgeInsets.all(14),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text('Financial breakdown', style: TextStyle(fontWeight: FontWeight.w900)),
+                          const SizedBox(height: 10),
+                          _financeRow('Product / supplier cost', costResult!['supplier_cost']),
+                          _financeRow('Volume shipping', costResult!['volume_shipping_cost']),
+                          _financeRow('Weight + packaging', costResult!['weight_shipping_cost']),
+                          const Divider(),
+                          _financeRow('True landed cost', costResult!['landed_cost'], bold: true),
+                          _financeRow('Markup', '${costResult!['markup_percent'] ?? 0}%'),
+                          _financeRow('Selling price', costResult!['selling_price'], bold: true),
+                          _financeRow('Gross profit / unit', costResult!['gross_profit'], bold: true),
+                          _financeRow('Gross margin', '${(costResult!['gross_margin_percent'] ?? 0).toStringAsFixed(2)}%', bold: true),
+                          _financeRow('Shipping mode', '${costResult!['mode']}'.toUpperCase()),
+                          _financeRow('Volume rate', costResult!['volume_rate']),
+                          _financeRow('Packing rate / kg', costResult!['packing_rate_per_kg']),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
                 if (widget.product == null) const SizedBox(height: 14),
                 if (widget.product == null)
                   TextField(
