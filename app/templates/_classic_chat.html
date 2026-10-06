@@ -67,7 +67,7 @@ window.omaClassicChatUserId = {{ current_user.id|tojson }};
   function mentionUser(username){return users.find(function(u){return String(u.username||'').toLowerCase()===String(username||'').toLowerCase()})||null}
   function renderBody(text){
     var safe=esc(text||'');
-    return safe.replace(/(^|[\\s])@([A-Za-z0-9_.-]{1,50})/g,function(_,prefix,username){
+    return safe.replace(/(^|[\s])@([A-Za-z0-9_.-]{1,50})/g,function(_,prefix,username){
       var user=mentionUser(username);
       if(!user)return prefix+'@'+username;
       return prefix+'<button type="button" class="oma-chat-mention-link" data-mention-user="'+esc(user.id)+'">@'+esc(username)+'</button>';
