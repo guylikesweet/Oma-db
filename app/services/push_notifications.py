@@ -305,6 +305,10 @@ def flush_outbox(limit=100):
                     data=data,
                     android=messaging.AndroidConfig(
                         priority="high",
+                        notification=messaging.AndroidNotification(
+                            title=row.title,
+                            body=row.body,
+                        ),
                     ),
                     apns=messaging.APNSConfig(
                         headers={
