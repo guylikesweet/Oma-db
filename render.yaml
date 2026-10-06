@@ -4,7 +4,7 @@ services:
     env: python
     plan: free
     buildCommand: >-
-      pip install -r requirements.txt && python -c 'from run import app; from sqlalchemy import text; from app import db; ctx=app.app_context(); ctx.push(); c=db.engine.begin(); conn=c.__enter__(); rows=conn.execute(text("SELECT version_num FROM alembic_version")).scalars().all(); print("Alembic versions before repair:", rows); conn.execute(text("DELETE FROM alembic_version WHERE version_num = \'oma20261005_chat_fix\' AND \'oma20261006_final\' IN (SELECT version_num FROM alembic_version)")); print("Alembic stale-marker repair complete"); c.__exit__(None,None,None); ctx.pop()' && flask db upgrade oma20261006_final && flask db current && flask db heads && flask seed-admin
+      pip install -r requirements.txt && python -c 'from run import app; from sqlalchemy import text; from app import db; ctx=app.app_context(); ctx.push(); c=db.engine.begin(); conn=c.__enter__(); rows=conn.execute(text("SELECT version_num FROM alembic_version")).scalars().all(); print("Alembic versions before repair:", rows); final="oma20261006_final" in rows; stale="oma20261005_chat_fix" in rows; print("final_present=", final, "stale_present=", stale); conn.execute(text("DELETE FROM alembic_version WHERE version_num = :stale AND :final IN (SELECT version_num FROM alembic_version)"), {"stale":"oma20261005_chat_fix", "final":"oma20261006_final"}); rows=conn.execute(text("SELECT version_num FROM alembic_version")).scalars().all(); print("Alembic versions after repair:", rows); c.__exit__(None,None,None); ctx.pop()' && flask db upgrade oma20261006_final && flask db current && flask db heads && flask seed-admin
     startCommand: "gunicorn run:app"
     healthCheckPath: /healthz
     envVars:
