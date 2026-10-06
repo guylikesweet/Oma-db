@@ -3,6 +3,7 @@ import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:sqflite/sqflite.dart' show databaseFactory;
 import 'package:sqflite_common_ffi_web/sqflite_ffi_web.dart';
 import 'brand_loader.dart';
@@ -23,6 +24,9 @@ import 'new_sale_page.dart';
 import 'journey_widgets.dart';
 import 'chat_page.dart';
 import 'profile_page.dart';
+import 'presentation/controllers/dashboard_controller.dart';
+import 'presentation/controllers/session_controller.dart';
+import 'presentation/providers/app_providers.dart';
 
 @pragma('vm:entry-point')
 Future<void> omaFirebaseMessagingBackgroundHandler(RemoteMessage message) async {
@@ -50,7 +54,20 @@ void main() {
       omaFirebaseMessagingBackgroundHandler,
     );
   }
-  runApp(OmaMobileApp(initialization: _initializeOma()));
+  runApp(
+    const ProviderScope(
+      child: OmaMobileAppRoot(),
+    ),
+  );
+}
+
+class OmaMobileAppRoot extends StatelessWidget {
+  const OmaMobileAppRoot({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return OmaMobileApp(initialization: _initializeOma());
+  }
 }
 
 class OmaMobileApp extends StatefulWidget {
@@ -67,7 +84,6 @@ class _OmaMobileAppState extends State<OmaMobileApp> with WidgetsBindingObserver
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addObserver(this);
     WidgetsBinding.instance.addObserver(this);
     _timer = Timer.periodic(
       const Duration(minutes: 1),
@@ -99,7 +115,6 @@ class _OmaMobileAppState extends State<OmaMobileApp> with WidgetsBindingObserver
 
   @override
   void dispose() {
-    WidgetsBinding.instance.removeObserver(this);
     WidgetsBinding.instance.removeObserver(this);
     _timer?.cancel();
     super.dispose();
@@ -274,17 +289,20 @@ ThemeData brandTheme(Brightness brightness) {
   );
 }
 
-class SessionGate extends StatefulWidget {
+class SessionGate extends ConsumerStatefulWidget {
   const SessionGate({super.key});
-  @override State<SessionGate> createState() => _SessionGateState();
+
+  @override
+  ConsumerState<SessionGate> createState() => _SessionGateState();
 }
 
-class _SessionGateState extends State<SessionGate> {
-  final api = ApiClient();
+class _SessionGateState extends ConsumerState<SessionGate> {
+  late final ApiClient api;
 
   @override
   void initState() {
     super.initState();
+    api = ref.read(apiClientProvider);
     BiometricGuard.passwordVerifier = (password) async {
       try {
         final result = await api.verifyPassword(password);
@@ -304,20 +322,19 @@ class _SessionGateState extends State<SessionGate> {
   }
 
   @override
-  Widget build(BuildContext context) => FutureBuilder<String?>(
-        future: api.token(),
-        builder: (_, snapshot) {
-          if (snapshot.connectionState != ConnectionState.done) {
-            return const Scaffold(
-              body: Center(child: BrandLoader()),
-            );
-          }
+  Widget build(BuildContext context) {
+    final session = ref.watch(sessionControllerProvider);
 
-          return snapshot.data?.isNotEmpty == true
-              ? _AuthenticatedShell(api: api)
-              : LoginPage(api: api);
-        },
-      );
+    return session.when(
+      loading: () => const Scaffold(
+        body: Center(child: BrandLoader()),
+      ),
+      error: (_, __) => LoginPage(api: api),
+      data: (state) => state.authenticated
+          ? _AuthenticatedShell(api: api)
+          : LoginPage(api: api),
+    );
+  }
 }
 
 class _AuthenticatedShell extends StatefulWidget {
@@ -1356,7 +1373,7 @@ class _OmaBottomNavigation extends StatelessWidget {
   }
 }
 
-class DashboardPage extends StatefulWidget {
+class DashboardPage extends ConsumerStatefulWidget {
   const DashboardPage({
     super.key,
     required this.api,
@@ -1377,17 +1394,16 @@ class DashboardPage extends StatefulWidget {
   final int refreshKey;
 
   @override
-  State<DashboardPage> createState() => _DashboardPageState();
+  ConsumerState<DashboardPage> createState() => _DashboardPageState();
 }
 
-class _DashboardPageState extends State<DashboardPage> {
-  Map<String, dynamic>? data;
-  int pending = 0;
-
+class _DashboardPageState extends ConsumerState<DashboardPage> {
   @override
   void initState() {
     super.initState();
-    load();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) load();
+    });
   }
 
   @override
@@ -1400,62 +1416,16 @@ class _DashboardPageState extends State<DashboardPage> {
   }
 
   Future<void> load() async {
-    try {
-      final remote = await widget.api.dashboard();
-      final db = await widget.local.db;
-      final products = await db.query('products');
-      final sales = await db.query('sales');
-      final low = products
-          .where((x) => (x['stock'] as int? ?? 0) <= 5)
-          .take(8)
-          .toList();
-
-      if (mounted) {
-        setState(() {
-          data = {
-            ...remote,
-            'low_stock_products': low,
-            'local_counts': {
-              'products': products.length,
-              'sales': sales.length,
-            },
-          };
-        });
-      }
-    } catch (_) {
-      final db = await widget.local.db;
-      final products = await db.query('products');
-      final sales = await db.query('sales');
-      final low = products
-          .where((x) => (x['stock'] as int? ?? 0) <= 5)
-          .take(8)
-          .toList();
-
-      if (mounted) {
-        setState(() {
-          data = {
-            'sales_today': 0,
-            'profit_today': 0,
-            'pending_shipments': 0,
-            'shipping_owed': 0,
-            'batches_in_transit': 0,
-            'sync_exceptions': 0,
-            'low_stock_count': low.length,
-            'low_stock_products': low,
-            'local_counts': {
-              'products': products.length,
-              'sales': sales.length,
-            },
-          };
-        });
-      }
-    }
-
-    pending = await widget.repo.pendingCount();
-    if (mounted) setState(() {});
+    await ref.read(dashboardControllerProvider.notifier).refresh();
   }
   @override
-  Widget build(BuildContext context) => RefreshIndicator(
+  Widget build(BuildContext context) {
+    final dashboard = ref.watch(dashboardControllerProvider);
+    final data = dashboard.valueOrNull?.data ?? <String, dynamic>{};
+    final pending =
+        dashboard.valueOrNull?.pendingOperations ?? 0;
+
+    return RefreshIndicator(
         onRefresh: () async {
           await widget.onSync(silent: false);
           await load();
@@ -1584,7 +1554,7 @@ class _DashboardPageState extends State<DashboardPage> {
                       ),
                     ),
                     const SizedBox(height: 14),
-                    if (data != null)
+                    if (dashboard.hasValue)
                       GridView.count(
                         crossAxisCount:
                             MediaQuery.sizeOf(context).width > 600
@@ -1599,43 +1569,43 @@ class _DashboardPageState extends State<DashboardPage> {
                           _Kpi(
                             title: 'Sales today',
                             value:
-                                '₦${_money(data!['sales_today'])}',
+                                '₦${_money(data['sales_today'])}',
                             icon: Icons.payments,
                           ),
                           _Kpi(
                             title: 'Profit today',
                             value:
-                                '₦${_money(data!['profit_today'])}',
+                                '₦${_money(data['profit_today'])}',
                             icon: Icons.trending_up,
                           ),
                           _Kpi(
                             title: 'Pending shipments',
                             value:
-                                '${data!['pending_shipments'] ?? 0}',
+                                '${data['pending_shipments'] ?? 0}',
                             icon: Icons.local_shipping,
                           ),
                           _Kpi(
                             title: 'Low stock',
                             value:
-                                '${data!['low_stock_count'] ?? 0}',
+                                '${data['low_stock_count'] ?? 0}',
                             icon: Icons.warning_amber,
                           ),
                           _Kpi(
                             title: 'Shipping owed',
                             value:
-                                '₦${data!['shipping_owed'] ?? 0}',
+                                '₦${data['shipping_owed'] ?? 0}',
                             icon: Icons.account_balance_wallet_outlined,
                           ),
                           _Kpi(
                             title: 'Batches in transit',
                             value:
-                                '${data!['batches_in_transit'] ?? 0}',
+                                '${data['batches_in_transit'] ?? 0}',
                             icon: Icons.flight_takeoff,
                           ),
                           _Kpi(
                             title: 'Sync exceptions',
                             value:
-                                '${data!['sync_exceptions'] ?? 0}',
+                                '${data['sync_exceptions'] ?? 0}',
                             icon: Icons.sync_problem,
                           ),
                         ],
@@ -1648,7 +1618,7 @@ class _DashboardPageState extends State<DashboardPage> {
                         ),
                       ),
                     const SizedBox(height: 16),
-                    if ((data?['low_stock_products'] as List?)
+                    if ((data['low_stock_products'] as List?)
                             ?.isNotEmpty ==
                         true)
                       Card(
@@ -1666,7 +1636,7 @@ class _DashboardPageState extends State<DashboardPage> {
                               ),
                               const SizedBox(height: 8),
                               ...List<dynamic>.from(
-                                data!['low_stock_products'],
+                                data['low_stock_products'],
                               ).take(8).map(
                                     (x) => ListTile(
                                       contentPadding:
@@ -1695,6 +1665,7 @@ class _DashboardPageState extends State<DashboardPage> {
           ],
         ),
       );
+  }
 }
 
 class _Kpi extends StatelessWidget {

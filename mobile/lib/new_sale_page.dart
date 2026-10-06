@@ -1,13 +1,15 @@
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'brand_loader.dart';
-import 'data/local_database.dart';
+import 'presentation/controllers/product_controller.dart';
+import 'presentation/controllers/sales_controller.dart';
 import 'data/sync_repository.dart';
 import 'core/network_errors.dart';
 
-class NewSalePage extends StatefulWidget {
+class NewSalePage extends ConsumerStatefulWidget {
   const NewSalePage({
     super.key,
     required this.repo,
@@ -21,8 +23,7 @@ class NewSalePage extends StatefulWidget {
   final bool stocked;
 
   @override
-  State<NewSalePage> createState() =>
-      _NewSalePageState();
+  ConsumerState<NewSalePage> createState() => _NewSalePageState();
 }
 
 /// One product line on a sale. The same product can appear on several lines
@@ -92,7 +93,7 @@ class _SaleLine {
   }
 }
 
-class _NewSalePageState extends State<NewSalePage> {
+class _NewSalePageState extends ConsumerState<NewSalePage> {
   final name = TextEditingController();
   final phone = TextEditingController();
   final address = TextEditingController();
@@ -110,24 +111,7 @@ class _NewSalePageState extends State<NewSalePage> {
   @override
   void initState() {
     super.initState();
-    load();
-  }
-
-  Future<void> load() async {
-    final db = await LocalDatabase.instance.db;
-
-    final rows = await db.query(
-      'products',
-      where: widget.stocked ? 'stock>0' : null,
-      orderBy: 'name ASC',
-    );
-
-    if (mounted) {
-      setState(() {
-        products = rows;
-        loading = false;
-      });
-    }
+    loading = false;
   }
 
   @override
@@ -157,12 +141,12 @@ class _NewSalePageState extends State<NewSalePage> {
 
   double get saleTotal => lines.fold(0.0, (sum, line) => sum + line.lineTotal);
 
-  Future<void> addProduct() async {
+  Future<void> addProduct(List<Map<String, dynamic>> availableProducts) async {
     final picked = await showModalBottomSheet<Map<String, dynamic>>(
       context: context,
       isScrollControlled: true,
       builder: (_) => _ProductPickerSheet(
-        products: products,
+        products: availableProducts,
         stocked: widget.stocked,
       ),
     );
@@ -242,7 +226,7 @@ class _NewSalePageState extends State<NewSalePage> {
 
       if (kIsWeb) {
         // No offline mode on web — create it for real, right now.
-        await widget.repo.createSaleOnline(
+        await ref.read(createSaleControllerProvider).online(
           customerName: name.text,
           customerPhone: phone.text,
           customerAddress: address.text,
@@ -255,7 +239,7 @@ class _NewSalePageState extends State<NewSalePage> {
         );
         message = 'Sale created.';
       } else {
-        await widget.repo.saveSaleOffline(
+        await ref.read(createSaleControllerProvider).offline(
           customerName: name.text,
           customerPhone: phone.text,
           customerAddress: address.text,
@@ -392,7 +376,18 @@ class _NewSalePageState extends State<NewSalePage> {
   }
 
   @override
-  Widget build(BuildContext context) => Scaffold(
+  Widget build(BuildContext context) {
+    final productState = ref.watch(productsProvider(widget.stocked));
+    final availableProducts =
+        productState.valueOrNull ?? const <Map<String, dynamic>>[];
+
+    if (productState.isLoading && productState.valueOrNull == null) {
+      return const Scaffold(
+        body: Center(child: BrandLoader()),
+      );
+    }
+
+    return Scaffold(
         appBar: AppBar(
           title: Text(
             widget.stocked ? 'New Stock Sale' : 'New Preorder Sale',
@@ -505,7 +500,7 @@ class _NewSalePageState extends State<NewSalePage> {
                       ),
                     ),
                   OutlinedButton.icon(
-                    onPressed: addProduct,
+                    onPressed: () => addProduct(availableProducts),
                     icon: const Icon(Icons.add),
                     label: Text(
                       lines.isEmpty ? 'Add product' : 'Add another product',
@@ -541,6 +536,7 @@ class _NewSalePageState extends State<NewSalePage> {
                 ],
               ),
       );
+  }
 }
 
 /// Search-and-pick sheet for adding a product to a sale.
