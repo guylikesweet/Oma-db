@@ -184,6 +184,32 @@ def queue_chat_message_notifications(message, *, special_user_ids=None):
         )
 
 
+
+def queue_chat_reaction_notification(message, *, actor_user_id):
+    """Queue a push notification for the author of a message when another user reacts."""
+    recipient_user_id = message.sender_user_id
+    if not recipient_user_id or recipient_user_id == actor_user_id:
+        return
+
+    actor = User.query.get(actor_user_id)
+    actor_name = getattr(actor, "username", "Someone") or "Someone"
+    emoji = getattr(message, "_reaction_emoji", None) or "👍"
+
+    queue_user_notification(
+        recipient_user_id,
+        event_type="chat_reaction",
+        title=f"{actor_name} reacted to your message",
+        body=f"{emoji} {actor_name} reacted to your message.",
+        data={
+            "type": "chat_reaction",
+            "chat_message_id": str(message.id),
+            "sender_user_id": str(actor_user_id),
+            "sender_username": actor_name,
+            "reaction_emoji": emoji,
+            "sound": "chat_message",
+        },
+    )
+
 def queue_batch_arrival(batch, exclude_user_id=None):
     """Queue the specialized air/sea arrival notification for other registered users."""
     mode = "air" if batch.transport_mode == ShipmentBatch.MODE_AIR else "sea"
