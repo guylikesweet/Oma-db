@@ -31,9 +31,6 @@ class BiometricGuard {
   }) async {
     if (kIsWeb) return false;
     try {
-      // Attempt the native biometric prompt directly. Some Android devices
-      // report canCheckBiometrics inconsistently even though the system can
-      // successfully present the enrolled biometric prompt.
       return await _auth.authenticate(
         localizedReason: reason,
         options: const AuthenticationOptions(
@@ -52,8 +49,6 @@ class BiometricGuard {
     BuildContext context, {
     required String reason,
   }) async {
-    // Web/classic authentication is password-based. Mobile gets the OS
-    // biometric first, with an explicit password fallback for hardware issues.
     Future<bool> passwordFallback() async {
       final verifier = passwordVerifier;
       if (verifier == null) return false;
@@ -97,18 +92,22 @@ class BiometricGuard {
         );
         if (password == null || password.isEmpty) return false;
         final ok = await verifier(password);
-        if (!ok && context.mounted) _show(context, 'Password verification failed.');
+        if (!ok && context.mounted) {
+          _show(context, 'Password verification failed.');
+        }
         return ok;
       } finally {
         controller.dispose();
       }
     }
 
+    // kIsWeb is a compile-time constant on each Flutter target. This source
+    // is shared with the web build, where this branch is required.
+    // ignore: dead_code
     if (kIsWeb) return passwordFallback();
 
     try {
       final supported = await _auth.isDeviceSupported();
-
       if (!supported) return passwordFallback();
 
       final authenticated = await _auth.authenticate(
@@ -123,8 +122,7 @@ class BiometricGuard {
 
       if (authenticated) return true;
       return passwordFallback();
-    } catch (e) {
-      // Hardware/OS biometric errors must never lock the user out.
+    } catch (_) {
       return passwordFallback();
     }
   }
