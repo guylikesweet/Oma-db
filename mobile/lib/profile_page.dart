@@ -121,7 +121,7 @@ class _ProfilePageState extends State<ProfilePage> {
         );
       }
     } catch (e) {
-      if (mounted) setState(() { saving = false; error = '$e'; });
+      if (mounted) setState(() { saving = false; error = userFacingError(e); });
     }
   }
 
