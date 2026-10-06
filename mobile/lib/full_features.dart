@@ -1,5 +1,7 @@
 import 'dart:typed_data';
 
+import 'package:flutter/foundation.dart' show kIsWeb;
+
 import 'package:flutter/material.dart';
 import 'package:printing/printing.dart';
 import 'package:share_plus/share_plus.dart';
@@ -128,7 +130,7 @@ class _WebsiteFeaturesPageState extends State<WebsiteFeaturesPage> {
             Icons.local_shipping,
             'Shipment batches',
             'Create and manage batches; biometric verification is required when marking a batch arrived.',
-            () => open(BatchesPage(api: widget.api, isAdmin: isAdmin)),
+            () => open(BatchesPage(api: widget.api, repo: widget.repo, isAdmin: isAdmin)),
           ),
 
           _tile(
@@ -142,7 +144,7 @@ class _WebsiteFeaturesPageState extends State<WebsiteFeaturesPage> {
             Icons.delivery_dining,
             'Deliveries',
             'Ready sales, consolidation, status and labels',
-            () => open(DeliveriesPage(api: widget.api)),
+            () => open(DeliveriesPage(api: widget.api, repo: widget.repo)),
           ),
 
           _tile(
@@ -869,10 +871,12 @@ class _WebSalesPageState extends State<WebSalesPage> {
     if (ok != true) return;
 
     try {
-      await widget.api.updateSaleStatus(
-        id,
-        {'status': selected},
-      );
+      if (kIsWeb) {
+        await widget.api.updateSaleStatus(id, {'status': selected});
+      } else {
+        await widget.repo.queueSaleStatus(id, selected);
+        await widget.repo.syncOnce();
+      }
 
       await load();
     } catch (e) {
@@ -938,10 +942,12 @@ class _WebSalesPageState extends State<WebSalesPage> {
     if (ok != true) return;
 
     try {
-      await widget.api.updateSaleStatus(
-        id,
-        {'payment_status': selected},
-      );
+      if (kIsWeb) {
+        await widget.api.updateSaleStatus(id, {'payment_status': selected});
+      } else {
+        await widget.repo.queuePaymentStatus(id, selected);
+        await widget.repo.syncOnce();
+      }
 
       await load();
     } catch (e) {
@@ -960,7 +966,12 @@ class _WebSalesPageState extends State<WebSalesPage> {
     )) return;
 
     try {
-      await widget.api.settleShipping(id, {});
+      if (kIsWeb) {
+        await widget.api.settleShipping(id, {});
+      } else {
+        await widget.repo.queueSettleShipping(id);
+        await widget.repo.syncOnce();
+      }
       await load();
     } catch (e) {
       if (mounted) {
@@ -1144,9 +1155,15 @@ class _WebSalesPageState extends State<WebSalesPage> {
 }
 
 class BatchesPage extends StatefulWidget {
-  const BatchesPage({super.key, required this.api, this.isAdmin = false});
+  const BatchesPage({
+    super.key,
+    required this.api,
+    required this.repo,
+    this.isAdmin = false,
+  });
 
   final ApiClient api;
+  final SyncRepository repo;
   final bool isAdmin;
 
   @override
@@ -1257,11 +1274,19 @@ class _BatchesPageState extends State<BatchesPage> {
     if (ok != true) return;
 
     try {
-      await widget.api.createBatch({
-        'name': name.text.trim(),
-        'transport_mode': mode,
-        'notes': notes.text.trim(),
-      });
+      if (kIsWeb) {
+        await widget.api.createBatch({
+          'name': name.text.trim(),
+          'transport_mode': mode,
+          'notes': notes.text.trim(),
+        });
+      } else {
+        await widget.repo.queueCreateBatch(
+          name.text.trim(),
+          notes.text.trim(),
+        );
+        await widget.repo.syncOnce();
+      }
 
       await load();
     } catch (e) {
@@ -1325,11 +1350,21 @@ class _BatchesPageState extends State<BatchesPage> {
               }
 
               try {
-                await widget.api.updateBatchSalesBulk(
-                  batch['id'] as int,
-                  addSaleIds: add ? ids.toList() : const [],
-                  removeSaleIds: add ? const [] : ids.toList(),
-                );
+                if (!kIsWeb && add) {
+                  for (final saleId in ids) {
+                    await widget.repo.queueBatchSale(
+                      batch['id'] as int,
+                      saleId,
+                    );
+                  }
+                  await widget.repo.syncOnce();
+                } else {
+                  await widget.api.updateBatchSalesBulk(
+                    batch['id'] as int,
+                    addSaleIds: add ? ids.toList() : const [],
+                    removeSaleIds: add ? const [] : ids.toList(),
+                  );
+                }
                 if (sheetContext.mounted) {
                   Navigator.pop(sheetContext);
                 }
@@ -1546,7 +1581,12 @@ class _BatchesPageState extends State<BatchesPage> {
     )) return;
 
     try {
-      await widget.api.arriveBatch(id, {});
+      if (kIsWeb) {
+        await widget.api.arriveBatch(id, {});
+      } else {
+        await widget.repo.queueBatchArrive(id);
+        await widget.repo.syncOnce();
+      }
       await load();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -1668,7 +1708,12 @@ class _BatchesPageState extends State<BatchesPage> {
     )) return;
 
     try {
-      await widget.api.settleShipping(saleId, {});
+      if (kIsWeb) {
+        await widget.api.settleShipping(saleId, {});
+      } else {
+        await widget.repo.queueSettleShipping(saleId);
+        await widget.repo.syncOnce();
+      }
       if (sheetContext.mounted) {
         Navigator.pop(sheetContext);
       }
@@ -1795,9 +1840,14 @@ class _BatchesPageState extends State<BatchesPage> {
 }
 
 class DeliveriesPage extends StatefulWidget {
-  const DeliveriesPage({super.key, required this.api});
+  const DeliveriesPage({
+    super.key,
+    required this.api,
+    required this.repo,
+  });
 
   final ApiClient api;
+  final SyncRepository repo;
 
   @override
   State<DeliveriesPage> createState() =>
@@ -2019,12 +2069,23 @@ class _DeliveriesPageState
     if (ok != true) return;
 
     try {
-      final created = await widget.api.createDelivery({
-        'sale_ids': selected.toList(),
-        'method': method.text.trim(),
-        'delivery_address': address.text.trim(),
-        'notes': notes.text.trim(),
-      });
+      Map<String, dynamic> created = {};
+      if (kIsWeb) {
+        created = await widget.api.createDelivery({
+          'sale_ids': selected.toList(),
+          'method': method.text.trim(),
+          'delivery_address': address.text.trim(),
+          'notes': notes.text.trim(),
+        });
+      } else {
+        await widget.repo.queueCreateDelivery(
+          saleIds: selected.toList(),
+          method: method.text.trim(),
+          address: address.text.trim(),
+          notes: notes.text.trim(),
+        );
+        await widget.repo.syncOnce();
+      }
 
       await load();
 
@@ -2194,10 +2255,12 @@ class _DeliveriesPageState
     String status,
   ) async {
     try {
-      await widget.api.updateDeliveryStatus(
-        id,
-        {'status': status},
-      );
+      if (kIsWeb) {
+        await widget.api.updateDeliveryStatus(id, {'status': status});
+      } else {
+        await widget.repo.queueDeliveryStatus(id, status);
+        await widget.repo.syncOnce();
+      }
 
       await load();
     } catch (e) {
@@ -2440,10 +2503,12 @@ class DeliveryDetailPage extends StatefulWidget {
   const DeliveryDetailPage({
     super.key,
     required this.api,
+    required this.repo,
     required this.delivery,
   });
 
   final ApiClient api;
+  final SyncRepository repo;
   final Map<String, dynamic> delivery;
 
   @override
@@ -2503,10 +2568,12 @@ class _DeliveryDetailPageState
 
   Future<void> setStatus(String status) async {
     try {
-      await widget.api.updateDeliveryStatus(
-        id,
-        {'status': status},
-      );
+      if (kIsWeb) {
+        await widget.api.updateDeliveryStatus(id, {'status': status});
+      } else {
+        await widget.repo.queueDeliveryStatus(id, status);
+        await widget.repo.syncOnce();
+      }
       await load();
     } catch (e) {
       _snack(e);
