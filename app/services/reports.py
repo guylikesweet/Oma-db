@@ -3,12 +3,17 @@ Reports logic for sales, shipping, inventory, and profit metrics.
 """
 from datetime import date, timedelta
 
+from sqlalchemy.orm import selectinload
+
 from app.models import Sale, Product
 
 
 def get_sales_in_range(start_date, end_date):
+    # Report calculations iterate through Sale.items. Eager-load that
+    # collection in one secondary query instead of issuing one query per sale.
     return (
-        Sale.query.filter(Sale.sale_date >= start_date, Sale.sale_date <= end_date)
+        Sale.query.options(selectinload(Sale.items))
+        .filter(Sale.sale_date >= start_date, Sale.sale_date <= end_date)
         .order_by(Sale.sale_date.desc(), Sale.id.desc())
         .all()
     )
@@ -116,7 +121,15 @@ SHIPPING_CSV_HEADERS = [
 def shipping_csv_rows():
     """Shipping-cost data sourced from Sale + its ShipmentBatch (the old, separate
     per-sale Shipping/tracking module has been removed — batches replaced it)."""
-    for s in Sale.query.filter(Sale.batch_id.isnot(None)).order_by(Sale.id).all():
+    # The exporter accesses batch.name/status for every row. Select-in loading
+    # keeps that as one additional query rather than an N+1 query pattern.
+    sales = (
+        Sale.query.options(selectinload(Sale.batch))
+        .filter(Sale.batch_id.isnot(None))
+        .order_by(Sale.id)
+        .all()
+    )
+    for s in sales:
         yield [
             s.id, s.customer_name, s.batch.name if s.batch else "", s.batch.status if s.batch else "",
             s.estimated_shipping_cost, s.actual_shipping_cost, s.shipping_payment_settled,
