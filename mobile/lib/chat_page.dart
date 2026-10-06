@@ -634,6 +634,7 @@ class _ChatPageState extends State<ChatPage> {
       ),
       builder: (context) => SizedBox(
         width: double.infinity,
+        height: MediaQuery.sizeOf(context).height,
         child: SafeArea(
           child: Padding(
             padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
@@ -753,17 +754,9 @@ class _ChatPageState extends State<ChatPage> {
 
   void _onComposerChanged() {
     final text = composer.text;
-    final cursor = composer.selection.baseOffset;
-
-    if (cursor < 0 || cursor > text.length) {
-      if (mentionOpen) {
-        setState(() {
-          mentionOpen = false;
-          mentionOptions = [];
-        });
-      }
-      return;
-    }
+    final rawCursor = composer.selection.baseOffset;
+    final cursor =
+        rawCursor < 0 || rawCursor > text.length ? text.length : rawCursor;
 
     final before = text.substring(0, cursor);
     final match = RegExp(r'(^|\s)@([A-Za-z0-9_.-]*)$').firstMatch(before);
@@ -785,7 +778,7 @@ class _ChatPageState extends State<ChatPage> {
           final username = (user['username'] ?? '').toString().toLowerCase();
           return username.startsWith(query);
         })
-        .where((user) => user['id'] != AppSession.userId)
+        .where((user) => '\${user['id'] ?? ''}' != '\${AppSession.userId}')
         .take(8)
         .map((user) => Map<String, dynamic>.from(user))
         .toList();
@@ -802,8 +795,9 @@ class _ChatPageState extends State<ChatPage> {
     TextEditingController controller,
   ) {
     final text = controller.text;
-    final cursor = controller.selection.baseOffset;
-    if (cursor < 0 || cursor > text.length) return;
+    final rawCursor = controller.selection.baseOffset;
+    final cursor =
+        rawCursor < 0 || rawCursor > text.length ? text.length : rawCursor;
 
     final before = text.substring(0, cursor);
     final match = RegExp(
