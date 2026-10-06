@@ -4576,7 +4576,6 @@ class _SyncQueuePageState
                           )
                         : null,
                   ),
-                  ),
                 );
               },
             );
