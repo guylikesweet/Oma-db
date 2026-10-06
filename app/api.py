@@ -23,7 +23,7 @@ from flask import Blueprint, request, jsonify, g, current_app
 from werkzeug.security import check_password_hash, generate_password_hash
 from sqlalchemy import inspect as sa_inspect, text as sa_text
 
-from app import db
+from app import db, limiter
 from app.services.journey import journey_public, flow_for, manual_stages_for, stage_label, set_manual_stage_bulk, JourneyError
 from app.access import require_admin_api
 from app.models import (
@@ -133,6 +133,7 @@ def mobile_audit_log():
 
 
 @api_bp.route("/v1/auth/login", methods=("POST",))
+@limiter.limit("10 per minute")
 def api_login():
     data = request.get_json(silent=True) or {}
     username = (data.get("username") or "").strip()
@@ -171,6 +172,7 @@ def api_login():
 
 
 @api_bp.route("/v1/auth/verify-password", methods=("POST",))
+@limiter.limit("20 per minute")
 @require_api_token
 def verify_password():
     """Verify the currently authenticated user's password without changing it."""
@@ -199,6 +201,7 @@ def verify_password():
 
 
 @api_bp.route("/v1/auth/biometric-login", methods=("POST",))
+@limiter.limit("10 per minute")
 def api_biometric_login():
     """Exchange a previously authenticated device token after local biometric verification."""
     data = request.get_json(silent=True) or {}
