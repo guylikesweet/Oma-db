@@ -49,6 +49,8 @@ class _ChatPageState extends State<ChatPage> {
   String? error;
   int _localSequence = 0;
   Timer? poller;
+  bool _loadInFlight = false;
+  int _consecutiveLoadFailures = 0;
   List<Map<String, dynamic>> mentionOptions = [];
   bool mentionOpen = false;
   bool _initialMessageHandled = false;
@@ -59,22 +61,32 @@ class _ChatPageState extends State<ChatPage> {
     composer.addListener(_onComposerChanged);
     load();
     _loadMentionUsers();
-    poller = Timer.periodic(
-      const Duration(seconds: 4),
-      (_) => load(silent: true),
-    );
+    _scheduleNextPoll();
   }
 
   @override
   void dispose() {
     poller?.cancel();
+    poller = null;
     composer.removeListener(_onComposerChanged);
     composer.dispose();
     scroll.dispose();
     super.dispose();
   }
 
+  void _scheduleNextPoll() {
+    poller?.cancel();
+    if (!mounted) return;
+    final seconds = _consecutiveLoadFailures == 0 ? 3 : (_consecutiveLoadFailures < 3 ? 6 : 15);
+    poller = Timer(Duration(seconds: seconds), () async {
+      await load(silent: true);
+      _scheduleNextPoll();
+    });
+  }
+
   Future<void> load({bool silent = false}) async {
+    if (_loadInFlight) return;
+    _loadInFlight = true;
     try {
       final results = await Future.wait([
         widget.api.chatMessages(limit: 100),
@@ -115,6 +127,7 @@ class _ChatPageState extends State<ChatPage> {
               .toList()
           : users;
 
+      _consecutiveLoadFailures = 0;
       if (!mounted) return;
 
       setState(() {
@@ -181,12 +194,15 @@ class _ChatPageState extends State<ChatPage> {
           // endpoint is itself unavailable.
         }
       }
+      _consecutiveLoadFailures = (_consecutiveLoadFailures + 1).clamp(0, 10);
       if (!silent || messages.isEmpty) {
         setState(() {
           loading = false;
           error = message;
         });
       }
+    } finally {
+      _loadInFlight = false;
     }
   }
 
