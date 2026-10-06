@@ -46,7 +46,11 @@ def _schedule_outbox_flush():
             flush_outbox()
         except Exception:
             # Push delivery is best effort. The committed outbox row stays
-            # pending and is retried by a later flush.
+            # pending and is retried by a later flush. Always log the failure:
+            # otherwise Render can appear completely healthy while FCM is
+            # rejecting every delivery.
+            import logging
+            logging.getLogger(__name__).exception("Push outbox flush failed")
             try:
                 db.session.rollback()
             except Exception:
