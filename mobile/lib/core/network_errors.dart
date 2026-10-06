@@ -75,7 +75,7 @@ void showNetworkError(
       action: onRetry == null
           ? null
           : SnackBarAction(
-              label: 'Try again',
+              label: 'Try',
               onPressed: onRetry,
             ),
       duration: const Duration(seconds: 6),
