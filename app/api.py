@@ -1972,6 +1972,18 @@ def mobile_chat_messages():
         }), 503
 
 
+@api_bp.route("/v1/chat/messages/<int:message_id>", methods=("GET",))
+@require_api_token
+def mobile_chat_message(message_id):
+    message = ChatMessage.query.get_or_404(message_id)
+    if (
+        g.api_user.created_at is not None
+        and message.created_at < g.api_user.created_at
+    ):
+        return jsonify({"error": "This message predates your account."}), 403
+    return jsonify(_chat_message_json(message))
+
+
 @api_bp.route("/v1/chat/diagnostic", methods=("GET",))
 @require_api_token
 def mobile_chat_diagnostic():
