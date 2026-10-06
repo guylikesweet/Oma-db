@@ -17,7 +17,7 @@ from decimal import Decimal
 from app import db
 from app.models import ShipmentBatch, Sale, SaleJourneyEvent
 from app.services.rates import get_volume_rate, get_rate_per_kg, RateMissingError
-from app.services.sales import shipping_cost_for_items
+from app.services.sales import shipping_cost_for_items, refresh_sale_profit
 from app.services.push_notifications import queue_batch_arrival, flush_outbox
 from app.services.audit import record_audit
 
@@ -203,6 +203,9 @@ def mark_arrived(batch_id):
             sale.items, batch.transport_mode, volume_rate, packing_rate
         )
         sale.total_amount = (sale.subtotal_amount or Decimal("0")) + sale.actual_shipping_cost
+        # Recalculate net profit using the immutable landed-cost snapshots on
+        # the sale items and the actual shipping cost locked at arrival.
+        refresh_sale_profit(sale, sale.actual_shipping_cost)
 
     batch.arrived_at = datetime.utcnow()
     batch.status = ShipmentBatch.STATUS_ARRIVED
