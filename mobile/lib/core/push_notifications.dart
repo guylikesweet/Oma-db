@@ -109,7 +109,7 @@ class OmaPushNotifications {
           api,
           token,
           kIsWeb ? 'web' : defaultTargetPlatform.name,
-          notificationChannelVersion: kIsWeb ? null : 'v2',
+          notificationChannelVersion: kIsWeb ? null : 'v3',
         );
       }
 
@@ -121,7 +121,7 @@ class OmaPushNotifications {
                 api,
                 next,
                 kIsWeb ? 'web' : defaultTargetPlatform.name,
-                notificationChannelVersion: kIsWeb ? null : 'v2',
+                notificationChannelVersion: kIsWeb ? null : 'v3',
               );
             } catch (error, stackTrace) {
               debugPrint('OmaPush: refreshed FCM token registration failed: $error');
@@ -247,12 +247,12 @@ class OmaPushNotifications {
                 : '${data['sound'] ?? 'scanner_beep'}';
 
     final channelId = isChat
-        ? 'oma_chat_v1'
+        ? 'oma_chat_v3'
         : mode == 'air'
-            ? 'oma_arrival_air_v2'
+            ? 'oma_arrival_air_v3'
             : mode == 'sea'
-                ? 'oma_arrival_sea_v2'
-                : 'oma_scanner_v2';
+                ? 'oma_arrival_sea_v3'
+                : 'oma_scanner_v3';
 
     final channelName = isChat
         ? 'Oma team chat'
@@ -371,7 +371,7 @@ class OmaPushNotifications {
         api,
         token,
         kIsWeb ? 'web' : defaultTargetPlatform.name,
-        notificationChannelVersion: kIsWeb ? null : 'v2',
+        notificationChannelVersion: kIsWeb ? null : 'v3',
       );
     } catch (error, stackTrace) {
       debugPrint('OmaPush: retry registration failed: $error');
