@@ -4188,6 +4188,8 @@ class MorePage extends StatelessWidget {
                     builder: (_) => WebsiteFeaturesPage(
                       api: api,
                       local: local,
+                      repo: repo,
+                      refreshKey: refreshKey,
                     ),
                   ),
                 ),
