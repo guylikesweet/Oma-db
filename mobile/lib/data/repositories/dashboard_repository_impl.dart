@@ -17,19 +17,23 @@ class DashboardRepositoryImpl implements DashboardRepository {
 
     // Local state is read first, so the UI never has to wait for the network
     // before it can render useful inventory/sales information.
-    final products = await db.query(
+    final productCountRows = await db.rawQuery(
+      'SELECT COUNT(*) AS count FROM products',
+    );
+    final saleCountRows = await db.rawQuery(
+      'SELECT COUNT(*) AS count FROM sales',
+    );
+    final low = await db.query(
       'products',
-      orderBy: 'name ASC',
+      where: 'stock <= ?',
+      whereArgs: [5],
+      orderBy: 'stock ASC, name ASC',
+      limit: 8,
     );
-    final sales = await db.query(
-      'sales',
-      orderBy: 'id DESC',
-      limit: 100,
-    );
-    final low = products
-        .where((row) => (row['stock'] as int? ?? 0) <= 5)
-        .take(8)
-        .toList();
+    final productCount =
+        (productCountRows.first['count'] as num?)?.toInt() ?? 0;
+    final saleCount =
+        (saleCountRows.first['count'] as num?)?.toInt() ?? 0;
     final pending = await sync.pendingCount();
 
     final localData = <String, dynamic>{
@@ -42,8 +46,8 @@ class DashboardRepositoryImpl implements DashboardRepository {
       'low_stock_count': low.length,
       'low_stock_products': low,
       'local_counts': {
-        'products': products.length,
-        'sales': sales.length,
+        'products': productCount,
+        'sales': saleCount,
       },
     };
 
@@ -55,8 +59,8 @@ class DashboardRepositoryImpl implements DashboardRepository {
           ...remote,
           'low_stock_products': low,
           'local_counts': {
-            'products': products.length,
-            'sales': sales.length,
+            'products': productCount,
+            'sales': saleCount,
           },
         },
         pendingOperations: pending,
