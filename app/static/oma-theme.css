@@ -371,3 +371,48 @@ form:not(.form-inline) > :not([type="hidden"]) + :not([type="hidden"]) {
   margin-top: 12px;
 }
 
+
+/* ===== Responsive polish v2: phone, tablet and wide desktop ===== */
+html,body{max-width:100%;overflow-x:hidden}
+img,video,canvas,svg{max-width:100%;height:auto}
+button,input,select,textarea{font:inherit}
+input,select,textarea{max-width:100%}
+pre{max-width:100%;overflow:auto;-webkit-overflow-scrolling:touch}
+.table-responsive{max-width:100%;overflow-x:auto;overscroll-behavior-x:contain}
+@media (max-width:1099px){
+  .topbar{position:sticky;top:0;z-index:1000}
+  .container,.container-fluid,.page-shell,.page-container{max-width:100%;overflow-x:clip}
+}
+@media (max-width:767px){
+  body{padding-bottom:82px}
+  .topbar{min-height:56px}
+  .topbar .home-link{max-width:58vw;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .row{margin-left:-5px;margin-right:-5px}
+  .row>[class*="col-"]{padding-left:5px;padding-right:5px}
+  .card,.box,.panel,.sale-card,.info-card{width:100%;overflow:hidden}
+  .action-grid{grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:10px!important}
+  .action-btn{min-height:92px!important;padding:16px 10px!important}
+  .action-btn .icon{font-size:25px;margin-bottom:7px}
+  .kpi-grid{gap:8px!important}
+  .kpi-grid .card{min-width:0}
+  .table-responsive{border:1px solid var(--oma-border);background:var(--oma-surface)}
+  .table-responsive table{min-width:max-content}
+  .modal-dialog{margin:10px!important}
+  .modal-content{max-height:calc(100vh - 20px);overflow:auto}
+  .modal-footer{flex-wrap:wrap}
+  .modal-footer .btn{flex:1 1 120px}
+  .btn-group{display:flex;flex-wrap:wrap;gap:6px}
+  .btn-group .btn{margin:0!important}
+  .form-row{gap:0}
+}
+@media (max-width:480px){
+  .action-grid{grid-template-columns:1fr!important}
+  .action-btn{min-height:72px!important;flex-direction:row;gap:10px}
+  .action-btn .icon{margin:0;font-size:22px}
+  .oma-classic-bottom-nav{width:calc(100vw - 8px);height:64px}
+  .oma-classic-nav-item{height:54px}
+  .oma-classic-nav-home{width:58px;height:58px;font-size:29px}
+}
+@media (min-width:1600px){
+  .page-shell,.page-container,.container{max-width:1480px}
+}
