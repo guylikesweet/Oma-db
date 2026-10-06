@@ -4126,7 +4126,7 @@ class _ChangePasswordPageState
   }
 
   Future<void> save() async {
-    if (next.text.length < 6) {
+    if (next.text.length < 8) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text(
