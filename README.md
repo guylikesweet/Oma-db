@@ -4,7 +4,7 @@ Flask + Postgres app: enter raw product dimensions and sale details, and CBM,
 volumetric weight, shipping estimates, and profit are all calculated automatically.
 
 ## Stack
-- Python 3.11, Flask 3, Flask-Admin, Flask-Login, Flask-SQLAlchemy, Flask-Migrate
+- Python 3.11, Flask 3, Flask-Admin, Flask-Login, Flask-SQLAlchemy, Flask-Migrate, Flask-Limiter
 - Database: Postgres (Neon — free tier, does not expire or delete data on inactivity)
 - Hosting: Render Web Service + Gunicorn
 - Auth: Flask session login for the legacy `/classic` interface plus bearer-token authentication for Flutter Web/Android.
