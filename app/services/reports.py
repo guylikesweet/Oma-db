@@ -1,6 +1,5 @@
 """
-Reports logic. No profit/loss anywhere — subtotal, shipping estimate/actual,
-and total only.
+Reports logic for sales, shipping, inventory, and profit metrics.
 """
 from datetime import date, timedelta
 
@@ -24,11 +23,41 @@ def sales_report(start_date=None, end_date=None):
 
     sales = get_sales_in_range(start_date, end_date)
 
+    cogs = sum(
+        (item.unit_cost or 0) * (item.qty or 0)
+        for sale in sales
+        for item in sale.items
+    )
+    gross_profit = sum((sale.subtotal_amount or 0) for sale in sales) - cogs
+    net_profit = sum(
+        (
+            sale.profit
+            if sale.profit is not None
+            else (
+                (sale.subtotal_amount or 0)
+                - sum((item.unit_cost or 0) * (item.qty or 0) for item in sale.items)
+                - (
+                    0
+                    if sale.is_stock_sale
+                    else (
+                        sale.actual_shipping_cost
+                        if sale.actual_shipping_cost is not None
+                        else (sale.estimated_shipping_cost or 0)
+                    )
+                )
+            )
+        )
+        for sale in sales
+    )
+
     totals = {
-        "subtotal": sum((s.subtotal_amount or 0) for s in sales),
-        "estimated_shipping": sum((s.estimated_shipping_cost or 0) for s in sales),
-        "actual_shipping": sum((s.actual_shipping_cost or 0) for s in sales),
-        "total": sum((s.total_amount or 0) for s in sales),
+        "subtotal": sum((sale.subtotal_amount or 0) for sale in sales),
+        "estimated_shipping": sum((sale.estimated_shipping_cost or 0) for sale in sales),
+        "actual_shipping": sum((sale.actual_shipping_cost or 0) for sale in sales),
+        "total": sum((sale.total_amount or 0) for sale in sales),
+        "cogs": cogs,
+        "gross_profit": gross_profit,
+        "net_profit": net_profit,
     }
 
     return {
@@ -57,11 +86,24 @@ def sales_csv_rows(start_date=None, end_date=None):
         cogs = sum((item.unit_cost or 0) * (item.qty or 0) for item in s.items)
         gross_profit = (s.subtotal_amount or 0) - cogs
         gross_margin = (gross_profit / s.subtotal_amount * 100) if s.subtotal_amount else 0
+        net_profit = (
+            s.profit
+            if s.profit is not None
+            else gross_profit - (
+                0
+                if s.is_stock_sale
+                else (
+                    s.actual_shipping_cost
+                    if s.actual_shipping_cost is not None
+                    else (s.estimated_shipping_cost or 0)
+                )
+            )
+        )
         yield [
             s.id, s.order_id, s.sale_date, s.customer_name, s.customer_phone, s.customer_state,
             s.order_status, s.payment_status, s.subtotal_amount, s.estimated_shipping_cost,
             s.actual_shipping_cost, s.shipping_payment_settled, s.total_amount,
-            cogs, gross_profit, gross_margin, s.profit,
+            cogs, gross_profit, gross_margin, net_profit,
         ]
 
 
