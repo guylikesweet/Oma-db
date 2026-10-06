@@ -79,7 +79,7 @@ class _JourneyCardState extends State<JourneyCard> {
           ),
           TextButton(
             onPressed: load,
-            child: const Text('Retry'),
+            child: const Text('Try Again'),
           ),
         ],
       );
@@ -574,7 +574,7 @@ class _ErrorState extends StatelessWidget {
             const SizedBox(height: 12),
             FilledButton.tonal(
               onPressed: onRetry,
-              child: const Text('Retry'),
+              child: const Text('Try Again'),
             ),
           ],
         ),
