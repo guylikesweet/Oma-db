@@ -990,7 +990,7 @@ class _ChatPageState extends State<ChatPage> {
                   ),
                   child: Row(
                     children: [
-                      Image.memory(attachmentBytes!, width: 54, height: 54, fit: BoxFit.cover),
+                      Image.memory(attachmentBytes!, width: 54, height: 54, fit: BoxFit.cover, cacheWidth: 108, cacheHeight: 108),
                       const SizedBox(width: 8),
                       Expanded(child: Text(attachmentName ?? 'Photo')),
                       IconButton(
@@ -1063,7 +1063,7 @@ class _ChatPageState extends State<ChatPage> {
     if (local is Uint8List) {
       return ClipRRect(
         borderRadius: BorderRadius.circular(12),
-        child: Image.memory(local, width: 260, height: 220, fit: BoxFit.cover),
+        child: Image.memory(local, width: 260, height: 220, fit: BoxFit.cover, cacheWidth: 520, cacheHeight: 440),
       );
     }
     final id = int.tryParse('${message['id']}');
