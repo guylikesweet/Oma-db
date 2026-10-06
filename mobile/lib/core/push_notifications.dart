@@ -115,13 +115,15 @@ class OmaPushNotifications {
         messaging.onTokenRefresh.listen((next) async {
           if (next.isNotEmpty) {
             try {
-              await api.registerPushDevice(
+              await _registerTokenWithRetry(
+                api,
                 next,
                 kIsWeb ? 'web' : defaultTargetPlatform.name,
                 notificationChannelVersion: kIsWeb ? null : 'v2',
               );
-            } catch (_) {
-              // The next authenticated entry will register the current token again.
+            } catch (error, stackTrace) {
+              debugPrint('OmaPush: refreshed FCM token registration failed: $error');
+              debugPrint('$stackTrace');
             }
           }
         });
