@@ -1,4 +1,4 @@
-from flask import Flask, redirect, url_for, render_template, session, request, flash
+from flask import Flask, redirect, url_for, render_template, session, request, flash, g
 import click
 from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
