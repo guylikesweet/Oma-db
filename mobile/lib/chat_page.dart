@@ -10,6 +10,7 @@ import 'package:share_plus/share_plus.dart';
 import 'brand_loader.dart';
 import 'data/api_client.dart';
 import 'data/app_session.dart';
+import 'core/network_errors.dart';
 
 class ChatPage extends StatefulWidget {
   const ChatPage({super.key, required this.api, this.initialMessageId});
@@ -168,7 +169,7 @@ class _ChatPageState extends State<ChatPage> {
       }
     } catch (e) {
       if (!mounted) return;
-      var message = '${e}';
+      var message = userFacingError(e);
       if (e is ApiException &&
           e.statusCode == 503 &&
           AppSession.isAdmin) {
@@ -259,6 +260,7 @@ class _ChatPageState extends State<ChatPage> {
       _scrollToBottom();
     } catch (e) {
       if (!mounted) return;
+      showNetworkError(context, e, onRetry: () => _retryFailedMessage(optimistic));
       setState(() {
         messages = messages
             .map(
@@ -330,7 +332,7 @@ class _ChatPageState extends State<ChatPage> {
       final updated = await widget.api.updateChatMessage(id, result);
       if (mounted) setState(() => messages = messages.map((m) => '${m['id']}' == '$id' ? updated : m).toList());
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Could not edit message: $e')));
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(userFacingError(e))));
     }
   }
 
@@ -353,7 +355,7 @@ class _ChatPageState extends State<ChatPage> {
       final updated = await widget.api.deleteChatMessage(id);
       if (mounted) setState(() => messages = messages.map((m) => '${m['id']}' == '$id' ? updated : m).toList());
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Could not delete message: $e')));
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(userFacingError(e))));
     }
   }
 
@@ -364,7 +366,7 @@ class _ChatPageState extends State<ChatPage> {
       final updated = await widget.api.reactToChatMessage(id, emoji);
       if (mounted) setState(() => messages = messages.map((m) => '${m['id']}' == '$id' ? updated : m).toList());
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Could not react: $e')));
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(userFacingError(e))));
     }
   }
 
@@ -386,7 +388,7 @@ class _ChatPageState extends State<ChatPage> {
         XFile.fromData(bytes, name: '${message['attachment_filename'] ?? 'chat-photo.jpg'}', mimeType: 'image/jpeg'),
       ], text: 'Oma team chat photo');
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Could not download photo: $e')));
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(userFacingError(e))));
     }
   }
 
@@ -1460,7 +1462,7 @@ class _ChatPageState extends State<ChatPage> {
                     actions: [
                       TextButton(
                         onPressed: () => load(),
-                        child: const Text('Retry'),
+                        child: const Text('Try'),
                       ),
                     ],
                   ),
