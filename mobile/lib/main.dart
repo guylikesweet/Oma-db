@@ -484,12 +484,7 @@ class _LoginPageState extends State<LoginPage> {
           ),
         );
       }
-    } catch (e, st) {
-      // Temporary: print the full stack trace to the browser console so we
-      // can see exactly which line throws, since e.toString() alone gives
-      // no location for a null-check (TypeError) failure.
-      // ignore: avoid_print
-      print('LOGIN ERROR: $e\n$st');
+    } catch (e) {
       if (mounted) {
         setState(() => error = e.toString());
       }
