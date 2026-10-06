@@ -1,5 +1,5 @@
 """
-Sales business logic (simplified — no profit/loss tracking anywhere).
+Sales business logic. Sale-item unit_cost is a landed-cost snapshot used for COGS and profit.
 
 At creation:
   sales.subtotal_amount        = SUM(unit_price * qty)
@@ -49,6 +49,37 @@ def line_shipping_cost(mode, line_cbm, line_volumetric_kg, line_kg, volume_rate,
     else:
         volume_part = (line_cbm or Decimal("0")) * volume_rate
     return volume_part + (line_kg or Decimal("0")) * packing_rate
+
+
+def sale_cogs(sale):
+    """Return COGS from the immutable landed-cost snapshots on SaleItem rows."""
+    return sum(
+        (item.unit_cost or Decimal("0")) * (item.qty or 0)
+        for item in sale.items
+    )
+
+
+def refresh_sale_profit(sale, shipping_cost=None):
+    """Refresh the sale's net profit from sale-item landed-cost snapshots.
+
+    If shipping_cost is omitted, use the sale's actual settled shipping when
+    available; otherwise use the order-time estimate. Stock sales have no
+    shipping cost.
+    """
+    cogs = sale_cogs(sale)
+    gross_profit = (sale.subtotal_amount or Decimal("0")) - cogs
+
+    if sale.is_stock_sale:
+        shipping = Decimal("0")
+    elif shipping_cost is not None:
+        shipping = Decimal(str(shipping_cost))
+    elif sale.actual_shipping_cost is not None:
+        shipping = sale.actual_shipping_cost or Decimal("0")
+    else:
+        shipping = sale.estimated_shipping_cost or Decimal("0")
+
+    sale.profit = gross_profit - shipping
+    return sale.profit
 
 
 def item_weight_kg(item):
@@ -220,6 +251,9 @@ def create_sale(customer_name, customer_phone, customer_address, customer_state,
         sale.estimated_shipping_sea = estimated_sea
         sale.estimated_shipping_air = estimated_air if air_rate is not None else None
     sale.total_amount = subtotal  # goods only; actual shipping added once the batch arrives
+    # Store the first profit snapshot immediately. Preorders are refreshed with
+    # actual shipping when their batch arrives; stock sales have no shipping cost.
+    refresh_sale_profit(sale)
 
     record_audit(
         "sale.create",
