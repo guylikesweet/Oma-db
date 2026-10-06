@@ -466,8 +466,11 @@ class SyncRepository {
           limit: 1,
         );
 
-        if (dep.isNotEmpty &&
-            dep.first['status'] != 'synced') {
+        // A dependent operation must never be sent if its prerequisite is
+        // missing or has not completed. A missing prerequisite is normally
+        // only possible after local data was cleared, and sending the child
+        // anyway could create a server-side record with invalid references.
+        if (dep.isEmpty || dep.first['status'] != 'synced') {
           continue;
         }
       }
