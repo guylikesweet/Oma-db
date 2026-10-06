@@ -6,6 +6,7 @@ from flask_login import LoginManager, login_required
 from flask_cors import CORS
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
+from app.csrf import init_csrf
 from datetime import timedelta
 import os
 import time
@@ -30,6 +31,7 @@ def create_app(config_object="config.Config"):
     migrate.init_app(app, db)
     login_manager.init_app(app)
     limiter.init_app(app)
+    init_csrf(app)
     login_manager.login_view = "auth.login"
     @app.before_request
     def enforce_classic_inactivity_timeout():
