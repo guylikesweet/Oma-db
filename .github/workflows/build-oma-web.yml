@@ -1,13 +1,9 @@
 name: Build OmaSales Web
 
 on:
-  pull_request:
-    paths:
-      - 'app/**'
-      - 'mobile/**'
-      - 'migrations/**'
-      - 'requirements.txt'
-      - '.github/workflows/build-oma-web.yml'
+  # Automatic runs are intentionally disabled.
+  # Start this workflow manually from the Actions tab.
+  workflow_dispatch:
 
   push:
     paths:
