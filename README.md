@@ -7,7 +7,7 @@ volumetric weight, shipping estimates, and profit are all calculated automatical
 - Python 3.11, Flask 3, Flask-Admin, Flask-Login, Flask-SQLAlchemy, Flask-Migrate
 - Database: Postgres (Neon — free tier, does not expire or delete data on inactivity)
 - Hosting: Render Web Service + Gunicorn
-- Auth: single admin user, session-based login
+- Auth: Flask session login for the legacy `/classic` interface plus bearer-token authentication for Flutter Web/Android.
 
 ## Local setup
 
@@ -33,7 +33,7 @@ flask run
 Visit `http://127.0.0.1:5000/` — it redirects to `/admin/`, which redirects to
 `/login` if you're not signed in yet.
 
-## What's built (Stages 1–5)
+## What's built
 
 | Stage | Current implementation |
 |---|---|
@@ -41,7 +41,7 @@ Visit `http://127.0.0.1:5000/` — it redirects to `/admin/`, which redirects to
 | 2 | Authentication, logout/password change, Flask-Admin, role-based access, protected CRUD, stock audit trail. |
 | 3 | Admin/staff boundaries, immutable audit log, audited sensitive operations, mobile idempotency and offline actor attribution. |
 | 4 | Android/iOS-capable local biometric gate with password fallback, Firebase Cloud Messaging device registration, notification outbox, batch-arrival push events and shipment-specific Android notification sounds. |
-| 5 | Green/white brand system, light/dark/sunrise themes, responsive desktop/mobile layouts, operational dashboard KPIs, reports/CSV, offline/sync states, PDF branding/watermarks and mobile/web parity work. |
+| 5 | Green/white brand system, light/dark/sunrise themes, responsive desktop/mobile layouts, operational dashboard KPIs, reports/CSV, offline/sync states, PDF branding/watermarks, Flutter Web and Android parity, Team Chat, push notifications, landed-cost pricing and shipment workflows. |
 
 ### Sensitive-action verification
 
@@ -75,7 +75,7 @@ Firebase Cloud Messaging is used for push delivery. Notification intent is writt
 4. Deploy. The build command runs `flask db upgrade` automatically on every deploy
    (safe — already-applied migrations are skipped).
 5. Open the Render Shell tab once and run `flask seed-admin` to create your admin login.
-6. Visit your Render URL. `/healthz` returns `{"status": "ok"}` for uptime monitoring.
+6. Visit your Render URL. The Flutter Web application is served from `/`; `/webapp/` is also available for the compiled SPA assets. `/healthz` returns `{"status": "ok"}` for uptime monitoring.
 
 ## Notes
 
