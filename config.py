@@ -20,6 +20,13 @@ class Config:
 
     SECRET_KEY = _secret_key or "dev-key-change-me"
 
+    _admin_username = os.environ.get("ADMIN_USERNAME")
+    _admin_password = os.environ.get("ADMIN_PASSWORD")
+    if _production_database and not _admin_password:
+        raise RuntimeError(
+            "ADMIN_PASSWORD must be configured when DATABASE_URL is set."
+        )
+
     # Render/Supabase provide DATABASE_URL as postgres://... -> SQLAlchemy needs postgresql://
     _raw_db_url = os.environ.get("DATABASE_URL", "")
     if _raw_db_url.startswith("postgres://"):
@@ -39,8 +46,8 @@ class Config:
         "pool_recycle": 280,
     }
 
-    ADMIN_USERNAME = os.environ.get("ADMIN_USERNAME", "admin")
-    ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "change-me")
+    ADMIN_USERNAME = _admin_username or "admin"
+    ADMIN_PASSWORD = _admin_password or "change-me"
 
     # Default courier rate per CBM (Naira), used when seeding courier_rates
     DEFAULT_RATE_PER_CBM = 600000.00
