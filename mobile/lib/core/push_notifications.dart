@@ -99,6 +99,7 @@ class OmaPushNotifications {
         await api.registerPushDevice(
           token,
           kIsWeb ? 'web' : defaultTargetPlatform.name,
+          notificationChannelVersion: kIsWeb ? null : 'v2',
         );
       }
 
@@ -109,6 +110,7 @@ class OmaPushNotifications {
               await api.registerPushDevice(
                 next,
                 kIsWeb ? 'web' : defaultTargetPlatform.name,
+                notificationChannelVersion: kIsWeb ? null : 'v2',
               );
             } catch (_) {
               // The next authenticated entry will register the current token again.
