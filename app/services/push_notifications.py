@@ -228,6 +228,79 @@ def queue_user_notification(
     )
 
 
+
+def send_test_notification(user_id):
+    """Send a direct visible FCM notification to a user's enabled devices."""
+    app = _firebase()
+    if app is None:
+        raise RuntimeError(
+            "Firebase is not configured or could not be initialized on the server."
+        )
+
+    from firebase_admin import messaging
+
+    devices = PushDevice.query.filter_by(
+        user_id=user_id,
+        enabled=True,
+    ).all()
+    if not devices:
+        return {
+            "sent": 0,
+            "devices": 0,
+            "errors": ["No enabled push device is registered for this account."],
+        }
+
+    sent = 0
+    errors = []
+    for device in devices:
+        try:
+            message = messaging.Message(
+                token=device.token,
+                notification=messaging.Notification(
+                    title="OmaSales push test",
+                    body="Push notifications are working on this device.",
+                ),
+                data={
+                    "type": "push_test",
+                    "title": "OmaSales push test",
+                    "body": "Push notifications are working on this device.",
+                    "notification_id": "test-device-%s" % device.id,
+                    "sound": "scanner_beep",
+                },
+                android=messaging.AndroidConfig(
+                    priority="high",
+                    notification=messaging.AndroidNotification(
+                        title="OmaSales push test",
+                        body="Push notifications are working on this device.",
+                        **(
+                            {"channel_id": "oma_scanner_v2"}
+                            if (
+                                device.platform == "android"
+                                and device.notification_channel_version == "v2"
+                            )
+                            else {}
+                        ),
+                    ),
+                ),
+            )
+            messaging.send(message, app=app)
+            device.last_seen_at = datetime.utcnow()
+            sent += 1
+        except Exception as exc:
+            errors.append(str(exc)[:4000])
+            try:
+                if isinstance(exc, messaging.UnregisteredError):
+                    device.enabled = False
+            except Exception:
+                pass
+
+    db.session.commit()
+    return {
+        "sent": sent,
+        "devices": len(devices),
+        "errors": errors,
+    }
+
 def flush_outbox(limit=100):
     """Best-effort delivery of pending notifications.
 
