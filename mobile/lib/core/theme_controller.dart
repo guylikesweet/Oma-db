@@ -97,16 +97,13 @@ class OmaThemeController {
     try {
       final location = Location();
 
-      var serviceEnabled = await location.serviceEnabled();
-      if (!serviceEnabled) {
-        serviceEnabled = await location.requestService();
-      }
+      // Theme resolution must never unexpectedly prompt for GPS/service
+      // access every minute. If location has already been granted, use it;
+      // otherwise use the deterministic 06:00/18:00 fallback.
+      final serviceEnabled = await location.serviceEnabled();
       if (!serviceEnabled) return _fallbackDarkness();
 
-      var permission = await location.hasPermission();
-      if (permission == PermissionStatus.denied) {
-        permission = await location.requestPermission();
-      }
+      final permission = await location.hasPermission();
       if (permission != PermissionStatus.granted) {
         return _fallbackDarkness();
       }
