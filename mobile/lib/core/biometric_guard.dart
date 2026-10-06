@@ -56,6 +56,7 @@ class BiometricGuard {
       final verifier = passwordVerifier;
       if (verifier == null) return false;
       final controller = TextEditingController();
+      var obscure = true;
       try {
         final password = await showDialog<String>(
           context: context,
@@ -63,7 +64,6 @@ class BiometricGuard {
             title: const Text('Verify with password'),
             content: StatefulBuilder(
               builder: (context, setState) {
-                var obscure = true;
                 return TextField(
                   controller: controller,
                   autofocus: true,
