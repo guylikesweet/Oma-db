@@ -1147,17 +1147,85 @@ class _AppShellState extends State<AppShell> {
       ),
     );
 
-    return Scaffold(
-      body: Stack(
-        children: [
-          Positioned.fill(child: content),
-          GlobalChatLauncher(api: widget.api),
-        ],
-      ),
-      bottomNavigationBar: _OmaBottomNavigation(
-        selectedIndex: tab,
-        onSelected: (i) => setState(() => tab = i),
-      ),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final wide = constraints.maxWidth >= 1100;
+
+        Widget workspace() {
+          return Stack(
+            children: [
+              Positioned.fill(
+                child: Center(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 1480),
+                    child: content,
+                  ),
+                ),
+              ),
+              GlobalChatLauncher(api: widget.api),
+            ],
+          );
+        }
+
+        if (wide) {
+          return Scaffold(
+            body: Row(
+              children: [
+                NavigationRail(
+                  selectedIndex: tab,
+                  onDestinationSelected: (i) => setState(() => tab = i),
+                  labelType: NavigationRailLabelType.all,
+                  leading: Padding(
+                    padding: const EdgeInsets.only(top: 12, bottom: 18),
+                    child: Icon(
+                      Icons.storefront_rounded,
+                      color: Theme.of(context).colorScheme.primary,
+                      size: 30,
+                    ),
+                  ),
+                  destinations: const [
+                    NavigationRailDestination(
+                      icon: Icon(Icons.receipt_long_outlined),
+                      selectedIcon: Icon(Icons.receipt_long),
+                      label: Text('Sales'),
+                    ),
+                    NavigationRailDestination(
+                      icon: Icon(Icons.inventory_2_outlined),
+                      selectedIcon: Icon(Icons.inventory_2),
+                      label: Text('Products'),
+                    ),
+                    NavigationRailDestination(
+                      icon: Icon(Icons.dashboard_outlined),
+                      selectedIcon: Icon(Icons.dashboard),
+                      label: Text('Home'),
+                    ),
+                    NavigationRailDestination(
+                      icon: Icon(Icons.warehouse_outlined),
+                      selectedIcon: Icon(Icons.warehouse),
+                      label: Text('Stock'),
+                    ),
+                    NavigationRailDestination(
+                      icon: Icon(Icons.more_horiz),
+                      selectedIcon: Icon(Icons.more_horiz),
+                      label: Text('More'),
+                    ),
+                  ],
+                ),
+                const VerticalDivider(width: 1),
+                Expanded(child: workspace()),
+              ],
+            ),
+          );
+        }
+
+        return Scaffold(
+          body: workspace(),
+          bottomNavigationBar: _OmaBottomNavigation(
+            selectedIndex: tab,
+            onSelected: (i) => setState(() => tab = i),
+          ),
+        );
+      },
     );
 
   }
