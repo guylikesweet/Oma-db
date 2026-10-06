@@ -490,7 +490,7 @@ class _LoginPageState extends State<LoginPage> {
       }
     } catch (e) {
       if (mounted) {
-        setState(() => error = e.toString());
+        setState(() => error = userFacingError(e));
       }
     } finally {
       if (mounted) {
@@ -2048,7 +2048,7 @@ class _ProductDialogState extends State<ProductDialog> {
       }
     } catch (e) {
       if (mounted) {
-        setState(() => error = e.toString());
+        setState(() => error = userFacingError(e));
       }
     } finally {
       if (mounted) {
@@ -2804,7 +2804,7 @@ class _SaleDetailPageState extends State<SaleDetailPage> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.toString())),
+          SnackBar(content: Text(userFacingError(e))),
         );
       }
     }
@@ -2830,7 +2830,7 @@ class _SaleDetailPageState extends State<SaleDetailPage> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.toString())),
+          SnackBar(content: Text(userFacingError(e))),
         );
       }
     }
@@ -3467,7 +3467,7 @@ class _StockPageState extends State<StockPage> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(e.toString()),
+            content: Text(userFacingError(e)),
           ),
         );
       }
@@ -3772,7 +3772,7 @@ class _ChangePasswordDialogState
       }
     } catch (e) {
       if (mounted) {
-        setState(() => error = e.toString());
+        setState(() => error = userFacingError(e));
       }
     } finally {
       if (mounted) {
