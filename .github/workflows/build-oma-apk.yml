@@ -70,42 +70,56 @@ jobs:
           # Required API routes
           # --------------------------------------------------------
           required_routes = [
+              # Authentication/session endpoints used by the mobile client.
               "/v1/auth/login",
               "/v1/auth/me",
+              "/v1/auth/biometric-login",
+              "/v1/auth/verify-password",
               "/v1/auth/change-password",
+              "/v1/auth/change-username",
               "/v1/auth/logout",
 
+              # Bootstrap/sync endpoints.
               "/v1/bootstrap",
               "/v1/sync",
 
+              # Products, stock and sales.
               "/v1/products",
               "/v1/products/cost-calculator",
+              "/v1/products/<int:product_id>",
               "/v1/stock/adjust",
               "/v1/stock-log",
-
               "/v1/sales",
+              "/v1/sales/<int:sale_id>",
+              "/v1/sales/<int:sale_id>/journey",
 
+              # Shipment/batch/delivery/shipping endpoints.
               "/v1/batches",
-
               "/v1/deliveries",
               "/v1/deliveries/ready",
               "/v1/deliveries/<int:delivery_id>/label.pdf",
-
               "/v1/shipping",
-
               "/v1/courier-rates",
               "/v1/monthly-shipping-rates",
 
+              # Reports/dashboard/audit/settings/users/admin.
+              "/v1/dashboard",
+              "/v1/audit",
               "/v1/reports/sales",
               "/v1/reports/shipping",
               "/v1/reports/inventory",
-
               "/v1/settings",
-
               "/v1/users",
               "/v1/users/<int:user_id>",
-
               "/v1/admin/clear-test-data",
+
+              # Push registration and Team Chat.
+              "/v1/notifications/register-device",
+              "/v1/notifications/unregister-device",
+              "/v1/chat/messages",
+              "/v1/chat/messages/<int:message_id>",
+              "/v1/chat/messages/<int:message_id>/reactions",
+              "/v1/chat/messages/<int:message_id>/replies",
           ]
 
           missing = [
@@ -296,8 +310,11 @@ jobs:
         run: flutter pub get
 
       # ------------------------------------------------------------
-      # 5. FLUTTER ANALYSIS
+      # 5. FORMAT + ANALYZE FLUTTER CODE
       # ------------------------------------------------------------
+      - name: Format Dart code
+        run: dart format lib
+
       - name: Analyze Flutter code
         run: flutter analyze
 
