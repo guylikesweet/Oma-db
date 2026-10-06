@@ -1614,7 +1614,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
                         ),
                       ),
                     const SizedBox(height: 16),
-                    if ((data?['low_stock_products'] as List?)
+                    if ((data['low_stock_products'] as List?)
                             ?.isNotEmpty ==
                         true)
                       Card(
