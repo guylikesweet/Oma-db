@@ -3,6 +3,7 @@ import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:sqflite/sqflite.dart' show databaseFactory;
 import 'package:sqflite_common_ffi_web/sqflite_ffi_web.dart';
 import 'brand_loader.dart';
@@ -23,6 +24,7 @@ import 'new_sale_page.dart';
 import 'journey_widgets.dart';
 import 'chat_page.dart';
 import 'profile_page.dart';
+import 'presentation/controllers/dashboard_controller.dart';
 
 @pragma('vm:entry-point')
 Future<void> omaFirebaseMessagingBackgroundHandler(RemoteMessage message) async {
@@ -50,7 +52,20 @@ void main() {
       omaFirebaseMessagingBackgroundHandler,
     );
   }
-  runApp(OmaMobileApp(initialization: _initializeOma()));
+  runApp(
+    const ProviderScope(
+      child: OmaMobileAppRoot(),
+    ),
+  );
+}
+
+class OmaMobileAppRoot extends StatelessWidget {
+  const OmaMobileAppRoot({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return OmaMobileApp(initialization: _initializeOma());
+  }
 }
 
 class OmaMobileApp extends StatefulWidget {
@@ -1356,7 +1371,7 @@ class _OmaBottomNavigation extends StatelessWidget {
   }
 }
 
-class DashboardPage extends StatefulWidget {
+class DashboardPage extends ConsumerStatefulWidget {
   const DashboardPage({
     super.key,
     required this.api,
@@ -1380,14 +1395,13 @@ class DashboardPage extends StatefulWidget {
   State<DashboardPage> createState() => _DashboardPageState();
 }
 
-class _DashboardPageState extends State<DashboardPage> {
-  Map<String, dynamic>? data;
-  int pending = 0;
-
+class _DashboardPageState extends ConsumerState<DashboardPage> {
   @override
   void initState() {
     super.initState();
-    load();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) load();
+    });
   }
 
   @override
@@ -1400,62 +1414,16 @@ class _DashboardPageState extends State<DashboardPage> {
   }
 
   Future<void> load() async {
-    try {
-      final remote = await widget.api.dashboard();
-      final db = await widget.local.db;
-      final products = await db.query('products');
-      final sales = await db.query('sales');
-      final low = products
-          .where((x) => (x['stock'] as int? ?? 0) <= 5)
-          .take(8)
-          .toList();
-
-      if (mounted) {
-        setState(() {
-          data = {
-            ...remote,
-            'low_stock_products': low,
-            'local_counts': {
-              'products': products.length,
-              'sales': sales.length,
-            },
-          };
-        });
-      }
-    } catch (_) {
-      final db = await widget.local.db;
-      final products = await db.query('products');
-      final sales = await db.query('sales');
-      final low = products
-          .where((x) => (x['stock'] as int? ?? 0) <= 5)
-          .take(8)
-          .toList();
-
-      if (mounted) {
-        setState(() {
-          data = {
-            'sales_today': 0,
-            'profit_today': 0,
-            'pending_shipments': 0,
-            'shipping_owed': 0,
-            'batches_in_transit': 0,
-            'sync_exceptions': 0,
-            'low_stock_count': low.length,
-            'low_stock_products': low,
-            'local_counts': {
-              'products': products.length,
-              'sales': sales.length,
-            },
-          };
-        });
-      }
-    }
-
-    pending = await widget.repo.pendingCount();
-    if (mounted) setState(() {});
+    await ref.read(dashboardControllerProvider.notifier).refresh();
   }
   @override
-  Widget build(BuildContext context) => RefreshIndicator(
+  Widget build(BuildContext context) {
+    final dashboard = ref.watch(dashboardControllerProvider);
+    final data = dashboard.valueOrNull?.data;
+    final pending =
+        dashboard.valueOrNull?.pendingOperations ?? 0;
+
+    return RefreshIndicator(
         onRefresh: () async {
           await widget.onSync(silent: false);
           await load();
@@ -1695,6 +1663,7 @@ class _DashboardPageState extends State<DashboardPage> {
           ],
         ),
       );
+  }
 }
 
 class _Kpi extends StatelessWidget {
