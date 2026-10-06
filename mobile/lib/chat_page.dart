@@ -57,6 +57,7 @@ class _ChatPageState extends State<ChatPage> {
     super.initState();
     composer.addListener(_onComposerChanged);
     load();
+    _loadMentionUsers();
     poller = Timer.periodic(
       const Duration(seconds: 4),
       (_) => load(silent: true),
@@ -625,12 +626,20 @@ class _ChatPageState extends State<ChatPage> {
     await showModalBottomSheet<void>(
       context: context,
       showDragHandle: true,
-      builder: (context) => SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
+      isScrollControlled: true,
+      useSafeArea: true,
+      constraints: const BoxConstraints(
+        minWidth: double.infinity,
+        maxWidth: double.infinity,
+      ),
+      builder: (context) => SizedBox(
+        width: double.infinity,
+        child: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
               if (userId != null)
                 _profileAvatar(
                   userId: userId,
@@ -649,7 +658,8 @@ class _ChatPageState extends State<ChatPage> {
                 const SizedBox(height: 8),
                 Text('Inactive team member', style: TextStyle(color: scheme.error)),
               ],
-            ],
+              ],
+            ),
           ),
         ),
       ),
@@ -722,6 +732,23 @@ class _ChatPageState extends State<ChatPage> {
         children: spans,
       ),
     );
+  }
+
+  Future<void> _loadMentionUsers() async {
+    try {
+      final result = await widget.api.users();
+      if (!mounted) return;
+      final loaded = result
+          .whereType<Map>()
+          .map((user) => Map<String, dynamic>.from(user))
+          .toList();
+      setState(() {
+        users = loaded;
+      });
+      _onComposerChanged();
+    } catch (_) {
+      // Chat itself should remain usable if the user directory is unavailable.
+    }
   }
 
   void _onComposerChanged() {
