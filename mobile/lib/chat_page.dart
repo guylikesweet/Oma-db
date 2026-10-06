@@ -1372,7 +1372,7 @@ class _ChatPageState extends State<ChatPage> {
                           vertical: 2,
                         ),
                         child: Text(
-                          'Retry',
+                          'Try Again',
                           style: TextStyle(
                             fontSize: 10,
                             fontWeight: FontWeight.w900,
@@ -1462,7 +1462,7 @@ class _ChatPageState extends State<ChatPage> {
                     actions: [
                       TextButton(
                         onPressed: () => load(),
-                        child: const Text('Try'),
+                        child: const Text('Try Again'),
                       ),
                     ],
                   ),
