@@ -7,7 +7,18 @@ basedir = os.path.abspath(os.path.dirname(__file__))
 
 
 class Config:
-    SECRET_KEY = os.environ.get("SECRET_KEY", "dev-key-change-me")
+    _secret_key = os.environ.get("SECRET_KEY")
+    _production_database = bool(os.environ.get("DATABASE_URL"))
+
+    # Never allow the production deployment to silently fall back to a
+    # predictable signing key. Local development may still use the explicit
+    # development fallback when DATABASE_URL is not configured.
+    if _production_database and not _secret_key:
+        raise RuntimeError(
+            "SECRET_KEY must be configured when DATABASE_URL is set."
+        )
+
+    SECRET_KEY = _secret_key or "dev-key-change-me"
 
     # Render/Supabase provide DATABASE_URL as postgres://... -> SQLAlchemy needs postgresql://
     _raw_db_url = os.environ.get("DATABASE_URL", "")
