@@ -1,8 +1,8 @@
 """
 Serves the compiled Flutter Web build (app/static/webapp/, committed by
-build-oma-web.yml) under /webapp/ — a deliberately separate path from the
-existing "/" homepage, so the new UI can be tested on the real production
-domain without touching or replacing anything currently live.
+build-oma-web.yml) under /webapp/. The same compiled Flutter Web application is also exposed
+from the root route by app/__init__.py, so the Flutter Web client is now the
+main application while /classic remains the legacy Jinja interface.
 
 Not @login_required: this route only ever hands back static HTML/JS. The
 Flutter app authenticates itself against /api/v1/auth/login with its own
