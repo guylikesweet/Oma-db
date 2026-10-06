@@ -52,7 +52,7 @@ jobs:
           ADMIN_USERNAME: stage10-admin
           ADMIN_PASSWORD: stage10-password
         run: |
-          heads=$(flask --app run.py db heads | grep -E '^[0-9a-zA-Z_]+ ' | wc -l)
+          heads=$(flask --app run.py db heads | grep -c '(head)' || true)
           if [ "$heads" -ne 1 ]; then
             echo "Expected exactly one Alembic head, found $heads"
             flask --app run.py db heads
