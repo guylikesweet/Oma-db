@@ -149,19 +149,31 @@ def create_sale(customer_name, customer_phone, customer_address, customer_state,
         product_id = line["product_id"]
         requested[product_id] = requested.get(product_id, 0) + qty
 
-    # Stock-changing sales must serialize against every other stock writer.
-    # Lock products in deterministic ID order to avoid deadlocks when two
-    # multi-product sales arrive concurrently.
-    for product_id in sorted(requested):
-        product = (
-            Product.query
-            .filter_by(id=product_id)
-            .with_for_update()
-            .first()
-        )
-        if not product:
-            raise SaleValidationError(f"Product id {product_id} does not exist.")
-        products[product_id] = product
+    if is_stock:
+        # Stock-changing sales must serialize against every other stock writer.
+        # Lock products in deterministic ID order to avoid deadlocks when two
+        # multi-product sales arrive concurrently.
+        for product_id in sorted(requested):
+            product = (
+                Product.query
+                .filter_by(id=product_id)
+                .with_for_update()
+                .first()
+            )
+            if not product:
+                raise SaleValidationError(
+                    f"Product id {product_id} does not exist."
+                )
+            products[product_id] = product
+    else:
+        # Preorders don't mutate inventory, so avoid unnecessary row locks.
+        for product_id in sorted(requested):
+            product = Product.query.filter_by(id=product_id).first()
+            if not product:
+                raise SaleValidationError(
+                    f"Product id {product_id} does not exist."
+                )
+            products[product_id] = product
 
     # Preorders are for goods still to be shipped in, so stock is irrelevant:
     # the quantity is simply what the customer asked for. Only stocked sales check it.
