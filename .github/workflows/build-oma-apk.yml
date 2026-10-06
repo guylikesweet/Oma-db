@@ -309,6 +309,17 @@ jobs:
           PY
 
       # ------------------------------------------------------------
+      # BACKEND REGRESSION TESTS
+      # ------------------------------------------------------------
+      - name: Run backend regression tests
+        working-directory: .
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m pip install --disable-pip-version-check -q -r requirements.txt -r requirements-dev.txt
+          python3 -m pytest -q
+
+      # ------------------------------------------------------------
       # 3. INSTALL FLUTTER
       # ------------------------------------------------------------
       - name: Install Flutter
