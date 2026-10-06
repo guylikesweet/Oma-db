@@ -282,12 +282,19 @@ class ApiClient {
 
   Future<Map<String, dynamic>> registerPushDevice(
     String token,
-    String platform,
-  ) {
+    String platform, {
+    String? notificationChannelVersion,
+  }) {
     return _map(
       'POST',
       '/v1/notifications/register-device',
-      body: {'token': token, 'platform': platform},
+      body: {
+        'token': token,
+        'platform': platform,
+        if (notificationChannelVersion != null &&
+            notificationChannelVersion.isNotEmpty)
+          'notification_channel_version': notificationChannelVersion,
+      },
     );
   }
 
