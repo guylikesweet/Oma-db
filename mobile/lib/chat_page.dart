@@ -894,6 +894,35 @@ class _ChatPageState extends State<ChatPage> {
         child: Stack(
           clipBehavior: Clip.none,
           children: [
+            IgnorePointer(
+              child: Positioned(
+                bottom: 10,
+                left: mine ? null : 5,
+                right: mine ? 5 : null,
+                child: Transform.rotate(
+                  angle: 0.785398,
+                  child: Container(
+                    width: 12,
+                    height: 12,
+                    decoration: BoxDecoration(
+                      gradient: bubbleGradient,
+                      border: Border(
+                        right: BorderSide(
+                          color: mine && !pending && !failed
+                              ? Colors.white.withOpacity(.22)
+                              : scheme.outline.withOpacity(.45),
+                        ),
+                        bottom: BorderSide(
+                          color: mine && !pending && !failed
+                              ? Colors.white.withOpacity(.22)
+                              : scheme.outline.withOpacity(.45),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
         AnimatedContainer(
           duration: const Duration(milliseconds: 280),
           curve: Curves.easeOutCubic,
