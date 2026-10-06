@@ -27,6 +27,7 @@ class _ChatPageState extends State<ChatPage> {
   String? attachmentName;
   bool emojiOpen = false;
   final Map<int, Uint8List> photoCache = {};
+  final Map<int, Uint8List> avatarCache = {};
   final Map<int, GlobalKey> messageKeys = {};
   static const emojiChoices = <String>[
     '😀','😂','😍','🥰','😎','😭','😅','😮','😢','😡',
@@ -787,6 +788,63 @@ class _ChatPageState extends State<ChatPage> {
       return raw.toString().replaceFirst('T', ' ').split('.').first;
     }
   }
+  Widget _senderAvatar(Map<String, dynamic> message, String sender) {
+    final scheme = Theme.of(context).colorScheme;
+    final rawId = message['sender_user_id'];
+    final userId = rawId is int ? rawId : int.tryParse('$rawId');
+    final url = message['sender_profile_photo_url']?.toString() ?? '';
+
+    if (userId == null || url.isEmpty) {
+      return CircleAvatar(
+        radius: 13,
+        backgroundColor: scheme.primaryContainer,
+        child: Text(
+          sender.trim().isEmpty ? '?' : sender.trim()[0].toUpperCase(),
+          style: TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.w900,
+            color: scheme.onPrimaryContainer,
+          ),
+        ),
+      );
+    }
+
+    final cached = avatarCache[userId];
+    if (cached != null) {
+      return CircleAvatar(
+        radius: 13,
+        backgroundImage: MemoryImage(cached),
+        backgroundColor: scheme.primaryContainer,
+      );
+    }
+
+    return FutureBuilder<Uint8List>(
+      future: widget.api.downloadChatAttachment(url),
+      builder: (context, snapshot) {
+        if (snapshot.hasData) {
+          avatarCache[userId] = snapshot.data!;
+          return CircleAvatar(
+            radius: 13,
+            backgroundImage: MemoryImage(snapshot.data!),
+            backgroundColor: scheme.primaryContainer,
+          );
+        }
+        return CircleAvatar(
+          radius: 13,
+          backgroundColor: scheme.primaryContainer,
+          child: Text(
+            sender.trim().isEmpty ? '?' : sender.trim()[0].toUpperCase(),
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w900,
+              color: scheme.onPrimaryContainer,
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   Widget _messageBubble(Map<String, dynamic> message) {
     final mine = message['sender_user_id'] == AppSession.userId;
     final status = '${message['_status'] ?? 'sent'}';
@@ -880,23 +938,7 @@ class _ChatPageState extends State<ChatPage> {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   if (!mine) ...[
-                    Container(
-                      width: 25,
-                      height: 25,
-                      alignment: Alignment.center,
-                      decoration: BoxDecoration(
-                        color: scheme.primaryContainer,
-                        shape: BoxShape.circle,
-                      ),
-                      child: Text(
-                        sender.trim().isEmpty ? '?' : sender.trim()[0].toUpperCase(),
-                        style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w900,
-                          color: scheme.onPrimaryContainer,
-                        ),
-                      ),
-                    ),
+                    _senderAvatar(message, sender),
                     const SizedBox(width: 7),
                   ],
                   Text(
