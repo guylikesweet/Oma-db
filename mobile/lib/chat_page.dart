@@ -133,8 +133,32 @@ class _ChatPageState extends State<ChatPage> {
           WidgetsBinding.instance.addPostFrameCallback((_) async {
             if (mounted) await _jumpToMessage(target);
           });
-        } else if (previousLastId == null) {
-          _scrollToBottom(animated: false);
+        } else {
+          try {
+            final targetMessage = await widget.api.chatMessage(target);
+            if (!mounted) return;
+            final alreadyPresent = messages.any(
+              (message) => _asInt(message['id']) == target,
+            );
+            if (!alreadyPresent) {
+              setState(() {
+                messages = [
+                  ...messages,
+                  targetMessage,
+                ]..sort(
+                    (a, b) => _asInt(a['id']).compareTo(_asInt(b['id'])),
+                  );
+              });
+            }
+            _initialMessageHandled = true;
+            WidgetsBinding.instance.addPostFrameCallback((_) async {
+              if (mounted) await _jumpToMessage(target);
+            });
+          } catch (_) {
+            if (previousLastId == null) {
+              _scrollToBottom(animated: false);
+            }
+          }
         }
       } else if (previousLastId == null) {
         _scrollToBottom(animated: false);
