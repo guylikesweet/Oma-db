@@ -79,6 +79,7 @@ window.omaClassicChatUserId = {{ current_user.id|tojson }};
   }
   function render(){
     if(!messages.length){list.innerHTML='<div class="oma-chat-state">No messages yet. Start the conversation.</div>';return}
+    var wasNearBottom=list.scrollHeight-list.scrollTop-list.clientHeight<80;
     list.innerHTML=messages.map(function(m){
       var mine=m.sender_user_id===window.omaClassicChatUserId;
       var deleted=m.deleted;
@@ -95,7 +96,7 @@ window.omaClassicChatUserId = {{ current_user.id|tojson }};
         (canManage&&!deleted?'<button type="button" data-act="edit">Edit</button><button type="button" data-act="delete">Delete</button>':'')+
         '</div></div>'
     }).join('');
-    list.scrollTop=list.scrollHeight
+    if(wasNearBottom||list.scrollTop===0)list.scrollTop=list.scrollHeight
   }
   async function load(){
     try{await initCsrf();messages=await api('/classic/chat/messages?limit=100');render()}catch(e){list.innerHTML='<div class="oma-chat-state">'+esc(e.message)+'</div>'}
