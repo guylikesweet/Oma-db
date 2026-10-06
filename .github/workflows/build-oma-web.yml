@@ -101,13 +101,10 @@ jobs:
       # ------------------------------------------------------------
       # 5. BUILD (release)
       #
-      # --base-href /webapp/ : this build is served by Flask under the
-      # /webapp/ prefix (see app/webapp.py) — a deliberately separate,
-      # non-default path so this can be tested on the real production
-      # domain without touching the existing site at "/". Once that's
-      # confirmed working, promoting it to the actual homepage is a
-      # separate, later decision — not automatic just because this
-      # build succeeds.
+      # --base-href /webapp/ : compiled Flutter assets are stored and served
+      # under /webapp/, while the Flask root route also serves the same
+      # index.html as the main application. Keeping the asset base stable
+      # prevents a rebuild from breaking Firebase/Flutter asset URLs.
       # ------------------------------------------------------------
       - name: Configure Firebase web messaging worker
         env:
