@@ -3149,7 +3149,7 @@ class _SaleDetailPageState extends State<SaleDetailPage> {
               const SizedBox(height: 12),
               OutlinedButton(
                 onPressed: load,
-                child: const Text('Retry'),
+                child: const Text('Try Again'),
               ),
             ],
           ),
