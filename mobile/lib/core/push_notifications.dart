@@ -35,10 +35,10 @@ class OmaPushNotifications {
     try {
       await _local.initialize(_initSettings, onDidReceiveNotificationResponse: _handleLocalNotificationTap);
 
-      final android = _local
-          .resolvePlatformSpecificImplementation<
-              AndroidFlutterLocalNotificationsPlugin>();
+      final android = _local.resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
       await android?.requestNotificationsPermission();
+      final ios = _local.resolvePlatformSpecificImplementation<IOSFlutterLocalNotificationsPlugin>();
+      await ios?.requestPermissions(alert: true, badge: true, sound: true);
 
       final location = Location();
       var permission = await location.hasPermission();
@@ -124,6 +124,7 @@ class OmaPushNotifications {
         });
         _foregroundListenerAttached = true;
       }
+      await restoreNotificationLaunch();
     } catch (error, stackTrace) {
       debugPrint('OmaPush initialize failed: $error');
       debugPrint('$stackTrace');
