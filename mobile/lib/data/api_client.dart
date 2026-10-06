@@ -1050,6 +1050,30 @@ class ApiClient {
   // USERS
   // ============================================================
 
+  Future<Map<String, dynamic>> calculateProductCost({
+    required String cost,
+    required String lengthCm,
+    required String widthCm,
+    required String heightCm,
+    required String actualWeightKg,
+    required String markupPercent,
+    String mode = 'sea',
+  }) {
+    return _map(
+      'POST',
+      '/v1/products/cost-calculator',
+      body: {
+        'cost': cost,
+        'length_cm': lengthCm,
+        'width_cm': widthCm,
+        'height_cm': heightCm,
+        'actual_weight_kg': actualWeightKg,
+        'markup_percent': markupPercent,
+        'mode': mode,
+      },
+    );
+  }
+
   Future<Map<String, dynamic>> getProfile() {
     return _map('GET', '/v1/profile');
   }
