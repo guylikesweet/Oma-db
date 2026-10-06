@@ -1,9 +1,8 @@
 name: Build OmaSales Mobile
 
 on:
-  push:
-    branches:
-      - stage3-architecture
+  # Automatic push/PR builds are intentionally disabled.
+  # Builds must be started manually from the Actions tab.
   workflow_dispatch:
     inputs:
       api_url:
