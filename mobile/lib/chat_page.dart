@@ -775,17 +775,26 @@ class _ChatPageState extends State<ChatPage> {
     if (raw == null || raw.toString().trim().isEmpty) return '';
     try {
       var value = raw.toString().trim();
-      if (!value.endsWith('Z') && !RegExp(r'[+-]\\d{2}:?\\d{2}
+      if (!value.endsWith('Z') &&
+          !RegExp(r'[+-]\\d{2}:?\\d{2}$').hasMatch(value)) {
+        value = '${value}Z';
+      }
+      final utc = DateTime.parse(value).toUtc();
+      final lagos = utc.add(const Duration(hours: 1));
+      String two(int n) => n.toString().padLeft(2, '0');
+      return '${two(lagos.day)}/${two(lagos.month)}/${lagos.year} ${two(lagos.hour)}:${two(lagos.minute)}';
+    } catch (_) {
+      return raw.toString().replaceFirst('T', ' ').split('.').first;
+    }
+  }
+
     final mine = message['sender_user_id'] == AppSession.userId;
     final status = '${message['_status'] ?? 'sent'}';
     final pending = status == 'sending';
     final failed = status == 'failed';
     final reply = message['reply_to'];
     final sender = mine ? 'Me' : '${message['sender_username'] ?? 'User'}';
-    final created = '${message['created_at'] ?? ''}'
-        .replaceFirst('T', ' ')
-        .split('.')
-        .first;
+    final created = _lagosTime(message['created_at']);
     final deleted = message['deleted'] == true;
     final canModify = !pending && !failed && !deleted && (mine || AppSession.isAdmin);
 
