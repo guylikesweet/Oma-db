@@ -29,7 +29,7 @@ from app.access import require_admin_api
 from app.models import (
     User, Product, Sale, SaleItem, Shipping, Delivery, ShipmentBatch,
     CourierRate, MonthlyShippingRate, MonthlyAirRate, StockLog, MobileOperation, MobileChange, AuditLog, PushDevice,
-    ChatMessage, ChatMention, ChatReaction,
+    ChatMessage, ChatMention, ChatReaction, NotificationOutbox,
 )
 from app.services.sales import create_sale, SaleValidationError, shipping_cost_for_items
 from app.services.rates import get_rate_for_month, get_air_rate_for_month, get_volume_rate, get_rate_per_kg, RateMissingError
@@ -876,6 +876,59 @@ def register_push_device():
     except Exception:
         pass
     return jsonify({"registered": True})
+
+
+@api_bp.route("/v1/notifications/diagnostic", methods=("GET",))
+@require_api_token
+def push_notification_diagnostic():
+    """Safe push-health information for the currently authenticated account."""
+    from app.services.push_notifications import _firebase
+
+    devices = PushDevice.query.filter_by(user_id=g.api_user.id).all()
+    pending = NotificationOutbox.query.filter_by(
+        target_user_id=g.api_user.id,
+        status="pending",
+    ).count()
+    failed = NotificationOutbox.query.filter_by(
+        target_user_id=g.api_user.id,
+        status="failed",
+    ).count()
+    recent_errors = [
+        {
+            "id": row.id,
+            "event_type": row.event_type,
+            "status": row.status,
+            "attempts": row.attempts,
+            "last_error": row.last_error,
+        }
+        for row in (
+            NotificationOutbox.query
+            .filter(
+                NotificationOutbox.target_user_id == g.api_user.id,
+                NotificationOutbox.last_error.isnot(None),
+            )
+            .order_by(NotificationOutbox.id.desc())
+            .limit(10)
+            .all()
+        )
+    ]
+
+    return jsonify({
+        "firebase_configured": _firebase() is not None,
+        "devices": [
+            {
+                "id": device.id,
+                "platform": device.platform,
+                "enabled": bool(device.enabled),
+                "channel_version": device.notification_channel_version,
+                "last_seen_at": device.last_seen_at.isoformat() if device.last_seen_at else None,
+            }
+            for device in devices
+        ],
+        "pending_outbox": pending,
+        "failed_outbox": failed,
+        "recent_errors": recent_errors,
+    })
 
 
 @api_bp.route("/v1/notifications/unregister-device", methods=("POST",))
