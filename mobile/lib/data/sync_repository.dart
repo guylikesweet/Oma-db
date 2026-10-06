@@ -55,8 +55,24 @@ class SyncRepository {
       return;
     }
 
+    // A bootstrap replaces the server-owned local snapshot. Never do that
+    // while offline work is queued: doing so can erase local sales/stock
+    // state before those operations reach the server.
+    final db = await local.db;
+    final pending = await db.query(
+      'sync_queue',
+      columns: ['local_id'],
+      where: "status IN ('pending', 'retry')",
+      limit: 1,
+    );
+    if (pending.isNotEmpty) {
+      return;
+    }
+
     final data = await api.bootstrap();
 
+    // applyBootstrap is transactional and advances the cursor only after the
+    // snapshot has been committed successfully.
     await local.applyBootstrap(data);
     await local.setMeta('bootstrapped', '1');
   }
