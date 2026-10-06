@@ -19,8 +19,8 @@ class User(db.Model, UserMixin):
     username = db.Column(db.String(50), unique=True, nullable=False)
     password_hash = db.Column(db.String(255), nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    # Used by the mobile app to authenticate against /api/* — a long random
-    # string, not a password. See `flask api-token` CLI command.
+    # Used by the mobile app to authenticate against /api/*. Tokens are stored
+    # as SHA-256 digests; the raw random token is only returned to the client.
     api_token = db.Column(db.String(64), unique=True, nullable=True)
     biometric_credential_hash = db.Column(db.String(255), nullable=True)
     api_last_activity_at = db.Column(db.DateTime, nullable=True)
