@@ -3624,6 +3624,53 @@ class MorePage extends StatelessWidget {
                 onTap: () => onSync(silent: false),
               ),
             ),
+            if (!kIsWeb)
+            Card(
+              child: ListTile(
+                leading: const Icon(Icons.notifications_active_outlined),
+                title: const Text('Test push notifications'),
+                subtitle: const Text(
+                  'Send a test notification to this device',
+                ),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () async {
+                  final messenger = ScaffoldMessenger.of(context);
+                  try {
+                    final result = await api.testPushNotification();
+                    final sent = result['sent'] ?? 0;
+                    final devices = result['devices'] ?? 0;
+                    final errors = (result['errors'] as List?)
+                            ?.map((x) => '$x')
+                            .where((x) => x.isNotEmpty)
+                            .toList() ??
+                        const <String>[];
+                    if (sent > 0) {
+                      messenger.showSnackBar(
+                        const SnackBar(
+                          content: Text(
+                            'Push test sent. Check this device for the notification.',
+                          ),
+                        ),
+                      );
+                    } else {
+                      messenger.showSnackBar(
+                        SnackBar(
+                          content: Text(
+                            errors.isNotEmpty
+                                ? errors.first
+                                : 'Push test was not delivered.',
+                          ),
+                        ),
+                      );
+                    }
+                  } catch (e) {
+                    messenger.showSnackBar(
+                      SnackBar(content: Text('Push test failed: $e')),
+                    );
+                  }
+                },
+              ),
+            ),
             const SizedBox(height: 16),
             OutlinedButton.icon(
               onPressed: () async {
