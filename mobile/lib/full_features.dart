@@ -15,6 +15,8 @@ import 'data/sale_kind.dart';
 import 'invoice_actions.dart';
 import 'journey_widgets.dart';
 import 'chat_page.dart';
+import 'new_sale_page.dart';
+import 'profile_page.dart';
 
 class WebsiteFeaturesPage extends StatefulWidget {
   const WebsiteFeaturesPage({
