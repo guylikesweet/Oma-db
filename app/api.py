@@ -24,6 +24,7 @@ from werkzeug.security import check_password_hash, generate_password_hash
 from werkzeug.utils import secure_filename
 from werkzeug.exceptions import RequestEntityTooLarge
 from sqlalchemy import inspect as sa_inspect, text as sa_text
+from sqlalchemy.orm import joinedload, selectinload
 
 from app import db, limiter
 from app.services.journey import journey_public, flow_for, manual_stages_for, stage_label, set_manual_stage_bulk, JourneyError
@@ -2126,7 +2127,18 @@ def mobile_chat_messages():
     if before_id:
         query = query.filter(ChatMessage.id < before_id)
     try:
-        rows = query.order_by(ChatMessage.id.desc()).limit(limit).all()
+        rows = (
+            query
+            .options(
+                joinedload(ChatMessage.sender),
+                joinedload(ChatMessage.reply_to).joinedload(ChatMessage.sender),
+                selectinload(ChatMessage.reactions),
+                selectinload(ChatMessage.mentions),
+            )
+            .order_by(ChatMessage.id.desc())
+            .limit(limit)
+            .all()
+        )
         rows.reverse()
         return jsonify([_chat_message_json(message) for message in rows])
     except Exception as exc:
