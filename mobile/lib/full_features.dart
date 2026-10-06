@@ -778,7 +778,7 @@ Future<void> openArrivalNotice(
       say('Could not open WhatsApp on this device.');
     }
   } catch (e) {
-    say('$e');
+    say(userFacingError(e));
   }
 }
 
@@ -1831,7 +1831,7 @@ class _DeliveriesPageState
       readySales = List<dynamic>.from(results[1]);
       loadError = null;
     } catch (e) {
-      loadError = '$e';
+      loadError = userFacingError(e);
     }
 
     // Suggestions are a bonus: if this fails (e.g. an older server), the
@@ -2488,7 +2488,7 @@ class _DeliveryDetailPageState
           .toList();
       error = null;
     } catch (e) {
-      error = '$e';
+      error = userFacingError(e);
     }
 
     if (mounted) setState(() => loading = false);
