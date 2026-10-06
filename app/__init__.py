@@ -3,12 +3,21 @@ from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
 from flask_login import LoginManager, login_required
 from flask_cors import CORS
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
 from datetime import timedelta
+import os
 import time
 
 db = SQLAlchemy()
 migrate = Migrate()
 login_manager = LoginManager()
+limiter = Limiter(
+    key_func=get_remote_address,
+    default_limits=[],
+    storage_uri=os.environ.get("RATELIMIT_STORAGE_URI", "memory://"),
+    headers_enabled=True,
+)
 
 
 def create_app(config_object="config.Config"):
@@ -19,6 +28,7 @@ def create_app(config_object="config.Config"):
     db.init_app(app)
     migrate.init_app(app, db)
     login_manager.init_app(app)
+    limiter.init_app(app)
     login_manager.login_view = "auth.login"
     @app.before_request
     def enforce_classic_inactivity_timeout():
