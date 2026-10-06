@@ -18,7 +18,6 @@ class OmaPushNotifications {
   static bool _tokenRefreshAttached = false;
   static bool _foregroundListenerAttached = false;
   static bool _messageTapListenerAttached = false;
-  static bool _permissionChecked = false;
   static ApiClient? _api;
 
   static final ValueNotifier<Map<String, dynamic>?> chatOpenRequest = ValueNotifier<Map<String, dynamic>?>(null);
@@ -84,7 +83,6 @@ class OmaPushNotifications {
         sound: true,
         provisional: false,
       );
-      _permissionChecked = true;
       if (permission.authorizationStatus == AuthorizationStatus.denied) {
         debugPrint(
           'OmaPush: notification permission is denied; FCM device registration skipped.',
