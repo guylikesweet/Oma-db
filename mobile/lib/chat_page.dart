@@ -146,7 +146,7 @@ class _ChatPageState extends State<ChatPage> {
                   ...messages,
                   targetMessage,
                 ]..sort(
-                    (a, b) => _asInt(a['id']).compareTo(_asInt(b['id'])),
+                    (a, b) => (_asInt(a['id']) ?? 0).compareTo(_asInt(b['id']) ?? 0),
                   );
               });
             }
