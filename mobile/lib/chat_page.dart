@@ -42,7 +42,9 @@ class _ChatPageState extends State<ChatPage> {
   List<Map<String, dynamic>> users = [];
   Map<String, dynamic>? replyTo;
   bool loading = true;
-  bool sending = false;
+  int _sendingCount = 0;
+
+  bool get sending => _sendingCount > 0;
   String? error;
   int _localSequence = 0;
   Timer? poller;
@@ -180,7 +182,7 @@ class _ChatPageState extends State<ChatPage> {
 
   Future<void> send() async {
     final text = composer.text.trim();
-    if ((text.isEmpty && attachmentBytes == null) || sending) return;
+    if (text.isEmpty && attachmentBytes == null) return;
 
     final replyId = replyTo?['id'];
     final localId = 'local-${++_localSequence}';
@@ -200,7 +202,7 @@ class _ChatPageState extends State<ChatPage> {
     };
 
     setState(() {
-      sending = true;
+      _sendingCount++;
       messages = [...messages, optimistic];
       composer.clear();
       replyTo = null;
@@ -227,7 +229,7 @@ class _ChatPageState extends State<ChatPage> {
                   : message,
             )
             .toList();
-        sending = false;
+        _sendingCount = _sendingCount > 0 ? _sendingCount - 1 : 0;
       });
       _scrollToBottom();
     } catch (e) {
