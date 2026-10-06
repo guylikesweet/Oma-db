@@ -129,7 +129,7 @@ def change_password():
         else:
             from app import db
             current_user.password_hash = generate_password_hash(new_password)
-            current_user.api_token = secrets.token_hex(32)
+            current_user.api_token = None
             current_user.biometric_credential_hash = None
             current_user.api_last_activity_at = None
             record_audit(
