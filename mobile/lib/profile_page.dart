@@ -26,6 +26,7 @@ class _ProfilePageState extends State<ProfilePage> {
   Uint8List? currentPhotoBytes;
   bool loading = true;
   bool saving = false;
+  bool obscureCurrentPassword = true;
   bool obscurePassword = true;
   bool obscureConfirm = true;
   String? error;
@@ -172,10 +173,16 @@ class _ProfilePageState extends State<ProfilePage> {
           TextField(
             controller: currentPassword,
             enabled: !saving,
-            obscureText: true,
-            decoration: const InputDecoration(
+            obscureText: obscureCurrentPassword,
+            decoration: InputDecoration(
               labelText: 'Current password (required when changing it)',
-              prefixIcon: Icon(Icons.lock_outline),
+              prefixIcon: const Icon(Icons.lock_outline),
+              suffixIcon: IconButton(
+                onPressed: () => setState(() => obscureCurrentPassword = !obscureCurrentPassword),
+                icon: Icon(
+                  obscureCurrentPassword ? Icons.visibility : Icons.visibility_off,
+                ),
+              ),
             ),
           ),
           const SizedBox(height: 14),
