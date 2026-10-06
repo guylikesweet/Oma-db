@@ -3232,7 +3232,7 @@ class _SaleLine {
       final cost = double.tryParse('${product['cost'] ?? ''}');
       if (cost != null) {
         final savedMarkup = double.tryParse(
-          '\${product['markup_percent'] ?? ''}',
+          '${product['markup_percent'] ?? ''}',
         );
         markup = savedMarkup != null && savedMarkup >= 0
             ? savedMarkup.round()
