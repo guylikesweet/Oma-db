@@ -21,7 +21,7 @@ class NetworkFailure {
       case NetworkFailureKind.serverWaking:
         return 'App server is crazy right now, try again in a few seconds.';
       case NetworkFailureKind.weakConnection:
-        return 'Your connection is weak, fix or try a different WiFi.';
+        return 'Your connection is weak, fix or try a different wifi.';
     }
   }
 }
