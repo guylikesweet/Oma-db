@@ -266,110 +266,254 @@ class _WebProductsPageState extends State<WebProductsPage> {
   }
 
   Future<void> form([Map<String, dynamic>? old]) async {
-    final name = TextEditingController(
-      text: '${old?['name'] ?? ''}',
+    final name = TextEditingController(text: '${old?['name'] ?? ''}');
+    final sku = TextEditingController(text: '${old?['sku'] ?? ''}');
+    final supplierCost = TextEditingController(
+      text: '${old?['supplier_cost'] ?? old?['cost'] ?? ''}',
     );
-    final sku = TextEditingController(
-      text: '${old?['sku'] ?? ''}',
-    );
-    final cost = TextEditingController(
+    final landedCost = TextEditingController(
       text: '${old?['cost'] ?? ''}',
     );
-    final stock = TextEditingController(
-      text: '${old?['stock'] ?? 0}',
+    final markup = TextEditingController(
+      text: '${old?['markup_percent'] ?? 0}',
     );
-
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) {
-        return AlertDialog(
-          title: Text(
-            old == null ? 'New product' : 'Edit product',
-          ),
-          content: SingleChildScrollView(
-            child: Column(
-              children: [
-                TextField(
-                  controller: name,
-                  decoration: const InputDecoration(
-                    labelText: 'Name',
-                  ),
-                ),
-                const SizedBox(height: 14),
-                TextField(
-                  controller: sku,
-                  decoration: const InputDecoration(
-                    labelText: 'SKU',
-                  ),
-                ),
-                const SizedBox(height: 14),
-                TextField(
-                  controller: cost,
-                  keyboardType: const TextInputType.numberWithOptions(
-                    decimal: true,
-                  ),
-                  decoration: const InputDecoration(
-                    labelText: 'Cost',
-                  ),
-                ),
-                if (old == null) const SizedBox(height: 14),
-                if (old == null)
-                  TextField(
-                    controller: stock,
-                    keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(
-                      labelText: 'Opening stock',
-                    ),
-                  ),
-              ],
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(dialogContext, false),
-              child: const Text('Cancel'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.pop(dialogContext, true),
-              child: const Text('Save'),
-            ),
-          ],
-        );
-      },
+    final sellingPrice = TextEditingController(
+      text: '${old?['selling_price'] ?? ''}',
     );
+    final shippingCost = TextEditingController(
+      text: '${old?['inbound_shipping_cost'] ?? 0}',
+    );
+    final length = TextEditingController(text: '${old?['length_cm'] ?? ''}');
+    final width = TextEditingController(text: '${old?['width_cm'] ?? ''}');
+    final height = TextEditingController(text: '${old?['height_cm'] ?? ''}');
+    final weight = TextEditingController(text: '${old?['actual_weight_kg'] ?? ''}');
+    final stock = TextEditingController(text: '${old?['stock'] ?? 0}');
 
-    if (ok != true) return;
-
-    if (!await BiometricGuard.require(
-      context,
-      reason: old == null
-          ? 'Verify your identity before creating a product.'
-          : 'Verify your identity before changing product details.',
-    )) return;
+    String shippingMode = 'sea';
+    bool calculating = false;
+    Map<String, dynamic>? costResult;
 
     try {
+      final ok = await showDialog<bool>(
+        context: context,
+        builder: (dialogContext) {
+          return StatefulBuilder(
+            builder: (context, setDialogState) {
+              Future<void> calculate() async {
+                setDialogState(() => calculating = true);
+                try {
+                  final result = await widget.api.calculateProductCost(
+                    cost: supplierCost.text,
+                    lengthCm: length.text,
+                    widthCm: width.text,
+                    heightCm: height.text,
+                    actualWeightKg: weight.text,
+                    markupPercent: markup.text,
+                    mode: shippingMode,
+                  );
+                  landedCost.text = '${result['landed_cost'] ?? 0}';
+                  shippingCost.text = '${result['shipping_cost'] ?? 0}';
+                  sellingPrice.text = '${result['selling_price'] ?? 0}';
+                  costResult = result;
+                  setDialogState(() {});
+                } catch (e) {
+                  if (dialogContext.mounted) {
+                    ScaffoldMessenger.of(dialogContext).showSnackBar(
+                      SnackBar(content: Text('Could not calculate cost: ${e}')),
+                    );
+                  }
+                } finally {
+                  if (dialogContext.mounted) {
+                    setDialogState(() => calculating = false);
+                  }
+                }
+              }
+
+              Widget row(String label, dynamic value, {bool bold = false}) {
+                final display = value is num ? value.toStringAsFixed(2) : '${value}';
+                return Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 2),
+                  child: Row(
+                    children: [
+                      Expanded(child: Text(label)),
+                      const SizedBox(width: 12),
+                      Text(display, style: TextStyle(fontWeight: bold ? FontWeight.w800 : FontWeight.w600)),
+                    ],
+                  ),
+                );
+              }
+
+              return AlertDialog(
+                title: Text(old == null ? 'New product' : 'Edit product'),
+                content: SizedBox(
+                  width: 480,
+                  child: SingleChildScrollView(
+                    child: Column(
+                      children: [
+                        TextField(controller: name, decoration: const InputDecoration(labelText: 'Name')),
+                        const SizedBox(height: 12),
+                        TextField(controller: sku, decoration: const InputDecoration(labelText: 'SKU')),
+                        const SizedBox(height: 12),
+                        TextField(
+                          controller: supplierCost,
+                          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                          decoration: const InputDecoration(labelText: 'Supplier cost'),
+                        ),
+                        const SizedBox(height: 10),
+                        TextField(
+                          controller: markup,
+                          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                          decoration: const InputDecoration(labelText: 'Markup %'),
+                        ),
+                        const SizedBox(height: 10),
+                        DropdownButtonFormField<String>(
+                          value: shippingMode,
+                          decoration: const InputDecoration(labelText: 'Inbound shipping mode'),
+                          items: const [
+                            DropdownMenuItem(value: 'sea', child: Text('Sea')),
+                            DropdownMenuItem(value: 'air', child: Text('Air')),
+                          ],
+                          onChanged: calculating
+                              ? null
+                              : (value) {
+                                  if (value != null) {
+                                    setDialogState(() => shippingMode = value);
+                                  }
+                                },
+                        ),
+                        const SizedBox(height: 10),
+                        FilledButton.icon(
+                          onPressed: calculating ? null : calculate,
+                          icon: calculating
+                              ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                              : const Icon(Icons.calculate_rounded),
+                          label: Text(calculating ? 'Calculating...' : 'Calculate true cost'),
+                        ),
+                        const SizedBox(height: 10),
+                        TextField(
+                          controller: landedCost,
+                          readOnly: true,
+                          decoration: const InputDecoration(labelText: 'True landed cost / unit'),
+                        ),
+                        const SizedBox(height: 10),
+                        TextField(
+                          controller: shippingCost,
+                          readOnly: true,
+                          decoration: const InputDecoration(labelText: 'Inbound shipping / unit'),
+                        ),
+                        const SizedBox(height: 10),
+                        TextField(
+                          controller: sellingPrice,
+                          readOnly: true,
+                          decoration: const InputDecoration(labelText: 'Suggested selling price / unit'),
+                        ),
+                        const SizedBox(height: 12),
+                        Row(
+                          children: [
+                            Expanded(child: TextField(controller: length, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Length cm'))),
+                            const SizedBox(width: 8),
+                            Expanded(child: TextField(controller: width, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Width cm'))),
+                            const SizedBox(width: 8),
+                            Expanded(child: TextField(controller: height, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Height cm'))),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        TextField(
+                          controller: weight,
+                          keyboardType: TextInputType.number,
+                          decoration: const InputDecoration(labelText: 'Actual weight kg'),
+                        ),
+                        if (costResult != null) ...[
+                          const SizedBox(height: 12),
+                          Card(
+                            child: Padding(
+                              padding: const EdgeInsets.all(12),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Text('Financial breakdown', style: TextStyle(fontWeight: FontWeight.w800)),
+                                  const SizedBox(height: 8),
+                                  row('Product / supplier cost', costResult!['supplier_cost']),
+                                  row('Volume shipping', costResult!['volume_shipping_cost']),
+                                  row('Weight + packaging', costResult!['weight_shipping_cost']),
+                                  const Divider(),
+                                  row('True landed cost', costResult!['landed_cost'], bold: true),
+                                  row('Break-even price', costResult!['break_even_price'], bold: true),
+                                  row('Markup', '${costResult!['markup_percent'] ?? 0}%'),
+                                  row('Selling price', costResult!['selling_price'], bold: true),
+                                  row('Gross profit / unit', costResult!['gross_profit'], bold: true),
+                                  row('Gross margin', '${(costResult!['gross_margin_percent'] ?? 0).toStringAsFixed(2)}%', bold: true),
+                                  row('Shipping mode', '${costResult!['mode']}'.toUpperCase()),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ],
+                        if (old == null) ...[
+                          const SizedBox(height: 12),
+                          TextField(
+                            controller: stock,
+                            keyboardType: TextInputType.number,
+                            decoration: const InputDecoration(labelText: 'Opening stock'),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                ),
+                actions: [
+                  TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('Cancel')),
+                  FilledButton(onPressed: () => Navigator.pop(dialogContext, true), child: const Text('Save')),
+                ],
+              );
+            },
+          );
+        },
+      );
+
+      if (ok != true) return;
+
+      if (!await BiometricGuard.require(
+        context,
+        reason: old == null
+            ? 'Verify your identity before creating a product.'
+            : 'Verify your identity before changing product details.',
+      )) {
+        return;
+      }
+
       final data = <String, dynamic>{
         'name': name.text.trim(),
         'sku': sku.text.trim().isEmpty ? null : sku.text.trim(),
-        'cost': double.tryParse(cost.text.trim()) ?? 0,
+        'cost': double.tryParse(landedCost.text.trim()) ?? 0,
+        'supplier_cost': double.tryParse(supplierCost.text.trim()),
+        'inbound_shipping_cost': double.tryParse(shippingCost.text.trim()),
+        'markup_percent': double.tryParse(markup.text.trim()),
+        'selling_price': double.tryParse(sellingPrice.text.trim()),
+        'length_cm': double.tryParse(length.text.trim()),
+        'width_cm': double.tryParse(width.text.trim()),
+        'height_cm': double.tryParse(height.text.trim()),
+        'actual_weight_kg': double.tryParse(weight.text.trim()),
       };
 
       if (old == null) {
         data['stock'] = int.tryParse(stock.text.trim()) ?? 0;
         await widget.api.createProduct(data);
       } else {
-        await widget.api.updateProduct(
-          old['id'] as int,
-          data,
-        );
+        await widget.api.updateProduct(old['id'] as int, data);
       }
 
       await load();
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('$e')),
-        );
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${e}')));
+      }
+    } finally {
+      for (final controller in [
+        name, sku, supplierCost, landedCost, markup, sellingPrice,
+        shippingCost, length, width, height, weight, stock,
+      ]) {
+        controller.dispose();
       }
     }
   }
