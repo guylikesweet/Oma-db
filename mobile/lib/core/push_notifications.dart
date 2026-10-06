@@ -17,6 +17,7 @@ class OmaPushNotifications {
   static bool _firebaseReady = false;
   static bool _tokenRefreshAttached = false;
   static bool _foregroundListenerAttached = false;
+  static bool _messageTapListenerAttached = false;
 
   static final ValueNotifier<Map<String, dynamic>?> chatOpenRequest = ValueNotifier<Map<String, dynamic>?>(null);
 
@@ -127,6 +128,17 @@ class OmaPushNotifications {
         });
         _foregroundListenerAttached = true;
       }
+
+      if (!_messageTapListenerAttached) {
+        FirebaseMessaging.onMessageOpenedApp.listen(_handleRemoteMessageTap);
+        _messageTapListenerAttached = true;
+      }
+
+      final initialMessage = await messaging.getInitialMessage();
+      if (initialMessage != null) {
+        _handleRemoteMessageTap(initialMessage);
+      }
+
       await restoreNotificationLaunch();
     } catch (error, stackTrace) {
       debugPrint('OmaPush initialize failed: $error');
@@ -255,6 +267,12 @@ class OmaPushNotifications {
       payload: payload,
       androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
     );
+  }
+
+  static void _handleRemoteMessageTap(RemoteMessage message) {
+    final data = Map<String, dynamic>.from(message.data);
+    if (data.isEmpty) return;
+    chatOpenRequest.value = data;
   }
 
   static void _handleLocalNotificationTap(NotificationResponse response) {
