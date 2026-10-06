@@ -11,6 +11,7 @@ New mobile development should use /api/v1/*.
 """
 import base64
 import io
+import hashlib
 import json
 import re
 import secrets
@@ -62,7 +63,22 @@ def require_api_token(f):
             return jsonify({"error": "Missing or malformed Authorization header. Use 'Bearer <token>'."}), 401
 
         token = auth_header[len("Bearer "):].strip()
-        user = User.query.filter_by(api_token=token).first() if token else None
+        token_digest = hashlib.sha256(token.encode("utf-8")).hexdigest() if token else ""
+        user = (
+            User.query.filter_by(api_token=token_digest).first()
+            if token_digest
+            else None
+        )
+
+        # One-time compatibility upgrade for sessions issued before bearer
+        # tokens were stored hashed.
+        if user is None and token:
+            legacy_user = User.query.filter_by(api_token=token).first()
+            if legacy_user is not None:
+                legacy_user.api_token = token_digest
+                db.session.commit()
+                user = legacy_user
+
         if not user or not user.is_active:
             return jsonify({"error": "This user account is inactive or the session is invalid."}), 401
 
@@ -96,9 +112,10 @@ def require_api_token(f):
 
 def _ensure_api_token(user):
     if not user.api_token:
-        user.api_token = secrets.token_hex(32)
+        raw_token = secrets.token_hex(32)
+        user.api_token = hashlib.sha256(raw_token.encode("utf-8")).hexdigest()
         db.session.commit()
-    return user.api_token
+        return raw_token
 
 
 @api_bp.route("/v1/audit", methods=("GET",))
@@ -148,7 +165,7 @@ def api_login():
 
     token = secrets.token_hex(32)
     biometric_credential = secrets.token_urlsafe(48)
-    user.api_token = token
+    user.api_token = hashlib.sha256(token.encode("utf-8")).hexdigest()
     user.biometric_credential_hash = generate_password_hash(biometric_credential)
     user.api_last_activity_at = datetime.utcnow()
     record_audit(
