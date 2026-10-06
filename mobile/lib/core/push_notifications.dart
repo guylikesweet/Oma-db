@@ -18,6 +18,8 @@ class OmaPushNotifications {
   static bool _tokenRefreshAttached = false;
   static bool _foregroundListenerAttached = false;
   static bool _messageTapListenerAttached = false;
+  static bool _permissionChecked = false;
+  static ApiClient? _api;
 
   static final ValueNotifier<Map<String, dynamic>?> chatOpenRequest = ValueNotifier<Map<String, dynamic>?>(null);
 
@@ -55,6 +57,7 @@ class OmaPushNotifications {
   }
 
   static Future<void> initialize(ApiClient api) async {
+    _api = api;
     try {
       if (!_firebaseReady) {
         if (kIsWeb) {
@@ -81,6 +84,7 @@ class OmaPushNotifications {
         sound: true,
         provisional: false,
       );
+      _permissionChecked = true;
       if (permission.authorizationStatus == AuthorizationStatus.denied) {
         debugPrint(
           'OmaPush: notification permission is denied; FCM device registration skipped.',
@@ -349,6 +353,32 @@ class OmaPushNotifications {
         if (decoded is Map) chatOpenRequest.value = Map<String, dynamic>.from(decoded);
       }
     } catch (_) {}
+  }
+
+  static Future<void> retryRegistration() async {
+    final api = _api;
+    if (api == null || !_firebaseReady) return;
+    try {
+      final messaging = FirebaseMessaging.instance;
+      final permission = await messaging.getNotificationSettings();
+      if (permission.authorizationStatus == AuthorizationStatus.denied) {
+        debugPrint('OmaPush: retry skipped because notification permission is denied.');
+        return;
+      }
+      final token = kIsWeb
+          ? await messaging.getToken(vapidKey: const String.fromEnvironment('FCM_WEB_VAPID_KEY'))
+          : await messaging.getToken();
+      if (token == null || token.isEmpty) return;
+      await _registerTokenWithRetry(
+        api,
+        token,
+        kIsWeb ? 'web' : defaultTargetPlatform.name,
+        notificationChannelVersion: kIsWeb ? null : 'v2',
+      );
+    } catch (error, stackTrace) {
+      debugPrint('OmaPush: retry registration failed: $error');
+      debugPrint('$stackTrace');
+    }
   }
 
   static Future<void> clearPendingReminders() async {
