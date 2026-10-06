@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
 import 'data/api_client.dart';
+import 'core/network_errors.dart';
 import 'data/app_session.dart';
 
 class ProfilePage extends StatefulWidget {
