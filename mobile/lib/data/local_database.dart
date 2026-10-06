@@ -17,7 +17,7 @@ class LocalDatabase {
     final path = kIsWeb ? 'oma_mobile.db' : p.join(await getDatabasesPath(), 'oma_mobile.db');
     _db = await openDatabase(
       path,
-      version: 6,
+      version: 7,
       onCreate: (database, version) => _create(database),
       onUpgrade: (database, oldVersion, newVersion) async {
         if (oldVersion < 2) {
@@ -39,6 +39,12 @@ class LocalDatabase {
           await database.execute("ALTER TABLE sync_queue ADD COLUMN next_attempt_at TEXT");
           await database.execute("ALTER TABLE sync_queue ADD COLUMN response_json TEXT");
         }
+        if (oldVersion < 7) {
+          await database.execute("ALTER TABLE products ADD COLUMN supplier_cost TEXT");
+          await database.execute("ALTER TABLE products ADD COLUMN inbound_shipping_cost TEXT");
+          await database.execute("ALTER TABLE products ADD COLUMN markup_percent TEXT");
+          await database.execute("ALTER TABLE products ADD COLUMN selling_price TEXT");
+        }
         if (oldVersion < 6) {
           await database.execute("ALTER TABLE sales ADD COLUMN sale_type TEXT NOT NULL DEFAULT 'preorder'");
         }
@@ -50,6 +56,7 @@ class LocalDatabase {
   Future<void> _create(Database database) async {
     await database.execute('''CREATE TABLE products (
       id INTEGER PRIMARY KEY, name TEXT NOT NULL, sku TEXT, cost TEXT,
+      supplier_cost TEXT, inbound_shipping_cost TEXT, markup_percent TEXT, selling_price TEXT,
       length_cm REAL, width_cm REAL, height_cm REAL, cbm REAL,
       volumetric_kg REAL, actual_weight_kg REAL, stock INTEGER NOT NULL DEFAULT 0,
       created_at TEXT, updated_at TEXT)''');
@@ -280,6 +287,10 @@ class LocalDatabase {
   Future<void> _upsertProduct(Transaction txn, Map<String, dynamic> p) async {
     await txn.insert('products', {
       'id': p['id'], 'name': p['name'] ?? '', 'sku': p['sku'], 'cost': p['cost']?.toString(),
+      'supplier_cost': p['supplier_cost']?.toString() ?? p['cost']?.toString(),
+      'inbound_shipping_cost': p['inbound_shipping_cost']?.toString() ?? '0',
+      'markup_percent': p['markup_percent']?.toString() ?? '0',
+      'selling_price': p['selling_price']?.toString() ?? '0',
       'length_cm': _num(p['length_cm']), 'width_cm': _num(p['width_cm']), 'height_cm': _num(p['height_cm']),
       'cbm': _num(p['cbm']), 'volumetric_kg': _num(p['volumetric_kg']), 'actual_weight_kg': _num(p['actual_weight_kg']),
       'stock': p['stock'] ?? 0, 'created_at': p['created_at'], 'updated_at': p['updated_at'],
