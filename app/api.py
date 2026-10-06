@@ -1165,6 +1165,12 @@ def mobile_batches():
     return jsonify([_batch_json(x) for x in ShipmentBatch.query.order_by(ShipmentBatch.id.desc()).all()])
 
 
+@api_bp.route("/v1/batches/<int:batch_id>", methods=("GET",))
+@require_api_token
+def mobile_batch_detail(batch_id):
+    return jsonify(_batch_json(ShipmentBatch.query.get_or_404(batch_id)))
+
+
 @api_bp.route("/v1/batches", methods=("POST",))
 @require_api_token
 def mobile_create_batch():
