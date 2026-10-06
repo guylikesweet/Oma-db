@@ -231,9 +231,11 @@ def queue_user_notification(
 def flush_outbox(limit=100):
     """Best-effort delivery of pending notifications.
 
-    FCM messages are intentionally data-only. That lets the Flutter client
-    display them itself both in the foreground and from the Android background
-    isolate, where it can also schedule the two-hour reminder.
+    FCM messages keep a stable data payload for every app version. Android
+    and web clients use that payload for their own foreground/background
+    presentation, while APNs also receives a visible alert so older iOS app
+    versions can still display the notification without depending on newer
+    client-side code.
 
     Delivery rules:
       * Only rows whose recipient currently has an enabled device are
