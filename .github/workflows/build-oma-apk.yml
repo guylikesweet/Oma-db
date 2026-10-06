@@ -116,10 +116,10 @@ jobs:
               # Push registration and Team Chat.
               "/v1/notifications/register-device",
               "/v1/notifications/unregister-device",
+              "/v1/chat/diagnostic",
               "/v1/chat/messages",
               "/v1/chat/messages/<int:message_id>",
-              "/v1/chat/messages/<int:message_id>/reactions",
-              "/v1/chat/messages/<int:message_id>/replies",
+              "/v1/chat/messages/<int:message_id>/react",
           ]
 
           missing = [
