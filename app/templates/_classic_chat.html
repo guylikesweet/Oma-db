@@ -66,6 +66,7 @@ window.omaClassicChatUserId = {{ current_user.id|tojson }};
 
   function esc(s){return String(s??'').replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]})}
   function initials(name){var s=String(name||'?').trim();return s?s.slice(0,1).toUpperCase():'?'}
+  function lagosTime(raw){try{var value=String(raw||'').trim();if(!value)return '';if(!/[Zz]|[+-]\d{2}:?\d{2}$/.test(value))value+='Z';var d=new Date(value);if(Number.isNaN(d.getTime()))return value.replace('T',' ').split('.')[0];var lagos=new Date(d.getTime()+60*60*1000);function two(n){return String(n).padStart(2,'0')}return two(lagos.getUTCDate())+'/'+two(lagos.getUTCMonth()+1)+'/'+lagos.getUTCFullYear()+' '+two(lagos.getUTCHours())+':'+two(lagos.getUTCMinutes())}catch(e){return String(raw||'').replace('T',' ').split('.')[0]}}
   function avatar(user){if(user&&user.profile_photo_url)return '<img class="oma-chat-avatar" src="'+esc(user.profile_photo_url)+'" alt="" onerror="this.replaceWith(Object.assign(document.createElement(\'span\'),{className:\'oma-chat-avatar\',textContent:\''+initials(user.username)+'\'}))">';return '<span class="oma-chat-avatar">'+initials(user&&user.username)+'</span>'}
   function mentionUser(username){return users.find(function(u){return String(u.username||'').toLowerCase()===String(username||'').toLowerCase()})||null}
   function renderBody(text){
@@ -108,10 +109,10 @@ window.omaClassicChatUserId = {{ current_user.id|tojson }};
       var body=deleted?'Message deleted':renderBody(m.content||'');
       var reply=m.reply_to?'<div class="oma-chat-reply-preview">↪ '+esc(m.reply_to.content||'Message deleted')+'</div>':'';
       var canManage=mine||{{ 'true' if current_user.is_admin else 'false' }};
-      return '<div class="oma-chat-msg '+(mine?'mine ':'')+(pending?' oma-chat-pending':'')+(targetMessageId&&String(m.id)===String(targetMessageId)?'target-message':'')+'" data-id="'+esc(m.id)+'">'+
+      return '<div class="oma-chat-msg '+(mine?'mine ':'')+(m._pending?' oma-chat-pending':'')+(targetMessageId&&String(m.id)===String(targetMessageId)?'target-message':'')+'" data-id="'+esc(m.id)+'">'+
         '<div class="oma-chat-name">'+esc(m.sender_username||'Team member')+'</div>'+reply+
         '<div class="oma-chat-body">'+body+(m.edited?' <small>(edited)</small>':'')+'</div>'+
-        '<div class="oma-chat-time">'+(pending?'Sending…':(m.created_at?new Date(m.created_at).toLocaleString():''))+'</div>'+
+        '<div class="oma-chat-time">'+(m._pending?'Sending…':(m.created_at?lagosTime(m.created_at):''))+'</div>'+
         '<button type="button" class="oma-chat-menu-button" aria-label="Message actions">⋯</button>'+
         '<div class="oma-chat-menu" hidden>'+
         '<button type="button" data-act="reply">Reply</button><button type="button" data-act="react">👍 React</button>'+
