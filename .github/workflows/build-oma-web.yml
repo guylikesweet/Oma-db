@@ -1,24 +1,7 @@
 name: Build OmaSales Web
 
 on:
-  # Automatic runs are intentionally disabled.
-  # Start this workflow manually from the Actions tab.
   workflow_dispatch:
-
-  push:
-    paths:
-      - 'app/**'
-      - 'mobile/**'
-      - 'migrations/**'
-      - 'requirements.txt'
-      - '.github/workflows/build-oma-web.yml'
-
-  workflow_dispatch:
-    inputs:
-      api_url:
-        description: 'Backend API base URL'
-        required: true
-        default: 'https://oma-db.onrender.com/api'
 
 permissions:
   contents: read
