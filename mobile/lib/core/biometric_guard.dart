@@ -1,5 +1,3 @@
-// ignore_for_file: dead_code
-
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:local_auth/local_auth.dart';
@@ -10,6 +8,10 @@ import 'package:local_auth/local_auth.dart';
 /// success/failure result from the operating system.
 class BiometricGuard {
   BiometricGuard._();
+
+  // Keep this behind a runtime getter so the shared source can be analyzed
+  // cleanly on native targets while retaining the web fallback path.
+  static bool get _isWebPlatform => kIsWeb;
 
   static final LocalAuthentication _auth = LocalAuthentication();
 
@@ -105,8 +107,7 @@ class BiometricGuard {
 
     // kIsWeb is a compile-time constant on each Flutter target. This source
     // is shared with the web build, where this branch is required.
-    // ignore: dead_code
-    if (kIsWeb) return passwordFallback();
+    if (_isWebPlatform) return passwordFallback();
 
     try {
       final supported = await _auth.isDeviceSupported();
