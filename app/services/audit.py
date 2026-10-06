@@ -101,10 +101,10 @@ def record_audit(
     )
     db.session.add(row)
 
-    # Meaningful business changes are also broadcast to every other mobile
-    # installation. Authentication/session housekeeping deliberately does not
-    # notify anyone. Batch arrival remains specialized because its sound
-    # depends on air vs sea.
+    # Meaningful business changes are broadcast to every registered mobile
+    # installation, including the account that made the change. Authentication
+    # and session housekeeping deliberately do not notify anyone. Chat and
+    # specialized arrival events apply their own explicit sender exclusions.
     notification = _change_notification_for_audit(
         action=str(action),
         target_type=target_type,
@@ -115,7 +115,6 @@ def record_audit(
     if notification is not None:
         from app.services.push_notifications import queue_change_notification
         queue_change_notification(
-            actor_user_id=notification.pop("actor_user_id"),
             **notification,
         )
         # The outbox row is part of the same transaction, so a failed business
