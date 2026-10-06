@@ -1284,6 +1284,7 @@ class _BatchesPageState extends State<BatchesPage> {
         await widget.repo.queueCreateBatch(
           name.text.trim(),
           notes.text.trim(),
+          transportMode: mode,
         );
         await widget.repo.syncOnce();
       }
