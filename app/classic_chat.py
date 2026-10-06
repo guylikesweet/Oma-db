@@ -99,6 +99,9 @@ def users():
             "username": user.username,
             "is_admin": bool(user.is_admin),
             "is_primary_admin": bool(user.is_primary_admin),
+            "has_profile_photo": bool(user.profile_photo_data),
+            "profile_photo_url": f"/classic/chat/users/{user.id}/avatar"
+            if user.profile_photo_data else None,
         }
         for user in rows
     ])
