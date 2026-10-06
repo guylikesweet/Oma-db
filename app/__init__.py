@@ -11,6 +11,7 @@ from datetime import timedelta
 from sqlalchemy import text as sa_text
 import os
 import time
+import uuid
 
 db = SQLAlchemy()
 migrate = Migrate()
@@ -27,6 +28,17 @@ def create_app(config_object="config.Config"):
     app = Flask(__name__)
     app.config.from_object(config_object)
     app.permanent_session_lifetime = timedelta(minutes=30)
+
+    @app.before_request
+    def attach_request_id():
+        """Give every request a short correlation ID for logs and support diagnostics."""
+        incoming = (request.headers.get("X-Request-ID") or "").strip()
+        g.request_id = incoming[:128] if incoming else uuid.uuid4().hex
+
+    @app.after_request
+    def expose_request_id(response):
+        response.headers["X-Request-ID"] = getattr(g, "request_id", "")
+        return response
 
     db.init_app(app)
     migrate.init_app(app, db)
