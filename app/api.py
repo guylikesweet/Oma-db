@@ -159,7 +159,8 @@ def mobile_create_chat_message():
                 image.save(out, format="JPEG", quality=78, optimize=True)
                 attachment = out.getvalue()
                 attachment_mimetype = "image/jpeg"
-                attachment_filename = (str(data.get("attachment_filename") or "photo").rsplit("/", 1)[-1][:220] + ".jpg")
+                safe_name = secure_filename(str(data.get("attachment_filename") or "photo"))[:180] or "photo"
+                attachment_filename = safe_name.rsplit(".", 1)[0] + ".jpg"
                 if len(attachment) > 2 * 1024 * 1024:
                     out = io.BytesIO()
                     image.save(out, format="JPEG", quality=62, optimize=True)
