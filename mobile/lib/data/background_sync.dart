@@ -74,7 +74,7 @@ class OmaBackgroundSync {
       _startupSyncName,
       omaBackgroundSyncTask,
       initialDelay: const Duration(seconds: 15),
-      constraints: const Constraints(
+      constraints: Constraints(
         networkType: NetworkType.connected,
       ),
       backoffPolicy: BackoffPolicy.exponential,
