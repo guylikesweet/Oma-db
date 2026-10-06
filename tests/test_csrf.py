@@ -1,6 +1,4 @@
 from flask import Flask, jsonify
-from werkzeug.exceptions import Forbidden
-
 from app.csrf import init_csrf
 
 
