@@ -1,0 +1,84 @@
+name: Stage 11 - Observability & Diagnostics
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  observability:
+    runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: sqlite:////tmp/oma-stage11.db
+      SECRET_KEY: stage11-ci-secret
+      ADMIN_USERNAME: stage11-admin
+      ADMIN_PASSWORD: stage11-password
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install backend dependencies
+        run: pip install -r requirements.txt
+
+      - name: Compile backend
+        run: python -m compileall app migrations run.py config.py
+
+      - name: Run backend tests
+        run: pytest -q
+
+      - name: Verify request correlation and API diagnostics
+        run: |
+          python - <<'PY'
+          import os
+          from app import create_app
+
+          app = create_app()
+          client = app.test_client()
+
+          response = client.get("/healthz")
+          request_id = response.headers.get("X-Request-ID")
+          assert request_id and len(request_id) <= 128
+
+          response = client.post(
+              "/api/v1/auth/login",
+              json={},
+              headers={"X-Request-ID": "stage11-test-request"},
+          )
+          assert response.status_code == 400
+          assert response.headers.get("X-Request-ID") == "stage11-test-request"
+
+          body = response.get_json()
+          assert body.get("error")
+          assert "request_id" not in body or body["request_id"] == "stage11-test-request"
+
+          print("Stage 11 request-correlation checks passed.")
+          PY
+
+      - name: Install Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.24.5"
+          channel: stable
+          cache: true
+
+      - name: Flutter dependencies
+        working-directory: mobile
+        run: flutter pub get
+
+      - name: Flutter analyze
+        working-directory: mobile
+        run: flutter analyze
+
+      - name: Architecture tests
+        working-directory: mobile
+        run: flutter test test/architecture_layers_test.dart
+
+      - name: Build Flutter Web
+        working-directory: mobile
+        run: flutter build web --release
