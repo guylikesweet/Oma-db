@@ -10,16 +10,25 @@ import 'core/biometric_guard.dart';
 import 'data/api_client.dart';
 import 'data/app_session.dart';
 import 'data/local_database.dart';
+import 'data/sync_repository.dart';
 import 'data/sale_kind.dart';
 import 'invoice_actions.dart';
 import 'journey_widgets.dart';
 import 'chat_page.dart';
 
 class WebsiteFeaturesPage extends StatefulWidget {
-  const WebsiteFeaturesPage({super.key, required this.api, required this.local});
+  const WebsiteFeaturesPage({
+    super.key,
+    required this.api,
+    required this.local,
+    required this.repo,
+    required this.refreshKey,
+  });
 
   final ApiClient api;
   final LocalDatabase local;
+  final SyncRepository repo;
+  final int refreshKey;
 
   @override
   State<WebsiteFeaturesPage> createState() => _WebsiteFeaturesPageState();
@@ -89,7 +98,14 @@ class _WebsiteFeaturesPageState extends State<WebsiteFeaturesPage> {
             Icons.inventory_2,
             'Manage products',
             'Admin changes require biometric verification (stock adjustments remain routine).',
-            () => open(WebProductsPage(api: widget.api)),
+            () => open(
+              ProductsPage(
+                api: widget.api,
+                local: widget.local,
+                repo: widget.repo,
+                refreshKey: widget.refreshKey,
+              ),
+            ),
           ),
 
           _tile(
