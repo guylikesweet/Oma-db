@@ -778,7 +778,7 @@ class _ChatPageState extends State<ChatPage> {
           final username = (user['username'] ?? '').toString().toLowerCase();
           return username.startsWith(query);
         })
-        .where((user) => '\${user['id'] ?? ''}' != '\${AppSession.userId}')
+        .where((user) => '${user['id'] ?? ''}' != '${AppSession.userId}')
         .take(8)
         .map((user) => Map<String, dynamic>.from(user))
         .toList();
