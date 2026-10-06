@@ -250,7 +250,7 @@ jobs:
           if (
               'revision = "oma20261006_final"' not in canonical_text
               or
-              '"oma20261006_landed_cost", "oma20261004"' not in canonical_text
+              '"oma20261006_landed_cost", "oma20261005_chat_fix"' not in canonical_text
           ):
               raise SystemExit(
                   "Canonical Alembic merge migration is invalid."
