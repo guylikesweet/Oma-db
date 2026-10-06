@@ -4459,6 +4459,50 @@ class _SyncQueuePageState
     if (mounted) setState(() {});
   }
 
+  Future<void> discardFailedSale(Map<String, dynamic> row) async {
+    final localSaleId = row['local_sale_id'] as int?;
+    final operationId = row['operation_id']?.toString();
+    if (localSaleId == null || operationId == null || operationId.isEmpty) {
+      return;
+    }
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Discard failed sale?'),
+        content: const Text(
+          'This removes the unsynced sale from this device. If it was a stocked sale, the locally reserved stock will be restored. The server was not able to accept this sale.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Keep'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Discard'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    await widget.local.removeLocalSaleAndRestoreStock(localSaleId);
+    await widget.local.deleteSyncOperation(operationId);
+
+    if (mounted) {
+      setState(() {});
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Failed sale discarded and local stock restored where applicable.',
+          ),
+        ),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) => Scaffold(
         appBar: AppBar(
@@ -4522,6 +4566,16 @@ class _SyncQueuePageState
                           x['last_error'],
                       ].join(' • '),
                     ),
+                    trailing: status == 'failed' &&
+                            x['operation_type'] == 'create_sale' &&
+                            x['local_sale_id'] != null
+                        ? IconButton(
+                            tooltip: 'Discard failed sale',
+                            icon: const Icon(Icons.delete_outline),
+                            onPressed: () => discardFailedSale(x),
+                          )
+                        : null,
+                  ),
                   ),
                 );
               },
