@@ -1,4 +1,4 @@
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'platform_info.dart';
 import 'package:flutter/material.dart';
 import 'package:local_auth/local_auth.dart';
 
@@ -11,7 +11,6 @@ class BiometricGuard {
 
   // Keep this behind a runtime getter so the shared source can be analyzed
   // cleanly on native targets while retaining the web fallback path.
-  static bool get _isWebPlatform => kIsWeb;
 
   static final LocalAuthentication _auth = LocalAuthentication();
 
@@ -20,7 +19,7 @@ class BiometricGuard {
   static Future<bool> Function(String password)? passwordVerifier;
 
   static Future<bool> canUseBiometrics() async {
-    if (kIsWeb) return false;
+    if (isWebPlatform) return false;
     try {
       if (!await _auth.isDeviceSupported()) return false;
       final enrolled = await _auth.getAvailableBiometrics();
