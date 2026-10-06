@@ -22,6 +22,7 @@ class _ProfilePageState extends State<ProfilePage> {
   final confirm = TextEditingController();
   Uint8List? photo;
   String? currentPhotoUrl;
+  Uint8List? currentPhotoBytes;
   bool loading = true;
   bool saving = false;
   bool obscure = true;
@@ -47,6 +48,13 @@ class _ProfilePageState extends State<ProfilePage> {
       if (!mounted) return;
       username.text = '\${profile['username'] ?? AppSession.username}';
       currentPhotoUrl = profile['profile_photo_url']?.toString();
+      if (currentPhotoUrl != null && currentPhotoUrl!.isNotEmpty) {
+        try {
+          currentPhotoBytes = await widget.api.downloadChatAttachment(currentPhotoUrl!);
+        } catch (_) {
+          // Keep the initials fallback if the protected avatar cannot be loaded.
+        }
+      }
       setState(() => loading = false);
     } catch (e) {
       if (mounted) setState(() { loading = false; error = '\$e'; });
@@ -79,6 +87,9 @@ class _ProfilePageState extends State<ProfilePage> {
       final result = await widget.api.updateProfile(payload);
       if (result['profile_photo_url'] != null) {
         currentPhotoUrl = result['profile_photo_url'].toString();
+        try {
+          currentPhotoBytes = await widget.api.downloadChatAttachment(currentPhotoUrl!);
+        } catch (_) {}
       }
       password.clear();
       confirm.clear();
@@ -97,9 +108,7 @@ class _ProfilePageState extends State<ProfilePage> {
   Widget avatar() {
     final ImageProvider<Object>? image = photo != null
         ? MemoryImage(photo!)
-        : (currentPhotoUrl == null || currentPhotoUrl!.isEmpty
-            ? null
-            : NetworkImage(currentPhotoUrl!));
+        : (currentPhotoBytes == null ? null : MemoryImage(currentPhotoBytes!));
     return CircleAvatar(
       radius: 54,
       backgroundColor: Theme.of(context).colorScheme.primaryContainer,
