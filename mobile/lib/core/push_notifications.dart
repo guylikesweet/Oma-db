@@ -235,7 +235,7 @@ class OmaPushNotifications {
     final body = '${data['body'] ?? ''}';
 
     final type = '${data['type'] ?? ''}';
-    final isChat = type == 'chat_message';
+    final isChat = type == 'chat_message' || type == 'chat_reaction';
     final mode = '${data['transport_mode'] ?? ''}'.toLowerCase();
 
     final soundName = isChat
