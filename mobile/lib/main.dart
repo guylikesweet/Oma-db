@@ -3640,7 +3640,6 @@ class MorePage extends StatelessWidget {
                   try {
                     final result = await api.testPushNotification();
                     final sent = result['sent'] ?? 0;
-                    final devices = result['devices'] ?? 0;
                     final errors = (result['errors'] as List?)
                             ?.map((x) => '$x')
                             .where((x) => x.isNotEmpty)
