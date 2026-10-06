@@ -300,22 +300,24 @@ def flush_outbox(limit=100):
 
         for device in devices:
             try:
-                # New Android builds create stable channels for chat and the
-                # two shipment modes. Supplying the channel in the FCM payload
-                # makes background/terminated notifications use those same
-                # channels (and therefore the intended sound). Older app
-                # versions that do not have these channel IDs still receive
-                # the FCM notification through Android's fallback channel.
+                # Only current Android builds advertise support for the
+                # explicit stable channels. Legacy devices intentionally omit
+                # channel_id so FCM keeps the legacy/default Android behavior.
                 mode = str(data.get("transport_mode", "")).lower()
                 event_type = str(data.get("type", row.event_type)).lower()
-                if event_type == "chat_message":
-                    android_channel_id = "oma_chat_v1"
-                elif mode == "air":
-                    android_channel_id = "oma_arrival_air_v2"
-                elif mode == "sea":
-                    android_channel_id = "oma_arrival_sea_v2"
-                else:
-                    android_channel_id = "oma_scanner_v2"
+                android_channel_id = None
+                if (
+                    device.platform == "android"
+                    and device.notification_channel_version == "v2"
+                ):
+                    if event_type == "chat_message":
+                        android_channel_id = "oma_chat_v1"
+                    elif mode == "air":
+                        android_channel_id = "oma_arrival_air_v2"
+                    elif mode == "sea":
+                        android_channel_id = "oma_arrival_sea_v2"
+                    else:
+                        android_channel_id = "oma_scanner_v2"
 
                 message = messaging.Message(
                     token=device.token,
@@ -325,7 +327,7 @@ def flush_outbox(limit=100):
                         notification=messaging.AndroidNotification(
                             title=row.title,
                             body=row.body,
-                            channel_id=android_channel_id,
+                            **({"channel_id": android_channel_id} if android_channel_id else {}),
                         ),
                     ),
                     apns=messaging.APNSConfig(
