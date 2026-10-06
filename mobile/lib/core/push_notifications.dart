@@ -82,6 +82,9 @@ class OmaPushNotifications {
         provisional: false,
       );
       if (permission.authorizationStatus == AuthorizationStatus.denied) {
+        debugPrint(
+          'OmaPush: notification permission is denied; FCM device registration skipped.',
+        );
         return;
       }
 
@@ -93,10 +96,15 @@ class OmaPushNotifications {
         }
       }
 
-      final token = kIsWeb ? await messaging.getToken(vapidKey: vapid) : await messaging.getToken();
+      final token = kIsWeb
+          ? await messaging.getToken(vapidKey: vapid)
+          : await messaging.getToken();
 
-      if (token != null && token.isNotEmpty) {
-        await api.registerPushDevice(
+      if (token == null || token.isEmpty) {
+        debugPrint('OmaPush: Firebase returned no FCM token.');
+      } else {
+        await _registerTokenWithRetry(
+          api,
           token,
           kIsWeb ? 'web' : defaultTargetPlatform.name,
           notificationChannelVersion: kIsWeb ? null : 'v2',
@@ -149,6 +157,44 @@ class OmaPushNotifications {
     }
   }
 
+  static Future<void> _registerTokenWithRetry(
+    ApiClient api,
+    String token,
+    String platform, {
+    String? notificationChannelVersion,
+  }) async {
+    Object? lastError;
+    for (var attempt = 1; attempt <= 3; attempt++) {
+      try {
+        final response = await api.registerPushDevice(
+          token,
+          platform,
+          notificationChannelVersion: notificationChannelVersion,
+        );
+        debugPrint(
+          'OmaPush: FCM device registered '
+          '(platform=$platform, channel=${notificationChannelVersion ?? 'legacy'}, '
+          'attempt=$attempt, response=$response)',
+        );
+        return;
+      } catch (error, stackTrace) {
+        lastError = error;
+        debugPrint(
+          'OmaPush: FCM device registration failed '
+          '(attempt=$attempt/3): $error',
+        );
+        debugPrint('$stackTrace');
+        if (attempt < 3) {
+          await Future<void>.delayed(
+            Duration(milliseconds: 700 * attempt),
+          );
+        }
+      }
+    }
+    throw StateError(
+      'Unable to register this device for push notifications: $lastError',
+    );
+  }
   /// Called by the Firebase background isolate on Android.
   @pragma('vm:entry-point')
   static Future<void> handleBackgroundMessage(
