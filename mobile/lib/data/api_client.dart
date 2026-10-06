@@ -298,6 +298,13 @@ class ApiClient {
     );
   }
 
+  Future<Map<String, dynamic>> testPushNotification() {
+    return _map(
+      'POST',
+      '/v1/notifications/test',
+    );
+  }
+
   Future<Map<String, dynamic>> unregisterPushDevice(String token) {
     return _map(
       'POST',
