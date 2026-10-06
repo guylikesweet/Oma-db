@@ -4,6 +4,7 @@ from logging.config import fileConfig
 from flask import current_app
 
 from alembic import context
+from sqlalchemy import inspect, text
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
@@ -97,6 +98,36 @@ def run_migrations_online():
     connectable = get_engine()
 
     with connectable.connect() as connection:
+        # A previous deployment can leave an ancestor revision alongside a
+        # merge revision in alembic_version. Alembic treats that as an
+        # overlapping requested revision and refuses to traverse the graph.
+        # Repair only the known redundant ancestor when the final merge marker
+        # is already present. This does not alter application data or schema.
+        if inspect(connection).has_table("alembic_version"):
+            version_rows = connection.execute(
+                text("SELECT version_num FROM alembic_version")
+            ).scalars().all()
+            if (
+                "oma20261006_final" in version_rows
+                and "oma20261005_chat_fix" in version_rows
+            ):
+                logger.warning(
+                    "Repairing stale Alembic version marker: "
+                    "oma20261005_chat_fix (oma20261006_final is already present)."
+                )
+                connection.execute(
+                    text(
+                        "DELETE FROM alembic_version "
+                        "WHERE version_num = :stale "
+                        "AND :final IN "
+                        "(SELECT version_num FROM alembic_version)"
+                    ),
+                    {
+                        "stale": "oma20261005_chat_fix",
+                        "final": "oma20261006_final",
+                    },
+                )
+
         context.configure(
             connection=connection,
             target_metadata=get_metadata(),
