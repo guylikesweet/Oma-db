@@ -20,6 +20,7 @@ import 'theme_settings_page.dart';
 import 'full_features.dart';
 import 'journey_widgets.dart';
 import 'chat_page.dart';
+import 'profile_page.dart';
 
 @pragma('vm:entry-point')
 Future<void> omaFirebaseMessagingBackgroundHandler(RemoteMessage message) async {
@@ -3958,16 +3959,14 @@ class MorePage extends StatelessWidget {
             ),
             Card(
               child: ListTile(
-                leading:
-                    const Icon(Icons.lock_reset),
-                title: const Text('My account'),
-                subtitle: const Text('Username and password'),
-                trailing:
-                    const Icon(Icons.chevron_right),
+                leading: const Icon(Icons.account_circle_outlined),
+                title: const Text('My profile'),
+                subtitle: const Text('Username, profile photo and password'),
+                trailing: const Icon(Icons.chevron_right),
                 onTap: () => Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (_) => ChangePasswordPage(api: api),
+                    builder: (_) => ProfilePage(api: api),
                   ),
                 ),
               ),
