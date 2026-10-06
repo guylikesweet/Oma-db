@@ -471,6 +471,11 @@ class _ChatPageState extends State<ChatPage> {
     }
   }
 
+  int? _asInt(dynamic value) {
+    if (value is int) return value;
+    return int.tryParse(value?.toString() ?? '');
+  }
+
   String _quoteText(Map<String, dynamic> message) {
     final deleted = message['deleted'] == true;
     if (deleted) return 'Message deleted';
@@ -493,7 +498,7 @@ class _ChatPageState extends State<ChatPage> {
     final hasPhoto = '${reply['attachment_url'] ?? ''}'.isNotEmpty ||
         reply['_attachment_bytes'] is Uint8List;
     final quote = _quoteText(reply);
-    final replyId = reply['id'] is int ? reply['id'] as int : int.tryParse('${reply['id']}');
+    final replyId = _asInt(reply['id']);
 
     return InkWell(
       onTap: replyId == null ? null : () => _jumpToMessage(replyId),
@@ -799,7 +804,7 @@ class _ChatPageState extends State<ChatPage> {
                             return ListTile(
                               dense: true,
                               leading: _profileAvatar(
-                                userId: user['id'] is int ? user['id'] as int : int.tryParse(user['id'].toString()) ?? -1,
+                                userId: _asInt(user['id']) ?? -1,
                                 url: (user['profile_photo_url'] ?? '').toString(),
                                 username: (user['username'] ?? 'User').toString(),
                                 radius: 18,
@@ -1031,7 +1036,7 @@ class _ChatPageState extends State<ChatPage> {
             ],
           );
 
-    final messageId = message['id'] is int ? message['id'] as int : int.tryParse('${message['id']}');
+    final messageId = _asInt(message['id']);
     final messageKey = messageId == null
         ? null
         : (messageKeys[messageId] ??= GlobalKey());
@@ -1165,8 +1170,21 @@ class _ChatPageState extends State<ChatPage> {
                 Text('edited', style: TextStyle(fontSize: 10, fontStyle: FontStyle.italic, color: mine ? Colors.white70 : scheme.onSurfaceVariant)),
               if (message['original_content'] != null && AppSession.isPrimaryAdmin && message['edited'] == true)
                 Container(margin: const EdgeInsets.only(top: 6), padding: const EdgeInsets.all(8), decoration: BoxDecoration(color: scheme.tertiaryContainer, borderRadius: BorderRadius.circular(9)), child: Text('Original: ${message['original_content']}')),
-              if ((message['reactions'] as Map?)?.isNotEmpty == true)
-                Wrap(spacing: 4, children: (message['reactions'] as Map).entries.map((entry) => ActionChip(visualDensity: VisualDensity.compact, avatar: Text('${entry.key}'), label: Text('${entry.value}'), onPressed: () => react(message, '${entry.key}'))).toList()),
+              final reactions = message['reactions'];
+              if (reactions is Map && reactions.isNotEmpty)
+                Wrap(
+                  spacing: 4,
+                  children: reactions.entries
+                      .map(
+                        (entry) => ActionChip(
+                          visualDensity: VisualDensity.compact,
+                          avatar: Text('${entry.key}'),
+                          label: Text('${entry.value}'),
+                          onPressed: () => react(message, '${entry.key}'),
+                        ),
+                      )
+                      .toList(),
+                ),
               ],
               const SizedBox(height: 3),
               Row(
