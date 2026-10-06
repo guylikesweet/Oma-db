@@ -4,7 +4,7 @@ services:
     env: python
     plan: free
     buildCommand: >-
-      pip install -r requirements.txt && flask db upgrade oma20261006_push_channels && flask db current && flask db heads && flask seed-admin
+      pip install -r requirements.txt && flask db upgrade && flask db current && flask db heads && flask seed-admin
     startCommand: "gunicorn run:app"
     healthCheckPath: /healthz
     envVars:
