@@ -266,7 +266,7 @@ class _ChatPageState extends State<ChatPage> {
                   : message,
             )
             .toList();
-        sending = false;
+        _sendingCount = _sendingCount > 0 ? _sendingCount - 1 : 0;
       });
       _scrollToBottom();
     }
