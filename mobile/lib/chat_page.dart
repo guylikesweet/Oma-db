@@ -894,11 +894,11 @@ class _ChatPageState extends State<ChatPage> {
         child: Stack(
           clipBehavior: Clip.none,
           children: [
-            IgnorePointer(
-              child: Positioned(
-                bottom: 10,
+            Positioned(
+              bottom: 10,
                 left: mine ? null : 5,
                 right: mine ? 5 : null,
+              child: IgnorePointer(
                 child: Transform.rotate(
                   angle: 0.785398,
                   child: Container(
