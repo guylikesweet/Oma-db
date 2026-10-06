@@ -631,6 +631,7 @@ class _GlobalChatLauncherState extends State<GlobalChatLauncher>
   bool _initialised = false;
   Timer? _poller;
   late final AnimationController _pulseController;
+  VoidCallback? _pushListener;
 
   @override
   void initState() {
@@ -643,12 +644,28 @@ class _GlobalChatLauncherState extends State<GlobalChatLauncher>
       const Duration(seconds: 4),
       (_) => _checkForUnreadMessages(),
     );
+    _pushListener = () => _handlePushRequest(
+          OmaPushNotifications.chatOpenRequest.value,
+        );
+    OmaPushNotifications.chatOpenRequest.addListener(_pushListener!);
     _checkForUnreadMessages();
+    _handlePushRequest(OmaPushNotifications.chatOpenRequest.value);
+  }
+
+  void _handlePushRequest(Map<String, dynamic>? data) {
+    if (!mounted || data == null || data['type'] != 'chat_message') return;
+    OmaPushNotifications.chatOpenRequest.value = null;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && !open) _openChat();
+    });
   }
 
   @override
   void dispose() {
     _poller?.cancel();
+    if (_pushListener != null) {
+      OmaPushNotifications.chatOpenRequest.removeListener(_pushListener!);
+    }
     _pulseController.dispose();
     super.dispose();
   }
