@@ -127,6 +127,10 @@ def run_migrations_online():
                         "final": "oma20261006_final",
                     },
                 )
+                # This repair happens before Alembic configures its migration
+                # transaction. Commit it explicitly so Alembic does not see the
+                # redundant ancestor again when it reads alembic_version.
+                connection.commit()
 
         context.configure(
             connection=connection,
