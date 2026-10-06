@@ -1124,20 +1124,24 @@ class _ChatPageState extends State<ChatPage> {
   Widget _messageBubble(Map<String, dynamic> message) {
     final reactions = message['reactions'];
     final mine = message['sender_user_id'] == AppSession.userId;
-    final status = '${message['_status'] ?? 'sent'}';
+    final status = '${message['_status'] ?? 'sent'${';
     final pending = status == 'sending';
     final failed = status == 'failed';
     final reply = message['reply_to'];
-    final sender = mine ? 'Me' : '${message['sender_username'] ?? 'User'}';
+    final sender = mine ? 'Me' : '${message['sender_username'] ?? 'User'${';
+
     final messageIndex = messages.indexOf(message);
-    final previousMessage = messageIndex > 0 ? messages[messageIndex - 1] : null;
+    final previousMessage =
+        messageIndex > 0 ? messages[messageIndex - 1] : null;
     final sameSender = previousMessage != null &&
-        '${previousMessage['sender_user_id'] ?? ''}' ==
-            '${message['sender_user_id'] ?? ''}';
+        '${previousMessage['sender_user_id'] ?? ''${' ==
+            '${message['sender_user_id'] ?? ''${';
     final showSenderMeta = !sameSender;
+
     final created = _lagosTime(message['created_at']);
     final deleted = message['deleted'] == true;
     final scheme = Theme.of(context).colorScheme;
+
     final bubbleGradient = mine
         ? LinearGradient(
             begin: Alignment.topLeft,
@@ -1163,10 +1167,8 @@ class _ChatPageState extends State<ChatPage> {
           );
 
     final messageId = _asInt(message['id']);
-    final messageKey = messageId == null
-        ? null
-        : (messageKeys[messageId] ??= GlobalKey());
-
+    final messageKey =
+        messageId == null ? null : (messageKeys[messageId] ??= GlobalKey());
     final maxBubbleWidth = MediaQuery.sizeOf(context).width * .82;
 
     return Align(
@@ -1192,252 +1194,324 @@ class _ChatPageState extends State<ChatPage> {
                   child: Stack(
                     clipBehavior: Clip.none,
                     children: [
-            if (showSenderMeta)
-              Positioned(
-                bottom: 10,
-                left: mine ? null : 0,
-                right: mine ? 0 : null,
-              child: IgnorePointer(
-                child: Transform.rotate(
-                  angle: 0.785398,
-                  child: Container(
-                    width: 12,
-                    height: 12,
-                    decoration: BoxDecoration(
-                      gradient: bubbleGradient,
-                      border: Border(
-                        right: BorderSide(
-                          color: mine && !pending && !failed
-                              ? Colors.white.withOpacity(.22)
-                              : scheme.outline.withOpacity(.45),
+                      if (showSenderMeta)
+                        Positioned(
+                          bottom: 10,
+                          left: mine ? null : 0,
+                          right: mine ? 0 : null,
+                          child: IgnorePointer(
+                            child: Transform.rotate(
+                              angle: 0.785398,
+                              child: Container(
+                                width: 12,
+                                height: 12,
+                                decoration: BoxDecoration(
+                                  gradient: bubbleGradient,
+                                  border: Border(
+                                    right: BorderSide(
+                                      color: mine && !pending && !failed
+                                          ? Colors.white.withOpacity(.22)
+                                          : scheme.outline.withOpacity(.45),
+                                    ),
+                                    bottom: BorderSide(
+                                      color: mine && !pending && !failed
+                                          ? Colors.white.withOpacity(.22)
+                                          : scheme.outline.withOpacity(.45),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
                         ),
-                        bottom: BorderSide(
-                          color: mine && !pending && !failed
-                              ? Colors.white.withOpacity(.22)
-                              : scheme.outline.withOpacity(.45),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-        ConstrainedBox(
-          constraints: BoxConstraints(maxWidth: maxBubbleWidth),
-          child: IntrinsicWidth(
-            child: AnimatedContainer(
-          duration: const Duration(milliseconds: 280),
-          curve: Curves.easeOutCubic,
-          margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
-          padding: const EdgeInsets.fromLTRB(10, 6, 10, 5),
-          decoration: BoxDecoration(
-            gradient: bubbleGradient,
-            borderRadius: BorderRadius.only(
-            topLeft: const Radius.circular(20),
-            topRight: const Radius.circular(20),
-            bottomLeft: Radius.circular(mine ? 20 : 5),
-            bottomRight: Radius.circular(mine ? 5 : 20),
-          ),
-            border: Border.all(
-              color: mine && !pending && !failed
-                  ? Colors.white.withOpacity(.22)
-                  : scheme.outline.withOpacity(.45),
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(
-                  pending || failed ? .04 : .12,
-                ),
-                blurRadius: pending || failed ? 5 : 14,
-                offset: const Offset(0, 5),
-              ),
-              if (mine && !pending && !failed)
-                BoxShadow(
-                  color: Colors.white.withOpacity(.14),
-                  blurRadius: 1,
-                  offset: const Offset(0, -1),
-                ),
-            ],
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment:
-                mine ? CrossAxisAlignment.end : CrossAxisAlignment.start,
-            children: [
-              if (showSenderMeta)
-                Padding(
-                  padding: EdgeInsets.only(
-                    bottom: 3,
-                    left: mine ? 0 : 1,
-                    right: mine ? 1 : 0,
-                  ),
-                  child: Text(
-                    sender,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w900,
-                      color: mine ? Colors.white : scheme.primary,
-                    ),
-                  ),
-                ),
-              if (deleted && !AppSession.isAdmin)
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                  decoration: BoxDecoration(color: scheme.surface.withOpacity(.75), borderRadius: BorderRadius.circular(14)),
-                  child: Column(children: [
-                    Icon(Icons.delete_sweep_rounded, size: 24, color: scheme.onSurfaceVariant),
-                    const SizedBox(height: 5),
-                    Text('Message deleted', style: TextStyle(fontStyle: FontStyle.italic, color: scheme.onSurfaceVariant)),
-                  ]),
-                ),
-              if (deleted && AppSession.isAdmin)
-                Container(
-                  margin: const EdgeInsets.only(bottom: 6),
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(color: scheme.errorContainer, borderRadius: BorderRadius.circular(8)),
-                  child: Text('DELETED', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: scheme.onErrorContainer)),
-                ),
-              if (!deleted || AppSession.isAdmin) ...[
-                if ('${message['attachment_url'] ?? ''}'.isNotEmpty || message['_attachment_bytes'] is Uint8List) _photoWidget(message),
-              if (reply is Map)
-                _quotedMessage(Map<String, dynamic>.from(reply), replyAuthor: sender),
-              if ('${message['content'] ?? ''}'.isNotEmpty)
-                _mentionText(
-                  '${message['content'] ?? ''}',
-                  mine: mine,
-                  defaultColor: mine && !pending && !failed ? Colors.white : scheme.onSurface,
-                ),
-              if (message['edited'] == true && !deleted)
-                Text('edited', style: TextStyle(fontSize: 10, fontStyle: FontStyle.italic, color: mine ? Colors.white70 : scheme.onSurfaceVariant)),
-              if (message['original_content'] != null && AppSession.isPrimaryAdmin && message['edited'] == true)
-                Container(margin: const EdgeInsets.only(top: 6), padding: const EdgeInsets.all(8), decoration: BoxDecoration(color: scheme.tertiaryContainer, borderRadius: BorderRadius.circular(9)), child: Text('Original: ${message['original_content']}')),
-              if (reactions is Map && reactions.isNotEmpty)
-                Wrap(
-                  spacing: 4,
-                  children: reactions.entries
-                      .map(
-                        (entry) => ActionChip(
-                          visualDensity: VisualDensity.compact,
-                          avatar: Text('${entry.key}'),
-                          label: Text('${entry.value}'),
-                          onPressed: () => react(message, '${entry.key}'),
-                        ),
-                      )
-                      .toList(),
-                ),
-              ],
-              const SizedBox(height: 2),
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  if (pending) ...[
-                    Icon(
-                      Icons.schedule_rounded,
-                      size: 13,
-                      color: scheme.onSurfaceVariant,
-                    ),
-                    const SizedBox(width: 4),
-                    Text(
-                      'Sending…',
-                      style: TextStyle(
-                        fontSize: 10,
-                        fontWeight: FontWeight.w700,
-                        color: scheme.onSurfaceVariant,
-                      ),
-                    ),
-                  ] else if (failed) ...[
-                    Icon(
-                      Icons.error_outline_rounded,
-                      size: 13,
-                      color: scheme.error,
-                    ),
-                    const SizedBox(width: 4),
-                    Text(
-                      'Not sent',
-                      style: TextStyle(
-                        fontSize: 10,
-                        fontWeight: FontWeight.w700,
-                        color: scheme.error,
-                      ),
-                    ),
-                    const SizedBox(width: 6),
-                    InkWell(
-                      onTap: () => _retryFailedMessage(message),
-                      borderRadius: BorderRadius.circular(8),
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 5,
-                          vertical: 2,
-                        ),
-                        child: Text(
-                          'Try Again',
-                          style: TextStyle(
-                            fontSize: 10,
-                            fontWeight: FontWeight.w900,
-                            color: scheme.primary,
+                      ConstrainedBox(
+                        constraints: BoxConstraints(maxWidth: maxBubbleWidth),
+                        child: IntrinsicWidth(
+                          child: AnimatedContainer(
+                            duration: const Duration(milliseconds: 280),
+                            curve: Curves.easeOutCubic,
+                            margin: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 2,
+                            ),
+                            padding: const EdgeInsets.fromLTRB(10, 6, 10, 5),
+                            decoration: BoxDecoration(
+                              gradient: bubbleGradient,
+                              borderRadius: BorderRadius.only(
+                                topLeft: const Radius.circular(20),
+                                topRight: const Radius.circular(20),
+                                bottomLeft: Radius.circular(mine ? 20 : 5),
+                                bottomRight: Radius.circular(mine ? 5 : 20),
+                              ),
+                              border: Border.all(
+                                color: mine && !pending && !failed
+                                    ? Colors.white.withOpacity(.22)
+                                    : scheme.outline.withOpacity(.45),
+                              ),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withOpacity(
+                                    pending || failed ? .04 : .12,
+                                  ),
+                                  blurRadius: pending || failed ? 5 : 14,
+                                  offset: const Offset(0, 5),
+                                ),
+                                if (mine && !pending && !failed)
+                                  BoxShadow(
+                                    color: Colors.white.withOpacity(.14),
+                                    blurRadius: 1,
+                                    offset: const Offset(0, -1),
+                                  ),
+                              ],
+                            ),
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              crossAxisAlignment: mine
+                                  ? CrossAxisAlignment.end
+                                  : CrossAxisAlignment.start,
+                              children: [
+                                if (showSenderMeta)
+                                  Padding(
+                                    padding: EdgeInsets.only(
+                                      bottom: 3,
+                                      left: mine ? 0 : 1,
+                                      right: mine ? 1 : 0,
+                                    ),
+                                    child: Text(
+                                      sender,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: TextStyle(
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.w900,
+                                        color: mine
+                                            ? Colors.white
+                                            : scheme.primary,
+                                      ),
+                                    ),
+                                  ),
+                                if (deleted && !AppSession.isAdmin)
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 10,
+                                      vertical: 8,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: scheme.surface.withOpacity(.75),
+                                      borderRadius: BorderRadius.circular(14),
+                                    ),
+                                    child: Column(
+                                      children: [
+                                        Icon(
+                                          Icons.delete_sweep_rounded,
+                                          size: 24,
+                                          color: scheme.onSurfaceVariant,
+                                        ),
+                                        const SizedBox(height: 5),
+                                        Text(
+                                          'Message deleted',
+                                          style: TextStyle(
+                                            fontStyle: FontStyle.italic,
+                                            color: scheme.onSurfaceVariant,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                if (deleted && AppSession.isAdmin)
+                                  Container(
+                                    margin: const EdgeInsets.only(bottom: 6),
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 8,
+                                      vertical: 4,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: scheme.errorContainer,
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: Text(
+                                      'DELETED',
+                                      style: TextStyle(
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.w800,
+                                        color: scheme.onErrorContainer,
+                                      ),
+                                    ),
+                                  ),
+                                if (!deleted || AppSession.isAdmin) ...[
+                                  if ('${message['attachment_url'] ?? ''${'.isNotEmpty ||
+                                      message['_attachment_bytes'] is Uint8List)
+                                    _photoWidget(message),
+                                  if (reply is Map)
+                                    _quotedMessage(
+                                      Map<String, dynamic>.from(reply),
+                                      replyAuthor: sender,
+                                    ),
+                                  if ('${message['content'] ?? ''${'.isNotEmpty)
+                                    _mentionText(
+                                      '${message['content'] ?? ''${',
+                                      mine: mine,
+                                      defaultColor:
+                                          mine && !pending && !failed
+                                              ? Colors.white
+                                              : scheme.onSurface,
+                                    ),
+                                  if (message['edited'] == true && !deleted)
+                                    Text(
+                                      'edited',
+                                      style: TextStyle(
+                                        fontSize: 10,
+                                        fontStyle: FontStyle.italic,
+                                        color: mine
+                                            ? Colors.white70
+                                            : scheme.onSurfaceVariant,
+                                      ),
+                                    ),
+                                  if (message['original_content'] != null &&
+                                      AppSession.isPrimaryAdmin &&
+                                      message['edited'] == true)
+                                    Container(
+                                      margin: const EdgeInsets.only(top: 6),
+                                      padding: const EdgeInsets.all(8),
+                                      decoration: BoxDecoration(
+                                        color: scheme.tertiaryContainer,
+                                        borderRadius: BorderRadius.circular(9),
+                                      ),
+                                      child: Text(
+                                        'Original: ${message['original_content']${',
+                                      ),
+                                    ),
+                                  if (reactions is Map && reactions.isNotEmpty)
+                                    Wrap(
+                                      spacing: 4,
+                                      children: reactions.entries
+                                          .map(
+                                            (entry) => ActionChip(
+                                              visualDensity:
+                                                  VisualDensity.compact,
+                                              avatar: Text('${entry.key${'),
+                                              label: Text('${entry.value${'),
+                                              onPressed: () => react(
+                                                message,
+                                                '${entry.key${',
+                                              ),
+                                            ),
+                                          )
+                                          .toList(),
+                                    ),
+                                ],
+                                const SizedBox(height: 2),
+                                Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    if (pending) ...[
+                                      Icon(
+                                        Icons.schedule_rounded,
+                                        size: 13,
+                                        color: scheme.onSurfaceVariant,
+                                      ),
+                                      const SizedBox(width: 4),
+                                      Text(
+                                        'Sending…',
+                                        style: TextStyle(
+                                          fontSize: 10,
+                                          fontWeight: FontWeight.w700,
+                                          color: scheme.onSurfaceVariant,
+                                        ),
+                                      ),
+                                    ] else if (failed) ...[
+                                      Icon(
+                                        Icons.error_outline_rounded,
+                                        size: 13,
+                                        color: scheme.error,
+                                      ),
+                                      const SizedBox(width: 4),
+                                      Text(
+                                        'Not sent',
+                                        style: TextStyle(
+                                          fontSize: 10,
+                                          fontWeight: FontWeight.w700,
+                                          color: scheme.error,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 6),
+                                      InkWell(
+                                        onTap: () =>
+                                            _retryFailedMessage(message),
+                                        borderRadius: BorderRadius.circular(8),
+                                        child: Padding(
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 5,
+                                            vertical: 2,
+                                          ),
+                                          child: Text(
+                                            'Try Again',
+                                            style: TextStyle(
+                                              fontSize: 10,
+                                              fontWeight: FontWeight.w900,
+                                              color: scheme.primary,
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    ] else ...[
+                                      Text(
+                                        created,
+                                        style: TextStyle(
+                                          fontSize: 10,
+                                          color: mine
+                                              ? Colors.white.withOpacity(.78)
+                                              : scheme.onSurfaceVariant,
+                                        ),
+                                      ),
+                                      if (mine) ...[
+                                        const SizedBox(width: 5),
+                                        Icon(
+                                          Icons.done_all_rounded,
+                                          size: 13,
+                                          color: Colors.white.withOpacity(.82),
+                                        ),
+                                      ],
+                                    ],
+                                  ],
+                                ),
+                              ],
+                            ),
                           ),
                         ),
                       ),
-                    ),
-                  ] else ...[
-                    Text(
-                      created,
-                      style: TextStyle(
-                        fontSize: 10,
-                        color: mine
-                            ? Colors.white.withOpacity(.78)
-                            : scheme.onSurfaceVariant,
-                      ),
-                    ),
-                    if (mine) ...[
-                      const SizedBox(width: 5),
-                      Icon(
-                        Icons.done_all_rounded,
-                        size: 13,
-                        color: Colors.white.withOpacity(.82),
-                      ),
                     ],
-                  ],
-                ],
-              ),
-            ],
-          ),
-            ),
-          ),
-        ),
-              ),
-              ],
-            ),
-            if (!pending && !failed)
-              Padding(
-                padding: EdgeInsets.only(
-                  left: mine ? 0 : 12,
-                  right: mine ? 12 : 0,
-                ),
-                child: SizedBox(
-                  height: 18,
-                  child: IconButton(
-                    padding: EdgeInsets.zero,
-                    constraints: const BoxConstraints(
-                      minWidth: 24,
-                      minHeight: 18,
-                    ),
-                    visualDensity: VisualDensity.compact,
-                    tooltip: 'Message actions',
-                    onPressed: () => _showMessageActions(message),
-                    icon: Icon(
-                      Icons.more_horiz_rounded,
-                      size: 16,
-                      color: scheme.onSurfaceVariant.withOpacity(.62),
-                    ),
                   ),
                 ),
-              ),
+                if (!pending && !failed)
+                  Padding(
+                    padding: EdgeInsets.only(
+                      left: mine ? 0 : 12,
+                      right: mine ? 12 : 0,
+                    ),
+                    child: SizedBox(
+                      height: 18,
+                      child: IconButton(
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(
+                          minWidth: 24,
+                          minHeight: 18,
+                        ),
+                        visualDensity: VisualDensity.compact,
+                        tooltip: 'Message actions',
+                        onPressed: () => _showMessageActions(message),
+                        icon: Icon(
+                          Icons.more_horiz_rounded,
+                          size: 16,
+                          color: scheme.onSurfaceVariant.withOpacity(.62),
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
           ],
         ),
-      ],
       ),
     );
   }
