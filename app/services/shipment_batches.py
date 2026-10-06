@@ -249,6 +249,9 @@ def mark_unarrived(batch_id, user_id=None):
         sale.total_amount = sale.subtotal_amount or Decimal("0")
         sale.shipping_payment_settled = False
         sale.shipping_payment_settled_at = None
+        # Return the profit figure to the order-time estimate until the batch
+        # arrives again and locks a new actual shipping cost.
+        refresh_sale_profit(sale)
         # The automatic arrival milestone must be reversible too. Recording
         # the current batch mode as a fresh journey event makes the downgrade
         # visible immediately on every client.
