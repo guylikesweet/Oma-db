@@ -306,11 +306,18 @@ def flush_outbox(limit=100):
                     ),
                     apns=messaging.APNSConfig(
                         headers={
-                            "apns-push-type": "background",
-                            "apns-priority": "5",
+                            "apns-push-type": "alert",
+                            "apns-priority": "10",
                         },
                         payload=messaging.APNSPayload(
-                            aps=messaging.Aps(content_available=True),
+                            aps=messaging.Aps(
+                                alert=messaging.ApsAlert(
+                                    title=row.title,
+                                    body=row.body,
+                                ),
+                                sound="default",
+                                content_available=True,
+                            ),
                         ),
                     ),
                 )
