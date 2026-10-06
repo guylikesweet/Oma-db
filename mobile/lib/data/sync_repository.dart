@@ -574,6 +574,15 @@ class SyncRepository {
         ) as Map,
       );
 
+      // Temporary negative sale IDs are local-only. Even when an
+      // operation has a dependency marker, inspect the actual payload too:
+      // this prevents a multi-sale delivery or any malformed dependent
+      // operation from reaching the server before every referenced sale has
+      // been reconciled to a real server ID.
+      if (_hasUnresolvedSaleReference(payload)) {
+        continue;
+      }
+
       try {
         dynamic response;
 
@@ -823,6 +832,21 @@ class SyncRepository {
     );
 
     return (result.first['c'] as int?) ?? 0;
+  }
+
+  bool _hasUnresolvedSaleReference(Map<String, dynamic> payload) {
+    final saleId = int.tryParse('${payload['sale_id'] ?? ''}');
+    if (saleId != null && saleId < 0) return true;
+
+    final saleIds = payload['sale_ids'];
+    if (saleIds is List) {
+      for (final value in saleIds) {
+        final id = int.tryParse('$value');
+        if (id != null && id < 0) return true;
+      }
+    }
+
+    return false;
   }
 
   Future<void> rollbackFailedStockAdjustment(Map<String, dynamic> payload) async {
