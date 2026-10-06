@@ -3,6 +3,7 @@ name: Stage 3 Architecture Guard
 on:
   push:
     branches:
+      - main
       - stage3-architecture
   pull_request:
     branches:
