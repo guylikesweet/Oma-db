@@ -50,13 +50,18 @@ def clear_test_data(typed_confirmation):
         raise ValueError(f"Confirmation text didn't match. You must type exactly: {CONFIRMATION_PHRASE}")
 
     counts = {}
-    for label, model in CLEARABLE_MODELS:
-        rows = model.query.all()
-        counts[label] = len(rows)
-        for row in rows:
-            db.session.delete(row)
-        # Flush after each table so the listener records these deletes before
-        # the next table's rows (which may reference them) are even queried.
-        db.session.flush()
-    db.session.commit()
-    return counts
+    try:
+        for label, model in CLEARABLE_MODELS:
+            rows = model.query.all()
+            counts[label] = len(rows)
+            for row in rows:
+                db.session.delete(row)
+            # Flush after each table so the listener records these deletes before
+            # the next table's rows (which may reference them) are even queried.
+            db.session.flush()
+        db.session.commit()
+        return counts
+    except Exception:
+        # Never leave a destructive maintenance operation half-applied.
+        db.session.rollback()
+        raise
