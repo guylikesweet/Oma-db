@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:share_plus/share_plus.dart';
@@ -458,6 +459,115 @@ class _ChatPageState extends State<ChatPage> {
     return isMine ? scheme.primary : scheme.secondary;
   }
 
+  Future<void> _showMentionProfile(Map<String, dynamic> user) async {
+    if (!mounted) return;
+    final scheme = Theme.of(context).colorScheme;
+    final rawId = user['id'];
+    final userId = rawId is int ? rawId : int.tryParse(rawId.toString());
+    final username = (user['username'] ?? 'User').toString();
+    final role = (user['role'] ?? 'staff').toString();
+    await showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (context) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (userId != null)
+                _profileAvatar(
+                  userId: userId,
+                  url: (user['profile_photo_url'] ?? '').toString(),
+                  username: username,
+                  radius: 34,
+                ),
+              const SizedBox(height: 12),
+              Text('@' + username, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w900)),
+              const SizedBox(height: 5),
+              Text(
+                user['is_admin'] == true ? 'Administrator' : role.toUpperCase(),
+                style: TextStyle(color: scheme.onSurfaceVariant, fontWeight: FontWeight.w700, fontSize: 12),
+              ),
+              if (user['is_active'] == false) ...[
+                const SizedBox(height: 8),
+                Text('Inactive team member', style: TextStyle(color: scheme.error)),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _profileAvatar({
+    required int userId,
+    required String url,
+    required String username,
+    double radius = 18,
+  }) {
+    final scheme = Theme.of(context).colorScheme;
+    final cached = avatarCache[userId];
+    if (cached != null) {
+      return CircleAvatar(radius: radius, backgroundImage: MemoryImage(cached), backgroundColor: scheme.primaryContainer);
+    }
+    if (url.isEmpty || userId < 0) {
+      return CircleAvatar(
+        radius: radius,
+        backgroundColor: scheme.primaryContainer,
+        child: Text(username.isEmpty ? '?' : username[0].toUpperCase()),
+      );
+    }
+    return FutureBuilder<Uint8List>(
+      future: widget.api.downloadChatAttachment(url),
+      builder: (context, snapshot) {
+        if (snapshot.hasData) {
+          avatarCache[userId] = snapshot.data!;
+          return CircleAvatar(radius: radius, backgroundImage: MemoryImage(snapshot.data!), backgroundColor: scheme.primaryContainer);
+        }
+        return CircleAvatar(
+          radius: radius,
+          backgroundColor: scheme.primaryContainer,
+          child: Text(username.isEmpty ? '?' : username[0].toUpperCase()),
+        );
+      },
+    );
+  }
+
+  Widget _mentionText(String content, {required bool mine, required Color defaultColor}) {
+    final pattern = RegExp(r'(?<![A-Za-z0-9_])@([A-Za-z0-9_.-]{1,50})');
+    final spans = <TextSpan>[];
+    var cursor = 0;
+    for (final match in pattern.allMatches(content)) {
+      if (match.start > cursor) spans.add(TextSpan(text: content.substring(cursor, match.start)));
+      final username = match.group(1) ?? '';
+      Map<String, dynamic>? user;
+      for (final candidate in users) {
+        if ((candidate['username'] ?? '').toString().toLowerCase() == username.toLowerCase()) {
+          user = candidate;
+          break;
+        }
+      }
+      spans.add(TextSpan(
+        text: match.group(0),
+        style: TextStyle(
+          fontWeight: FontWeight.w900,
+          color: mine ? Colors.white : Theme.of(context).colorScheme.primary,
+          decoration: user == null ? TextDecoration.none : TextDecoration.underline,
+        ),
+        recognizer: user == null ? null : (TapGestureRecognizer()..onTap = () => _showMentionProfile(user!)),
+      ));
+      cursor = match.end;
+    }
+    if (cursor < content.length) spans.add(TextSpan(text: content.substring(cursor)));
+    return RichText(
+      text: TextSpan(
+        style: TextStyle(fontSize: 15, fontWeight: mine ? FontWeight.w600 : FontWeight.w500, color: defaultColor),
+        children: spans,
+      ),
+    );
+  }
+
   void _selectMention(
     Map<String, dynamic> user,
     TextEditingController controller,
@@ -581,9 +691,16 @@ class _ChatPageState extends State<ChatPage> {
                             final user = options.elementAt(index);
                             return ListTile(
                               dense: true,
-                              leading: const Icon(Icons.person_outline),
+                              leading: _profileAvatar(
+                                userId: user['id'] is int ? user['id'] as int : int.tryParse(user['id'].toString()) ?? -1,
+                                url: (user['profile_photo_url'] ?? '').toString(),
+                                username: (user['username'] ?? 'User').toString(),
+                                radius: 18,
+                              ),
                               title: Text(
                                 '@' + (user['username'] ?? ''),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
                               ),
                               onTap: () => onSelected(user),
                             );
@@ -752,21 +869,11 @@ class _ChatPageState extends State<ChatPage> {
       message: label,
       child: Material(
         color: mine ? Colors.white.withOpacity(.12) : scheme.surface.withOpacity(.72),
-        borderRadius: BorderRadius.circular(999),
+        shape: const CircleBorder(),
         child: InkWell(
           onTap: onTap,
-          borderRadius: BorderRadius.circular(999),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(icon, size: 14, color: foreground),
-                const SizedBox(width: 4),
-                Text(label, style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: foreground)),
-              ],
-            ),
-          ),
+          customBorder: const CircleBorder(),
+          child: SizedBox(width: 28, height: 28, child: Icon(icon, size: 14, color: foreground)),
         ),
       ),
     );
@@ -789,60 +896,18 @@ class _ChatPageState extends State<ChatPage> {
     }
   }
   Widget _senderAvatar(Map<String, dynamic> message, String sender) {
-    final scheme = Theme.of(context).colorScheme;
     final rawId = message['sender_user_id'];
     final userId = rawId is int ? rawId : int.tryParse('$rawId');
     final url = message['sender_profile_photo_url']?.toString() ?? '';
-
-    if (userId == null || url.isEmpty) {
+    if (userId == null) {
+      final scheme = Theme.of(context).colorScheme;
       return CircleAvatar(
         radius: 13,
         backgroundColor: scheme.primaryContainer,
-        child: Text(
-          sender.trim().isEmpty ? '?' : sender.trim()[0].toUpperCase(),
-          style: TextStyle(
-            fontSize: 11,
-            fontWeight: FontWeight.w900,
-            color: scheme.onPrimaryContainer,
-          ),
-        ),
+        child: Text(sender.trim().isEmpty ? '?' : sender.trim()[0].toUpperCase()),
       );
     }
-
-    final cached = avatarCache[userId];
-    if (cached != null) {
-      return CircleAvatar(
-        radius: 13,
-        backgroundImage: MemoryImage(cached),
-        backgroundColor: scheme.primaryContainer,
-      );
-    }
-
-    return FutureBuilder<Uint8List>(
-      future: widget.api.downloadChatAttachment(url),
-      builder: (context, snapshot) {
-        if (snapshot.hasData) {
-          avatarCache[userId] = snapshot.data!;
-          return CircleAvatar(
-            radius: 13,
-            backgroundImage: MemoryImage(snapshot.data!),
-            backgroundColor: scheme.primaryContainer,
-          );
-        }
-        return CircleAvatar(
-          radius: 13,
-          backgroundColor: scheme.primaryContainer,
-          child: Text(
-            sender.trim().isEmpty ? '?' : sender.trim()[0].toUpperCase(),
-            style: TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.w900,
-              color: scheme.onPrimaryContainer,
-            ),
-          ),
-        );
-      },
-    );
+    return _profileAvatar(userId: userId, url: url, username: sender, radius: 13);
   }
 
   Widget _messageBubble(Map<String, dynamic> message) {
@@ -886,6 +951,8 @@ class _ChatPageState extends State<ChatPage> {
         ? null
         : (messageKeys[messageId] ??= GlobalKey());
 
+    final maxBubbleWidth = MediaQuery.sizeOf(context).width * .82;
+
     return Align(
       key: messageKey,
       alignment: mine ? Alignment.centerRight : Alignment.centerLeft,
@@ -923,10 +990,12 @@ class _ChatPageState extends State<ChatPage> {
                 ),
               ),
             ),
-        AnimatedContainer(
+        ConstrainedBox(
+          constraints: BoxConstraints(maxWidth: maxBubbleWidth),
+          child: IntrinsicWidth(
+            child: AnimatedContainer(
           duration: const Duration(milliseconds: 280),
           curve: Curves.easeOutCubic,
-          constraints: const BoxConstraints(maxWidth: 380),
           margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
           padding: const EdgeInsets.fromLTRB(13, 10, 13, 9),
           decoration: BoxDecoration(
@@ -1001,19 +1070,12 @@ class _ChatPageState extends State<ChatPage> {
                 if ('${message['attachment_url'] ?? ''}'.isNotEmpty || message['_attachment_bytes'] is Uint8List) _photoWidget(message),
               if (reply is Map)
                 _quotedMessage(Map<String, dynamic>.from(reply), replyAuthor: sender),
-              Align(
-                alignment: Alignment.centerLeft,
-                child: Text(
+              if ('${message['content'] ?? ''}'.isNotEmpty)
+                _mentionText(
                   '${message['content'] ?? ''}',
-                  style: TextStyle(
-                    fontSize: 15,
-                    fontWeight: mine ? FontWeight.w600 : FontWeight.w500,
-                    color: mine && !pending && !failed
-                        ? Colors.white
-                        : scheme.onSurface,
-                  ),
+                  mine: mine,
+                  defaultColor: mine && !pending && !failed ? Colors.white : scheme.onSurface,
                 ),
-              ),
               if (message['edited'] == true && !deleted)
                 Text('edited', style: TextStyle(fontSize: 10, fontStyle: FontStyle.italic, color: mine ? Colors.white70 : scheme.onSurfaceVariant)),
               if (message['original_content'] != null && AppSession.isPrimaryAdmin && message['edited'] == true)
@@ -1094,8 +1156,9 @@ class _ChatPageState extends State<ChatPage> {
               ),
             ],
           ),
+            ),
+          ),
         ),
-
       ],
         ),
       ),
