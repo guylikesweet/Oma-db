@@ -8,6 +8,7 @@ from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 from app.csrf import init_csrf
 from datetime import timedelta
+from sqlalchemy import text as sa_text
 import os
 import time
 
@@ -142,7 +143,15 @@ def create_app(config_object="config.Config"):
 
     @app.route("/healthz")
     def healthz():
-        return {"status": "ok"}, 200
+        """Render health probe: report healthy only when the DB is reachable."""
+        try:
+            db.session.execute(sa_text("SELECT 1"))
+            db.session.rollback()
+            return {"status": "ok", "database": "ok"}, 200
+        except Exception:
+            db.session.rollback()
+            app.logger.exception("Health check database probe failed")
+            return {"status": "degraded", "database": "unavailable"}, 503
 
     return app
 
