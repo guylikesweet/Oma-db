@@ -1127,6 +1127,12 @@ class _ChatPageState extends State<ChatPage> {
     final failed = status == 'failed';
     final reply = message['reply_to'];
     final sender = mine ? 'Me' : '${message['sender_username'] ?? 'User'}';
+    final messageIndex = messages.indexOf(message);
+    final previousMessage = messageIndex > 0 ? messages[messageIndex - 1] : null;
+    final sameSender = previousMessage != null &&
+        '${previousMessage['sender_user_id'] ?? ''}' ==
+            '${message['sender_user_id'] ?? ''}';
+    final showSenderMeta = !sameSender;
     final created = _lagosTime(message['created_at']);
     final deleted = message['deleted'] == true;
     final scheme = Theme.of(context).colorScheme;
@@ -1171,13 +1177,24 @@ class _ChatPageState extends State<ChatPage> {
           crossAxisAlignment:
               mine ? CrossAxisAlignment.end : CrossAxisAlignment.start,
           children: [
-            Stack(
-              clipBehavior: Clip.none,
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.end,
+              textDirection: mine ? TextDirection.rtl : TextDirection.ltr,
               children: [
-            Positioned(
-              bottom: 10,
-                left: mine ? null : 5,
-                right: mine ? 5 : null,
+                if (showSenderMeta) ...[
+                  _senderAvatar(message, sender),
+                  const SizedBox(width: 4),
+                ],
+                Flexible(
+                  child: Stack(
+                    clipBehavior: Clip.none,
+                    children: [
+            if (showSenderMeta)
+              Positioned(
+                bottom: 10,
+                left: mine ? null : 0,
+                right: mine ? 0 : null,
               child: IgnorePointer(
                 child: Transform.rotate(
                   angle: 0.785398,
@@ -1245,28 +1262,24 @@ class _ChatPageState extends State<ChatPage> {
             crossAxisAlignment:
                 mine ? CrossAxisAlignment.end : CrossAxisAlignment.start,
             children: [
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  if (!mine) ...[
-                    _senderAvatar(message, sender),
-                    const SizedBox(width: 6),
-                  ],
-                  Flexible(
-                    child: Text(
-                      sender,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w900,
-                        color: mine ? Colors.white : scheme.primary,
-                      ),
+              if (showSenderMeta)
+                Padding(
+                  padding: EdgeInsets.only(
+                    bottom: 3,
+                    left: mine ? 0 : 1,
+                    right: mine ? 1 : 0,
+                  ),
+                  child: Text(
+                    sender,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w900,
+                      color: mine ? Colors.white : scheme.primary,
                     ),
                   ),
-
-                ],
-              ),
+                ),
               if (deleted && !AppSession.isAdmin)
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
