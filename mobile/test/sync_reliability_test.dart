@@ -7,7 +7,8 @@ void main() {
   group('SyncPolicy', () {
     test('classifies client errors as permanent', () {
       expect(SyncPolicy.isPermanentError(ApiException(400, 'bad request')), isTrue);
-      expect(SyncPolicy.isPermanentError(ApiException(401, 'unauthorized')), isTrue);
+      expect(SyncPolicy.isPermanentError(ApiException(401, 'unauthorized')), isFalse);
+      expect(SyncPolicy.isPermanentError(ApiException(429, 'rate limited')), isFalse);
       expect(SyncPolicy.isPermanentError(ApiException(409, 'conflict')), isTrue);
       expect(SyncPolicy.isPermanentError(ApiException(422, 'invalid')), isTrue);
     });
