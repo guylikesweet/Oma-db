@@ -200,7 +200,8 @@ def register_cli(app):
 
     @app.cli.command("api-token")
     def api_token():
-        """Show the admin user's API token (used by the mobile app), generating one if it doesn't exist yet."""
+        """Rotate and print a fresh mobile API token for the configured admin."""
+        import hashlib
         import secrets
         from app.models import User
 
@@ -210,9 +211,9 @@ def register_cli(app):
             print(f"No user '{username}' found — run `flask seed-admin` first.")
             return
 
-        if not user.api_token:
-            user.api_token = secrets.token_hex(32)
-            db.session.commit()
-            print("Generated a new API token.")
-
-        print(f"API token for '{username}': {user.api_token}")
+        raw_token = secrets.token_hex(32)
+        user.api_token = hashlib.sha256(raw_token.encode("utf-8")).hexdigest()
+        user.api_last_activity_at = None
+        user.biometric_credential_hash = None
+        db.session.commit()
+        print(f"API token for '{username}': {raw_token}")
