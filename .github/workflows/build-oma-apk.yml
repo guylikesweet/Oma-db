@@ -196,8 +196,9 @@ jobs:
 
           merge = versions / "final_mobile_merge.py"
           security = versions / "oma20261004_mobile_session_security.py"
+          canonical = versions / "oma20261006_final_merge.py"
 
-          for required in (d4, e71, merge, security):
+          for required in (d4, e71, merge, security, canonical):
               if not required.exists():
                   raise SystemExit(
                       f"Required migration missing: {required}"
@@ -235,13 +236,24 @@ jobs:
                   "Final mobile migration merge is invalid."
               )
 
+          canonical_text = canonical.read_text(encoding="utf-8")
+
           if (
               'revision = "oma20261004"' not in security_text
               or
               'down_revision = "f7a1c9e4b210"' not in security_text
           ):
               raise SystemExit(
-                  "Mobile security migration is not attached to the current Alembic head."
+                  "Mobile security migration is invalid."
+              )
+
+          if (
+              'revision = "oma20261006_final"' not in canonical_text
+              or
+              '"oma20261006_landed_cost", "oma20261004"' not in canonical_text
+          ):
+              raise SystemExit(
+                  "Canonical Alembic merge migration is invalid."
               )
 
           print("Mobile migration chain: OK")
