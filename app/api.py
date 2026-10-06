@@ -2118,21 +2118,28 @@ def mobile_create_chat_message():
         # chat message feel slow to the sender.
         db.session.commit()
 
-        try:
-            queue_chat_message_notifications(message, special_user_ids=special_user_ids)
-            db.session.commit()
-        except Exception:
-            db.session.rollback()
-            current_app.logger.exception("Team chat push queue failed")
-
         app_obj = current_app._get_current_object()
+        message_id = message.id
+        notification_user_ids = tuple(special_user_ids)
 
-        def _flush_chat_pushes():
+        def _deliver_chat_pushes():
             try:
                 with app_obj.app_context():
+                    background_message = ChatMessage.query.get(message_id)
+                    if background_message is None:
+                        return
+                    queue_chat_message_notifications(
+                        background_message,
+                        special_user_ids=set(notification_user_ids),
+                    )
+                    db.session.commit()
                     flush_outbox()
             except Exception:
-                app_obj.logger.exception("Background team chat push flush failed")
+                try:
+                    db.session.rollback()
+                except Exception:
+                    pass
+                app_obj.logger.exception("Background team chat push delivery failed")
             finally:
                 try:
                     db.session.remove()
@@ -2140,7 +2147,7 @@ def mobile_create_chat_message():
                     pass
 
         threading.Thread(
-            target=_flush_chat_pushes,
+            target=_deliver_chat_pushes,
             name="oma-chat-push",
             daemon=True,
         ).start()
