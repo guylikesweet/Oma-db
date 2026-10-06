@@ -841,6 +841,7 @@ def register_push_device():
     data = request.get_json(silent=True) or {}
     token = str(data.get("token") or "").strip()
     platform = str(data.get("platform") or "android").strip().lower()
+    channel_version = str(data.get("notification_channel_version") or "").strip()[:20] or None
     if not token:
         return jsonify({"error": "Push token is required."}), 400
     if platform not in {"android", "ios", "web"}:
