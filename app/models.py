@@ -411,6 +411,9 @@ class PushDevice(db.Model):
     user_id = db.Column(db.Integer, db.ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     token = db.Column(db.Text, nullable=False, unique=True)
     platform = db.Column(db.String(20), nullable=False, default="android")
+    # New Android builds opt into explicit stable notification channels. Older
+    # installs leave this null so FCM keeps using the legacy/default channel.
+    notification_channel_version = db.Column(db.String(20), nullable=True)
     enabled = db.Column(db.Boolean, nullable=False, default=True, server_default="true")
     last_seen_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
