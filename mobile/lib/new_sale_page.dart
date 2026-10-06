@@ -5,7 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'brand_loader.dart';
 import 'presentation/controllers/product_controller.dart';
-import 'presentation/providers/app_providers.dart';
+import 'presentation/controllers/sales_controller.dart';
 import 'data/sync_repository.dart';
 import 'core/network_errors.dart';
 
@@ -23,8 +23,7 @@ class NewSalePage extends ConsumerStatefulWidget {
   final bool stocked;
 
   @override
-  State<NewSalePage> createState() =>
-      _NewSalePageState();
+  ConsumerState<NewSalePage> createState() => _NewSalePageState();
 }
 
 /// One product line on a sale. The same product can appear on several lines
