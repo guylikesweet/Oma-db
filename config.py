@@ -39,6 +39,11 @@ class Config:
     SQLALCHEMY_DATABASE_URI = _raw_db_url or "sqlite:///" + os.path.join(basedir, "dev.db")
     SQLALCHEMY_TRACK_MODIFICATIONS = False
 
+    # A 12 MB raw chat photo becomes roughly 16 MB when base64 encoded in JSON.
+    # Leave a little protocol overhead while still preventing unexpectedly large
+    # request bodies from reaching Flask/Pillow.
+    MAX_CONTENT_LENGTH = 18 * 1024 * 1024
+
     # The legacy /classic interface uses Flask's signed session cookie.
     # Harden it automatically for the production deployment.
     SESSION_COOKIE_HTTPONLY = True
