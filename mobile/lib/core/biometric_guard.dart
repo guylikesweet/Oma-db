@@ -1,3 +1,5 @@
+// ignore_for_file: dead_code
+
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:local_auth/local_auth.dart';
