@@ -874,8 +874,29 @@ def register_push_device():
         from app.services.push_notifications import flush_outbox
         flush_outbox()
     except Exception:
-        pass
+        current_app.logger.exception(
+            "Push outbox flush after device registration failed"
+        )
     return jsonify({"registered": True})
+
+
+@api_bp.route("/v1/notifications/test", methods=("POST",))
+@require_api_token
+def test_push_notification():
+    """Send a direct FCM test notification to this account's devices."""
+    from app.services.push_notifications import send_test_notification
+
+    try:
+        result = send_test_notification(g.api_user.id)
+        status = 200 if result["sent"] > 0 else 503
+        return jsonify(result), status
+    except Exception as exc:
+        current_app.logger.exception("Push notification test failed")
+        return jsonify({
+            "sent": 0,
+            "devices": 0,
+            "error": str(exc),
+        }), 503
 
 
 @api_bp.route("/v1/notifications/diagnostic", methods=("GET",))
