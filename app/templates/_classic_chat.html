@@ -88,11 +88,11 @@ window.omaClassicChatUserId = {{ current_user.id|tojson }};
       return '<div class="oma-chat-msg '+(mine?'mine':'')+'" data-id="'+esc(m.id)+'">'+
         '<div class="oma-chat-name">'+esc(m.sender_username||'Team member')+'</div>'+reply+
         '<div class="oma-chat-body">'+body+(m.edited?' <small>(edited)</small>':'')+'</div>'+
-        '<div class="oma-chat-time">'+(m.created_at?new Date(m.created_at).toLocaleString():'')+'</div>'+\
-        '<button type="button" class="oma-chat-menu-button" aria-label="Message actions">⋯</button>'+\
-        '<div class="oma-chat-menu" hidden>'+\
-        '<button type="button" data-act="reply">Reply</button><button type="button" data-act="react">👍 React</button>'+\
-        (canManage&&!deleted?'<button type="button" data-act="edit">Edit</button><button type="button" data-act="delete">Delete</button>':'')+\
+        '<div class="oma-chat-time">'+(m.created_at?new Date(m.created_at).toLocaleString():'')+'</div>'+
+        '<button type="button" class="oma-chat-menu-button" aria-label="Message actions">⋯</button>'+
+        '<div class="oma-chat-menu" hidden>'+
+        '<button type="button" data-act="reply">Reply</button><button type="button" data-act="react">👍 React</button>'+
+        (canManage&&!deleted?'<button type="button" data-act="edit">Edit</button><button type="button" data-act="delete">Delete</button>':'')+
         '</div></div>'
     }).join('');
     list.scrollTop=list.scrollHeight
