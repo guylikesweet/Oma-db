@@ -63,12 +63,25 @@ class BiometricGuard {
           context: context,
           builder: (dialogContext) => AlertDialog(
             title: const Text('Verify with password'),
-            content: TextField(
-              controller: controller,
-              autofocus: true,
-              obscureText: true,
-              decoration: const InputDecoration(labelText: 'Password'),
-              onSubmitted: (value) => Navigator.pop(dialogContext, value),
+            content: StatefulBuilder(
+              builder: (context, setState) {
+                var obscure = true;
+                return TextField(
+                  controller: controller,
+                  autofocus: true,
+                  obscureText: obscure,
+                  decoration: InputDecoration(
+                    labelText: 'Password',
+                    suffixIcon: IconButton(
+                      onPressed: () => setState(() => obscure = !obscure),
+                      icon: Icon(
+                        obscure ? Icons.visibility : Icons.visibility_off,
+                      ),
+                    ),
+                  ),
+                  onSubmitted: (value) => Navigator.pop(dialogContext, value),
+                );
+              },
             ),
             actions: [
               TextButton(
