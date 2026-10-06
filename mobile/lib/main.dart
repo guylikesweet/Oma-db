@@ -4391,18 +4391,6 @@ class _ChangePasswordDialogState
                 ),
               ),
             ),
-            Align(
-              alignment: Alignment.centerRight,
-              child: TextButton(
-                onPressed: () =>
-                    setState(() => obscure = !obscure),
-                child: Text(
-                  obscure
-                      ? 'Show passwords'
-                      : 'Hide passwords',
-                ),
-              ),
-            ),
             if (error != null)
               Text(
                 error!,
