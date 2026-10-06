@@ -824,7 +824,12 @@ class _WebSalesPageState extends State<WebSalesPage> {
 
   Future<void> load() async {
     try {
-      rows = await widget.api.sales();
+      if (kIsWeb) {
+        rows = await widget.api.sales();
+      } else {
+        final db = await LocalDatabase.instance.db;
+        rows = await db.query('sales', orderBy: 'id DESC');
+      }
     } catch (_) {}
 
     if (mounted) {
