@@ -7,6 +7,8 @@ from flask_login import current_user
 from werkzeug.security import generate_password_hash
 from markupsafe import Markup
 from sqlalchemy import inspect
+from wtforms import PasswordField
+from wtforms.validators import Optional, Length
 
 from app import db
 from app.access import admin_required, password_recently_confirmed, reauth_url
@@ -74,19 +76,35 @@ class SecureAdminIndexView(AdminIndexView):
 class UserView(AdminOnlyModelView):
     column_list = ("id", "username", "role", "is_active", "is_primary_admin", "created_at")
     column_labels = {"is_primary_admin": "Original admin", "is_active": "Active"}
-    form_columns = ("username", "role", "is_active")
+    form_columns = ("username", "password", "role", "is_active")
+    form_extra_fields = {
+        "password": PasswordField(
+            "Password",
+            validators=[Optional(), Length(min=8, message="Password must be at least 8 characters.")],
+            description="Required when creating a user; leave blank when editing to keep the current password.",
+        ),
+    }
     form_choices = {"role": [("admin", "Admin"), ("staff", "Staff")]}
 
     def on_model_change(self, form, model, is_created):
-        # New users are created with a default password they must change on first login.
         role_history = inspect(model).attrs.role.history
         old_role = (
             None
             if is_created
             else (role_history.deleted[0] if role_history.deleted else model.role)
         )
+
+        password_value = getattr(form, "password", None)
+        password = (password_value.data or "").strip() if password_value else ""
         if is_created:
-            model.password_hash = generate_password_hash("changeme123")
+            if len(password) < 8:
+                raise ValueError("A password of at least 8 characters is required for a new user.")
+            model.password_hash = generate_password_hash(password)
+        elif password:
+            model.password_hash = generate_password_hash(password)
+            model.api_token = None
+            model.api_last_activity_at = None
+            model.biometric_credential_hash = None
         if model.is_primary_admin:
             model.role = "admin"
             model.is_active = True
