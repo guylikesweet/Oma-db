@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'brand_loader.dart';
 import 'data/api_client.dart';
+import 'core/network_errors.dart';
 
 /// Compact first-stage journey card for the sale detail screen.
 ///
@@ -248,7 +249,7 @@ class _JourneyPageState extends State<JourneyPage> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Could not update selected journeys: ' + e.toString())),
+          SnackBar(content: Text(userFacingError(e))),
         );
       }
     }
@@ -279,7 +280,7 @@ class _JourneyPageState extends State<JourneyPage> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Could not load this journey: ${e}')),
+        SnackBar(content: Text(userFacingError(e))),
       );
     }
   }
@@ -446,7 +447,7 @@ class _JourneyEditorState extends State<_JourneyEditor> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Could not update journey: ${e}')),
+          SnackBar(content: Text(userFacingError(e))),
         );
       }
     } finally {
