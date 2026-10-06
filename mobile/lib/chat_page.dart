@@ -364,6 +364,114 @@ class _ChatPageState extends State<ChatPage> {
     setState(() => replyTo = message);
   }
 
+  Future<void> _showMessageActions(Map<String, dynamic> message) async {
+    if (!mounted) return;
+
+    final status = '${message['_status'] ?? 'sent'}';
+    final pending = status == 'sending';
+    final failed = status == 'failed';
+    final deleted = message['deleted'] == true;
+    final canModify = !pending && !failed && !deleted &&
+        (message['sender_user_id'] == AppSession.userId || AppSession.isAdmin);
+
+    final hasText = message['content']?.toString().trim().isNotEmpty == true;
+    final hasPhoto =
+        message['attachment_url']?.toString().isNotEmpty == true ||
+        message['_attachment_bytes'] is Uint8List;
+
+    final action = await showModalBottomSheet<String>(
+      context: context,
+      showDragHandle: true,
+      builder: (context) {
+        final scheme = Theme.of(context).colorScheme;
+        Widget item({
+          required String value,
+          required IconData icon,
+          required String label,
+        }) {
+          return ListTile(
+            dense: true,
+            minVerticalPadding: 2,
+            leading: Icon(icon),
+            title: Text(label),
+            onTap: () => Navigator.pop(context, value),
+          );
+        }
+
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(10, 2, 10, 10),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (!deleted && !pending && !failed)
+                  item(
+                    value: 'reply',
+                    icon: Icons.reply_rounded,
+                    label: 'Reply',
+                  ),
+                if (!deleted && !pending && !failed)
+                  item(
+                    value: 'react',
+                    icon: Icons.add_reaction_rounded,
+                    label: 'React',
+                  ),
+                if (hasText)
+                  item(
+                    value: 'copy',
+                    icon: Icons.content_copy_rounded,
+                    label: 'Copy',
+                  ),
+                if (canModify)
+                  item(
+                    value: 'edit',
+                    icon: Icons.edit_rounded,
+                    label: 'Edit',
+                  ),
+                if (canModify)
+                  item(
+                    value: 'delete',
+                    icon: Icons.delete_outline_rounded,
+                    label: 'Delete',
+                  ),
+                if (hasPhoto)
+                  item(
+                    value: 'save',
+                    icon: Icons.download_rounded,
+                    label: 'Save photo',
+                  ),
+                if (action == null) const SizedBox(height: 2),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+
+    if (!mounted || action == null) return;
+
+    switch (action) {
+      case 'reply':
+        _replyTo(message);
+        break;
+      case 'react':
+        await showReactionPicker(message);
+        break;
+      case 'copy':
+        await copyMessage(message);
+        break;
+      case 'edit':
+        await editMessage(message);
+        break;
+      case 'delete':
+        await deleteMessage(message);
+        break;
+      case 'save':
+        await downloadPhoto(message);
+        break;
+    }
+  }
+
   String _quoteText(Map<String, dynamic> message) {
     final deleted = message['deleted'] == true;
     if (deleted) return 'Message deleted';
@@ -957,7 +1065,7 @@ class _ChatPageState extends State<ChatPage> {
       key: messageKey,
       alignment: mine ? Alignment.centerRight : Alignment.centerLeft,
       child: GestureDetector(
-        onLongPress: failed ? null : () => _replyTo(message),
+        onLongPress: failed ? null : () => _showMessageActions(message),
         child: Stack(
           clipBehavior: Clip.none,
           children: [
@@ -996,8 +1104,8 @@ class _ChatPageState extends State<ChatPage> {
             child: AnimatedContainer(
           duration: const Duration(milliseconds: 280),
           curve: Curves.easeOutCubic,
-          margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-          padding: const EdgeInsets.fromLTRB(13, 10, 13, 9),
+          margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+          padding: const EdgeInsets.fromLTRB(11, 8, 11, 7),
           decoration: BoxDecoration(
             gradient: bubbleGradient,
             borderRadius: BorderRadius.only(
@@ -1083,23 +1191,7 @@ class _ChatPageState extends State<ChatPage> {
               if ((message['reactions'] as Map?)?.isNotEmpty == true)
                 Wrap(spacing: 4, children: (message['reactions'] as Map).entries.map((entry) => ActionChip(visualDensity: VisualDensity.compact, avatar: Text('${entry.key}'), label: Text('${entry.value}'), onPressed: () => react(message, '${entry.key}'))).toList()),
               ],
-              if (!deleted && !pending && !failed)
-                Wrap(
-                  spacing: 3,
-                  children: [
-                    _chatAction(icon: Icons.reply_rounded, label: 'Reply', mine: mine, onTap: () => _replyTo(message)),
-                    _chatAction(icon: Icons.add_reaction_rounded, label: 'React', mine: mine, onTap: () => showReactionPicker(message)),
-                    if (message['content']?.toString().trim().isNotEmpty == true)
-                      _chatAction(icon: Icons.content_copy_rounded, label: 'Copy', mine: mine, onTap: () => copyMessage(message)),
-                    if (canModify)
-                      _chatAction(icon: Icons.edit_rounded, label: 'Edit', mine: mine, onTap: () => editMessage(message)),
-                    if (canModify)
-                      _chatAction(icon: Icons.delete_outline_rounded, label: 'Delete', mine: mine, onTap: () => deleteMessage(message)),
-                    if (message['attachment_url']?.toString().isNotEmpty == true || message['_attachment_bytes'] is Uint8List)
-                      _chatAction(icon: Icons.download_rounded, label: 'Save', mine: mine, onTap: () => downloadPhoto(message)),
-                  ],
-                ),
-              const SizedBox(height: 5),
+              const SizedBox(height: 3),
               Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
