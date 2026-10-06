@@ -93,6 +93,7 @@ jobs:
               "/v1/sync",
 
               "/v1/products",
+              "/v1/products/cost-calculator",
               "/v1/stock/adjust",
               "/v1/stock-log",
 
@@ -133,6 +134,27 @@ jobs:
               )
 
           print("Required API routes: OK")
+
+          # --------------------------------------------------------
+          # Product landed-cost/pricing contract
+          # --------------------------------------------------------
+          for required in (
+              "supplier_cost",
+              "inbound_shipping_cost",
+              "markup_percent",
+              "selling_price",
+          ):
+              if required not in models:
+                  raise SystemExit(
+                      f"Missing Product finance field: {required}"
+                  )
+
+          if "/v1/products/cost-calculator" not in api:
+              raise SystemExit(
+                  "Missing product cost calculator endpoint."
+              )
+
+          print("Product landed-cost/pricing contract: OK")
 
           # --------------------------------------------------------
           # Mobile sync models
