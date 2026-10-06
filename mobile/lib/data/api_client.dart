@@ -1,4 +1,6 @@
+import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -559,14 +561,23 @@ class ApiClient {
           'Bearer $savedToken';
     }
 
-    final response = await _client
-        .get(
-          uri,
-          headers: headers,
-        )
-        .timeout(
-          const Duration(seconds: 90),
-        );
+    late http.Response response;
+    try {
+      response = await _client
+          .get(
+            uri,
+            headers: headers,
+          )
+          .timeout(
+            const Duration(seconds: 90),
+          );
+    } on TimeoutException catch (e) {
+      throw ApiException(0, 'Network request timed out.', cause: e);
+    } on SocketException catch (e) {
+      throw ApiException(0, 'Network connection failed.', cause: e);
+    } on http.ClientException catch (e) {
+      throw ApiException(0, 'Network connection failed.', cause: e);
+    }
 
     if (response.statusCode < 200 ||
         response.statusCode >= 300) {
@@ -809,14 +820,23 @@ class ApiClient {
           'Bearer $savedToken';
     }
 
-    final response = await _client
-        .get(
-          uri,
-          headers: headers,
-        )
-        .timeout(
-          const Duration(seconds: 30),
-        );
+    late http.Response response;
+    try {
+      response = await _client
+          .get(
+            uri,
+            headers: headers,
+          )
+          .timeout(
+            const Duration(seconds: 30),
+          );
+    } on TimeoutException catch (e) {
+      throw ApiException(0, 'Network request timed out.', cause: e);
+    } on SocketException catch (e) {
+      throw ApiException(0, 'Network connection failed.', cause: e);
+    } on http.ClientException catch (e) {
+      throw ApiException(0, 'Network connection failed.', cause: e);
+    }
 
     if (response.statusCode < 200 ||
         response.statusCode >= 300) {
