@@ -127,7 +127,7 @@ class LocalDatabase {
       final pending = await txn.query(
         'sync_queue',
         columns: ['local_id'],
-        where: "status IN ('pending', 'retry')",
+        where: "status IN ('pending', 'retry', 'failed')",
         limit: 1,
       );
       if (pending.isNotEmpty) {
@@ -163,7 +163,12 @@ class LocalDatabase {
     return (minId ?? 0) - 1;
   }
 
-  Future<int> createLocalSale(Map<String, dynamic> sale, List<Map<String, dynamic>> items) async {
+  Future<int> createLocalSale(
+    Map<String, dynamic> sale,
+    List<Map<String, dynamic>> items, {
+    Map<String, dynamic>? queuePayload,
+    String? queueOperationType,
+  }) async {
     final database = await db;
     final localId = await nextLocalSaleId();
     final now = DateTime.now().toUtc().toIso8601String();
@@ -208,6 +213,27 @@ class LocalDatabase {
         if (isStock) {
           await txn.rawUpdate('UPDATE products SET stock = stock - ? WHERE id = ?', [item['qty'], item['product_id']]);
         }
+      }
+      if (queuePayload != null && queueOperationType != null) {
+        final op = queuePayload['operation_id']?.toString();
+        if (op == null || op.isEmpty) {
+          throw StateError('Queued local sales require an operation_id.');
+        }
+        final queuedPayload = <String, dynamic>{
+          ...queuePayload,
+          'operation_id': op,
+          'offline_origin': true,
+        };
+        await txn.insert('sync_queue', {
+          'operation_id': op,
+          'operation_type': queueOperationType,
+          'payload_json': jsonEncode(queuedPayload),
+          'local_sale_id': localId,
+          'status': 'pending',
+          'attempts': 0,
+          'created_at': now,
+          'updated_at': now,
+        });
       }
     });
     return localId;
