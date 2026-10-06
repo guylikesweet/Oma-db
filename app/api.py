@@ -237,7 +237,9 @@ def api_biometric_login():
         return jsonify({"error": "This username does not have a valid biometric login on this device."}), 401
 
     token = secrets.token_hex(32)
-    user.api_token = token
+    # Store only a digest at rest, just like password-login sessions. The raw
+    # token is returned once to the client and is never persisted in plaintext.
+    user.api_token = hashlib.sha256(token.encode("utf-8")).hexdigest()
     user.api_last_activity_at = datetime.utcnow()
 
     record_audit(
