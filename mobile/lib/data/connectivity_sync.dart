@@ -9,7 +9,11 @@ class ConnectivitySync {
   bool _running = false;
 
   void start() {
-    _subscription ??= Connectivity().onConnectivityChanged.listen((_) => syncNow());
+    _subscription ??= Connectivity().onConnectivityChanged.listen((results) {
+      if (results.any((result) => result != ConnectivityResult.none)) {
+        syncNow();
+      }
+    });
   }
 
   Future<SyncResult?> syncNow() async {
