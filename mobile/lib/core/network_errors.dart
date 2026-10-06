@@ -32,6 +32,10 @@ NetworkFailure? classifyNetworkError(Object error) {
   }
 
   if (error is SocketException) {
+    final socketText = error.toString().toLowerCase();
+    if (socketText.contains('timed out') || socketText.contains('timeout')) {
+      return const NetworkFailure(NetworkFailureKind.weakConnection);
+    }
     return const NetworkFailure(NetworkFailureKind.offline);
   }
 
