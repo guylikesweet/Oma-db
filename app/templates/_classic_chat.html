@@ -192,7 +192,9 @@ window.omaClassicChatUserId = {{ current_user.id|tojson }};
       if(act==='reply'){replyTo=m;replyBox.hidden=false;replyBox.textContent='Replying to '+(m.sender_username||'team member')+': '+(m.content||'Message deleted');input.focus();return}
       if(act==='delete'){if(!confirm('Delete this message?'))return;await api('/classic/chat/messages/'+id,{method:'DELETE'});await load();return}
       if(act==='edit'){var next=prompt('Edit message',m.content||'');if(next===null)return;await api('/classic/chat/messages/'+id,{method:'PATCH',body:JSON.stringify({content:next})});await load();return}
-      if(act==='react'){await api('/classic/chat/messages/'+id+'/react',{method:'POST',body:JSON.stringify({emoji:'👍'})});await load()}
+      if(act==='react'){await api('/classic/chat/messages/'+id+'/react',{method:'POST',body:JSON.stringify({emoji:'👍'})});await load();return}
+      if(act==='copy'){await navigator.clipboard.writeText(m.content||'');return}
+      if(act==='save'){if(m.attachment_url)window.open(m.attachment_url,'_blank');return}
     }catch(e){alert(e.message)}
   });
   mentionBox.addEventListener('click',function(ev){var b=ev.target.closest('[data-mention-index]');if(!b)return;var u=mentionOptions[Number(b.getAttribute('data-mention-index'))];if(u)selectMention(u)});
