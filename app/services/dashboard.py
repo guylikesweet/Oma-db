@@ -5,6 +5,7 @@ from datetime import date, timedelta
 from decimal import Decimal
 
 from sqlalchemy import func
+from sqlalchemy.orm import selectinload
 
 from app import db
 from app.models import Sale, Product, Shipping, ShipmentBatch, MobileOperation
@@ -31,9 +32,13 @@ def get_kpis():
         Shipping.query.filter(Shipping.shipping_status != "Delivered").count()
     )
 
+    low_stock_count = (
+        Product.query.filter(Product.stock < LOW_STOCK_THRESHOLD).count()
+    )
     low_stock_products = (
         Product.query.filter(Product.stock < LOW_STOCK_THRESHOLD)
-        .order_by(Product.stock.asc())
+        .order_by(Product.stock.asc(), Product.id.asc())
+        .limit(8)
         .all()
     )
 
@@ -54,7 +59,17 @@ def get_kpis():
     for key in STAGES:
         journey_counts[key] = 0
 
-    for sale in Sale.query.filter(Sale.order_status != "Cancelled").all():
+    journey_sales = (
+        Sale.query
+        .options(
+            selectinload(Sale.journey_events),
+            selectinload(Sale.batch),
+            selectinload(Sale.delivery),
+        )
+        .filter(Sale.order_status != "Cancelled")
+        .all()
+    )
+    for sale in journey_sales:
         try:
             from app.services.journey import current_stage_key
             key = current_stage_key(sale)
@@ -68,7 +83,7 @@ def get_kpis():
         "pending_shipments": pending_shipments,
         "shipping_owed": shipping_owed,
         "low_stock_products": low_stock_products,
-        "low_stock_count": len(low_stock_products),
+        "low_stock_count": low_stock_count,
         "batches_in_transit": ShipmentBatch.query.filter_by(status=ShipmentBatch.STATUS_IN_TRANSIT).count(),
         "sync_exceptions": MobileOperation.query.filter(MobileOperation.status == "failed").count(),
         "journey_counts": journey_counts,
