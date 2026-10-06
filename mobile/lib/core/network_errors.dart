@@ -41,7 +41,21 @@ NetworkFailure? classifyNetworkError(Object error) {
 
   final text = error.toString().toLowerCase();
 
-  if (text.contains('failed host lookup') ||
+  if (text.contains('app server is crazy right now') ||
+      text.contains('server is crazy right now') ||
+      text.contains('server waking')) {
+    return const NetworkFailure(NetworkFailureKind.serverWaking);
+  }
+
+  if (text.contains('your connection is weak') ||
+      text.contains('weak connection') ||
+      text.contains('timed out') ||
+      text.contains('timeout')) {
+    return const NetworkFailure(NetworkFailureKind.weakConnection);
+  }
+
+  if (text.contains('oops! looks like you need an active internet connection') ||
+      text.contains('failed host lookup') ||
       text.contains('no address associated with hostname') ||
       text.contains('network is unreachable') ||
       text.contains('connection refused') ||
