@@ -34,7 +34,7 @@ from app.models import (
     CourierRate, MonthlyShippingRate, MonthlyAirRate, StockLog, MobileOperation, MobileChange, AuditLog, PushDevice,
     ChatMessage, ChatMention, ChatReaction, NotificationOutbox,
 )
-from app.services.sales import create_sale, SaleValidationError, shipping_cost_for_items
+from app.services.sales import create_sale, SaleValidationError, shipping_cost_for_items, refresh_sale_profit
 from app.services.rates import get_rate_for_month, get_air_rate_for_month, get_volume_rate, get_rate_per_kg, RateMissingError
 from app.services.delivery import check_consolidation, find_consolidation_groups
 from app.services.audit import record_audit, _schedule_outbox_flush
