@@ -1449,36 +1449,24 @@ def mobile_batch_arrive(batch_id):
     data = request.get_json(silent=True) or {}
     try:
         op, existing = _mobile_operation(data)
-        if existing: return _mobile_replay(existing)
-        b = ShipmentBatch.query.get_or_404(batch_id)
-        if b.status != ShipmentBatch.STATUS_IN_TRANSIT: raise ValueError("Batch must be In Transit.")
-        if not b.sales: raise ValueError("Batch has no sales assigned.")
-        volume_rate = get_volume_rate(b.transport_mode, date.today())
-        kg_rate = get_rate_per_kg()
-        for s in b.sales:
-            s.actual_shipping_cost = shipping_cost_for_items(
-                s.items, b.transport_mode, volume_rate, kg_rate
-            )
-            s.total_amount = (s.subtotal_amount or Decimal("0")) + s.actual_shipping_cost
-            refresh_sale_profit(s, s.actual_shipping_cost)
-        b.arrived_at = datetime.utcnow()
-        b.status = ShipmentBatch.STATUS_ARRIVED
-        record_audit(
-            'batch.arrive', target_type='shipment_batch', target_id=b.id,
-            details={'transport_mode': b.transport_mode, 'sale_count': len(b.sales), 'name': b.name, 'source': 'api'},
-            user=g.api_user,
-        )
-        queue_batch_arrival(b, exclude_user_id=g.api_user.id)
-        result = _mobile_finish(op, "batch_arrive", 200, _batch_json(b))
+        if existing:
+            return _mobile_replay(existing)
+
+        batch = mark_arrived(batch_id)
+
+        result = _mobile_finish(op, "batch_arrive", 200, _batch_json(batch))
         db.session.flush()
         db.session.commit()
-        try:
-            flush_outbox()
-        except Exception:
-            pass
         return result
-    except (ValueError, RateMissingError) as e:
-        db.session.rollback(); return jsonify({"error": str(e)}), 400
+    except (ValueError, BatchValidationError) as e:
+        db.session.rollback()
+        return jsonify({"error": str(e)}), 400
+    except RateMissingError as e:
+        db.session.rollback()
+        return jsonify({"error": str(e)}), 400
+    except Exception:
+        db.session.rollback()
+        raise
 
 
 @api_bp.route("/v1/batches/<int:batch_id>/undo-arrival", methods=("POST",))
