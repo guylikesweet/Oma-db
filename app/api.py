@@ -47,6 +47,7 @@ from app.services.push_notifications import (
 )
 from app.services.dashboard import get_kpis, get_sales_last_30_days
 from app.services.shipment_batches import (
+    mark_arrived,
     mark_unarrived,
     update_batch_sales,
     BatchValidationError,
