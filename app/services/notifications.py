@@ -82,6 +82,103 @@ def _product_summary(sale):
     return ", ".join(parts)
 
 
+def _arrival_sales_for_phone(batch, phone):
+    """Return unsettled arrived sales in one batch belonging to one phone."""
+    normalized = whatsapp_number(phone)
+    rows = []
+    for sale in batch.sales:
+        if sale.is_stock_sale or sale.shipping_payment_settled:
+            continue
+        if sale.actual_shipping_cost is None:
+            continue
+        try:
+            if whatsapp_number(sale.customer_phone) == normalized:
+                rows.append(sale)
+        except NotificationError:
+            continue
+    return rows
+
+
+def build_batch_arrival_notices(batch):
+    """Build compact WhatsApp notices, merging every unsettled sale per phone."""
+    if not batch or batch.status != ShipmentBatch.STATUS_ARRIVED:
+        raise NotificationError("This shipment batch hasn't been marked as arrived yet.")
+
+    settings = get_settings()
+    missing = [
+        label for label, value in (
+            ("business name", settings.business_name),
+            ("bank name", settings.bank_name),
+            ("account number", settings.bank_account_number),
+            ("account name", settings.bank_account_name),
+        ) if not (value or "").strip()
+    ]
+    if missing:
+        raise NotificationError("Add the " + ", ".join(missing) + " in Settings first.")
+
+    groups = {}
+    for sale in batch.sales:
+        if sale.is_stock_sale or sale.shipping_payment_settled:
+            continue
+        if sale.actual_shipping_cost is None:
+            continue
+        try:
+            phone = whatsapp_number(sale.customer_phone)
+        except NotificationError:
+            continue
+        groups.setdefault(phone, []).append(sale)
+
+    notices = []
+    for phone, sales in groups.items():
+        sales.sort(key=lambda s: s.id)
+        customer_name = next(
+            ((s.customer_name or "").strip() for s in sales if (s.customer_name or "").strip()),
+            "Customer",
+        )
+        raw_phone = next(
+            ((s.customer_phone or "").strip() for s in sales if (s.customer_phone or "").strip()),
+            phone,
+        )
+        lines = []
+        total_paid = Decimal("0")
+        total_shipping = Decimal("0")
+        for sale in sales:
+            paid = sale.subtotal_amount if sale.payment_status == "Paid" else Decimal("0")
+            shipping = sale.actual_shipping_cost or Decimal("0")
+            total_paid += paid
+            total_shipping += shipping
+            lines.append(
+                f"• {sale.order_id or f'#{sale.id}'} — {_product_summary(sale)} — "
+                f"Paid {format_ngn(paid)} — Shipping {format_ngn(shipping)}"
+            )
+
+        message = (
+            f"Hello {customer_name},\n\n"
+            f"Your goods have arrived. Please settle the shipping balance so we can prepare your delivery.\n\n"
+            f"Orders:\n" + "\n".join(lines) + "\n\n"
+            f"Total paid: {format_ngn(total_paid)}\n"
+            f"Total shipping due: {format_ngn(total_shipping)}\n\n"
+            f"Payment: {settings.bank_name.strip()} — "
+            f"{settings.bank_account_number.strip()} ({settings.bank_account_name.strip()})\n"
+            f"Use your phone number {raw_phone} as narration.\n\n"
+            f"Reply here with your payment receipt for verification. "
+            f"Delivery will be scheduled after confirmation.\n\n"
+            f"Thank you,\n{settings.business_name.strip()}"
+        )
+        notices.append({
+            "phone": phone,
+            "customer_name": customer_name,
+            "sale_ids": [s.id for s in sales],
+            "order_ids": [s.order_id or f"#{s.id}" for s in sales],
+            "sale_count": len(sales),
+            "total_paid": float(total_paid),
+            "total_shipping": float(total_shipping),
+            "message": message,
+            "whatsapp_url": f"https://wa.me/{phone}?text={quote(message)}",
+        })
+
+    return notices
+
 def build_arrival_notice(sale):
     """Returns {"phone", "message", "whatsapp_url"} or raises NotificationError with a plain-English reason."""
     if sale.is_stock_sale:
