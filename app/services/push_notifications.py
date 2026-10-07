@@ -409,7 +409,7 @@ def flush_outbox(limit=100):
                     device.platform == "android"
                     and device.notification_channel_version == "v3"
                 ):
-                    if event_type == "chat_message":
+                    if event_type in {"chat_message", "chat_reaction"}:
                         android_channel_id = "oma_chat_v3"
                     elif mode == "air":
                         android_channel_id = "oma_arrival_air_v3"
