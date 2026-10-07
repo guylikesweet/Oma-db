@@ -1149,14 +1149,12 @@ class _WebSalesPageState extends State<WebSalesPage> {
                           // actual_shipping_cost is only filled in once the batch
                           // has arrived — that's when customers get notified.
                           if (sale['batch_id'] != null &&
-                              sale['actual_shipping_cost'] != null &&
                               sale['shipping_payment_settled'] != true)
                             const PopupMenuItem(
                               value: 'notify',
                               child: Text(
                                 'Notify customer on WhatsApp',
                               ),
-                            ),
                           const PopupMenuDivider(),
                           const PopupMenuItem(
                             value: 'share_invoice',
