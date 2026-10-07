@@ -1307,6 +1307,18 @@ def mobile_arrival_notice(sale_id):
         return jsonify({"error": str(e)}), 400
 
 
+
+@api_bp.route("/v1/batches/<int:batch_id>/arrival-notices", methods=("GET",))
+@require_api_token
+def mobile_batch_arrival_notices(batch_id):
+    """Return compact WhatsApp notices, one per customer phone, for an arrived batch."""
+    from app.services.notifications import build_batch_arrival_notices, NotificationError
+    batch = ShipmentBatch.query.get_or_404(batch_id)
+    try:
+        return jsonify(build_batch_arrival_notices(batch))
+    except NotificationError as e:
+        return jsonify({"error": str(e)}), 400
+
 @api_bp.route("/v1/sales/<int:sale_id>/invoice.pdf", methods=("GET",))
 @require_api_token
 def mobile_invoice_pdf(sale_id):
