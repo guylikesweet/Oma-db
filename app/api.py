@@ -1460,6 +1460,7 @@ def mobile_batch_arrive(batch_id):
                 s.items, b.transport_mode, volume_rate, kg_rate
             )
             s.total_amount = (s.subtotal_amount or Decimal("0")) + s.actual_shipping_cost
+            refresh_sale_profit(s, s.actual_shipping_cost)
         b.arrived_at = datetime.utcnow()
         b.status = ShipmentBatch.STATUS_ARRIVED
         record_audit(
