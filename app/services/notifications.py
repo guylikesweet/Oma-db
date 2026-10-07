@@ -82,23 +82,6 @@ def _product_summary(sale):
     return ", ".join(parts)
 
 
-def _arrival_sales_for_phone(batch, phone):
-    """Return unsettled arrived sales in one batch belonging to one phone."""
-    normalized = whatsapp_number(phone)
-    rows = []
-    for sale in batch.sales:
-        if sale.is_stock_sale or sale.shipping_payment_settled:
-            continue
-        if sale.actual_shipping_cost is None:
-            continue
-        try:
-            if whatsapp_number(sale.customer_phone) == normalized:
-                rows.append(sale)
-        except NotificationError:
-            continue
-    return rows
-
-
 def build_batch_arrival_notices(batch):
     """Build compact WhatsApp notices, merging every unsettled sale per phone."""
     if not batch or batch.status != ShipmentBatch.STATUS_ARRIVED:
@@ -118,7 +101,7 @@ def build_batch_arrival_notices(batch):
 
     groups = {}
     for sale in batch.sales:
-        if sale.is_stock_sale or sale.shipping_payment_settled:
+        if sale.is_stock_sale or sale.shipping_payment_settled or sale.order_status == "Cancelled":
             continue
         if sale.actual_shipping_cost is None:
             continue
