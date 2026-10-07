@@ -1530,6 +1530,17 @@ class _BatchesPageState extends State<BatchesPage> {
                               ),
                           ],
                           if (!inTransit) ...[
+                            const SizedBox(height: 12),
+                            FilledButton.icon(
+                              onPressed: () => notifyBatchCustomers(sheetContext, batch['id'] as int),
+                              icon: const Icon(Icons.chat_outlined),
+                              label: const Text('Notify customers on WhatsApp'),
+                            ),
+                            const SizedBox(height: 4),
+                            const Text(
+                              'One message per customer phone number; multiple sales are combined.',
+                              style: TextStyle(color: Colors.grey, fontSize: 12),
+                            ),
                             const SizedBox(height: 16),
                             ...assigned.map(
                               (sale) {
@@ -1720,6 +1731,70 @@ class _BatchesPageState extends State<BatchesPage> {
   ) =>
       openArrivalNotice(sheetContext, widget.api, saleId);
 
+  Future<void> notifyBatchCustomers(BuildContext context, int batchId) async {
+    try {
+      final notices = await widget.api.batchArrivalNotices(batchId);
+      if (!context.mounted) return;
+      if (notices.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('No unsettled customer shipping notices are ready for this batch.')),
+        );
+        return;
+      }
+      await showModalBottomSheet<void>(
+        context: context,
+        isScrollControlled: true,
+        builder: (sheetContext) => SafeArea(
+          child: SizedBox(
+            height: MediaQuery.of(sheetContext).size.height * .7,
+            child: ListView(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+              children: [
+                Text('Notify customers', style: Theme.of(sheetContext).textTheme.titleLarge),
+                const SizedBox(height: 6),
+                const Text(
+                  'Sales sharing the same phone number are merged into one WhatsApp message. Each message uses the shipping cost already calculated when this batch arrived.',
+                  style: TextStyle(color: Colors.grey),
+                ),
+                const SizedBox(height: 12),
+                ...notices.map((raw) {
+                  final notice = Map<String, dynamic>.from(raw as Map);
+                  final count = notice['sale_count'] ?? 0;
+                  final total = notice['total_shipping'];
+                  return Card(
+                    child: ListTile(
+                      title: Text('${notice['customer_name'] ?? 'Customer'}'),
+                      subtitle: Text(
+                        '$count sale${count == 1 ? '' : 's'} • Shipping NGN ${total is num ? total.toStringAsFixed(2) : total}',
+                      ),
+                      trailing: FilledButton(
+                        onPressed: () async {
+                          final url = '${notice['whatsapp_url'] ?? ''}';
+                          if (url.isEmpty) return;
+                          final opened = await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
+                          if (!opened && sheetContext.mounted) {
+                            ScaffoldMessenger.of(sheetContext).showSnackBar(
+                              const SnackBar(content: Text('Could not open WhatsApp on this device.')),
+                            );
+                          }
+                        },
+                        child: const Text('Notify'),
+                      ),
+                    ),
+                  );
+                }),
+              ],
+            ),
+          ),
+        ),
+      );
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(userFacingError(e))));
+      }
+    }
+  }
+
   Future<void> settleFromBatch(
     BuildContext sheetContext,
     int saleId,
@@ -1825,6 +1900,8 @@ class _BatchesPageState extends State<BatchesPage> {
                               onSelected: (value) async {
                                 if (value == 'arrive') {
                                   await arriveBatch(batch['id'] as int);
+                                } else if (value == 'notify') {
+                                  await notifyBatchCustomers(context, batch['id'] as int);
                                 } else if (value == 'undo') {
                                   await undoArrival(batch['id'] as int);
                                 } else if (value == 'delete') {
@@ -1839,6 +1916,11 @@ class _BatchesPageState extends State<BatchesPage> {
                                   const PopupMenuItem(
                                     value: 'arrive',
                                     child: Text('Mark arrived'),
+                                  ),
+                                if (batch['status'] == 'Arrived - Awaiting Shipping Payment')
+                                  const PopupMenuItem(
+                                    value: 'notify',
+                                    child: Text('Notify customers on WhatsApp'),
                                   ),
                                 if (batch['status'] == 'Arrived - Awaiting Shipping Payment')
                                   const PopupMenuItem(
