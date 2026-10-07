@@ -750,6 +750,13 @@ class ApiClient {
     );
   }
 
+  Future<List<dynamic>> batchArrivalNotices(int batchId) {
+    return _list(
+      'GET',
+      '/v1/batches/$batchId/arrival-notices',
+    );
+  }
+
   Future<Map<String, dynamic>> createDelivery(
     Map<String, dynamic> payload,
   ) {
