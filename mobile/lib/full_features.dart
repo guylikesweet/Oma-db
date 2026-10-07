@@ -1155,6 +1155,7 @@ class _WebSalesPageState extends State<WebSalesPage> {
                               child: Text(
                                 'Notify customer on WhatsApp',
                               ),
+                            ),
                           const PopupMenuDivider(),
                           const PopupMenuItem(
                             value: 'share_invoice',
