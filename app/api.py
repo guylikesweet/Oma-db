@@ -1414,6 +1414,10 @@ def mobile_batch_sale(batch_id, sale_id):
             if s.is_stock_sale: raise ValueError("Stocked sales are not shipped in batches.")
             if b.status != ShipmentBatch.STATUS_IN_TRANSIT: raise ValueError("Batch is no longer in transit.")
             if s.order_status == "Cancelled": raise ValueError("Cancelled sales cannot be added.")
+            if s.shipping_payment_settled or s.delivery_id:
+                raise ValueError("A settled or delivered sale cannot be added to a batch.")
+            if s.batch_id is not None and s.batch_id != b.id:
+                raise ValueError("Sale already belongs to another shipment batch.")
             s.batch_id = b.id
             s.batch_assigned_at = datetime.utcnow()
             record_audit(
