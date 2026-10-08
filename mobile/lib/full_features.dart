@@ -271,6 +271,13 @@ class _WebProductsPageState extends State<WebProductsPage> {
       if (kIsWeb) {
         rows = await widget.api.products();
       } else {
+        // More > Manage products must not depend on a previously populated
+        // local cache. Refresh the local snapshot first, then render it.
+        try {
+          await widget.repo.syncOnce();
+        } catch (_) {
+          // Offline is still supported: fall back to whatever is cached.
+        }
         final db = await LocalDatabase.instance.db;
         rows = await db.query('products', orderBy: 'name ASC');
       }
@@ -1033,6 +1040,14 @@ class _WebSalesPageState extends State<WebSalesPage> {
       if (kIsWeb) {
         rows = await widget.api.sales();
       } else {
+        // More > Manage sales was reading SQLite without first syncing it.
+        // A fresh install therefore showed "No sales found" even when the
+        // server contained sales. Sync first, then use the local snapshot.
+        try {
+          await widget.repo.syncOnce();
+        } catch (_) {
+          // Preserve offline behaviour by falling back to the cached rows.
+        }
         final db = await LocalDatabase.instance.db;
         rows = await db.query('sales', orderBy: 'id DESC');
       }
