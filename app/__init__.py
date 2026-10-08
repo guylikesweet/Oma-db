@@ -7,7 +7,7 @@ from flask_cors import CORS
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 from app.csrf import init_csrf
-from datetime import datetime, timedelta
+from datetime import timedelta
 from sqlalchemy import text as sa_text
 from werkzeug.exceptions import HTTPException
 import os
@@ -146,134 +146,23 @@ def create_app(config_object="config.Config"):
         current_app.logger.exception("Unhandled browser exception request_id=%s", getattr(g, "request_id", "unknown"))
         return make_response("Internal Server Error", 500)
 
-    def public_base_url():
-        """Return the configured canonical public origin for SEO URLs."""
-        configured = app.config.get("OMA_PUBLIC_BASE_URL", "")
-        if configured:
-            return configured
-        return request.url_root.rstrip("/")
-
     @app.route("/")
     def root():
-        use_cases = use_cases_for_marketing()
-        faq = [
-            {"@type": "Question", "name": "Does OmaSales work when the internet is unavailable?", "acceptedAnswer": {"@type": "Answer", "text": "The mobile application is designed around local data and an offline write queue, then synchronizes changes when connectivity returns."}},
-            {"@type": "Question", "name": "Can OmaSales manage shipping?", "acceptedAnswer": {"@type": "Answer", "text": "OmaSales supports shipment batches, sea and air shipping workflows, shipping rates, delivery preparation and customer shipping settlement."}},
-            {"@type": "Question", "name": "Can I use OmaSales on Android and the web?", "acceptedAnswer": {"@type": "Answer", "text": "Yes. OmaSales includes Flutter Android and Flutter Web clients backed by the same Flask API."}},
-        ]
-        schema = marketing_schema(
-            page_name="OmaSales — Inventory, Sales & Shipping Management for Nigerian Businesses",
-            description="OmaSales helps Nigerian businesses manage sales, stock, shipping, deliveries and profit from one fast app, with offline support.",
-            url=public_base_url() + "/",
-            faq=faq,
-        )
-        return render_template(
-            "marketing_home.html",
-            use_cases=use_cases,
-            year=datetime.utcnow().year,
-            canonical_url=public_base_url() + "/",
-            og_image=public_base_url() + url_for("static", filename="logo.png"),
-            schema=schema,
-        )
+        """Send staff to the supported Flutter Web application."""
+        return redirect(url_for("webapp.serve_webapp"))
 
 
-    @app.route("/use-case/<slug>")
-    def use_case(slug):
-        item = next((x for x in use_cases_for_marketing() if x["slug"] == slug), None)
-        if item is None:
-            from flask import abort
-            abort(404)
-        schema = marketing_schema(
-            page_name=item["seo_title"] + " | OmaSales",
-            description=item["description"],
-            url=public_base_url() + request.path,
-            breadcrumb=[
-                {"@type": "ListItem", "position": 1, "name": "OmaSales", "item": public_base_url() + "/"},
-                {"@type": "ListItem", "position": 2, "name": item["name"], "item": public_base_url() + request.path},
-            ],
-        )
-        return render_template(
-            "marketing_use_case.html",
-            item=item,
-            canonical_url=public_base_url() + request.path,
-            og_image=url_for("static", filename="logo.png", _external=True),
-            schema=schema,
-        )
-
-
-    @app.route("/blog")
-    def marketing_blog():
-        posts = blog_posts_for_marketing()
-        return render_template("marketing_blog.html", posts=posts, canonical_url=public_base_url() + "/blog", year=datetime.utcnow().year)
-
-
-    @app.route("/blog/<slug>")
-    def marketing_blog_post(slug):
-        item = next((x for x in blog_posts_for_marketing() if x["slug"] == slug), None)
-        if item is None:
-            from flask import abort
-            abort(404)
-        url = public_base_url() + request.path
-        schema = {
-            "@context": "https://schema.org",
-            "@type": "Article",
-            "headline": item["title"],
-            "description": item["description"],
-            "url": url,
-            "mainEntityOfPage": {"@type": "WebPage", "@id": url},
-            "author": {"@type": "Organization", "name": "OmaSales"},
-            "publisher": {"@type": "Organization", "name": "OmaSales", "url": public_base_url()},
-        }
-        return render_template("marketing_blog_post.html", item=item, canonical_url=url, schema=schema, year=datetime.utcnow().year)
-
-
-    @app.route("/status")
-    def status_page():
-        database_ok = False
-        try:
-            db.session.execute(sa_text("SELECT 1"))
-            db.session.rollback()
-            database_ok = True
-        except Exception:
-            db.session.rollback()
-            app.logger.exception("Public status database probe failed")
-        return render_template(
-            "marketing_status.html",
-            canonical_url=public_base_url() + "/status",
-            database_ok=database_ok,
-            year=datetime.utcnow().year,
-        )
-
-
-    @app.route("/pricing")
-    def pricing():
-        # Do not invent prices before commercial plans are finalized.
-        return render_template("marketing_pricing.html", canonical_url=public_base_url() + "/pricing", year=datetime.utcnow().year)
+    @app.route("/classic")
+    def retired_classic():
+        """Keep old bookmarks useful without reviving the retired UI."""
+        return redirect(url_for("webapp.serve_webapp"), code=301)
 
 
     @app.route("/robots.txt")
     def robots_txt():
+        """Keep the private staff application out of search indexes."""
         from flask import Response
-        base = public_base_url()
-        body = f"User-agent: *\\nAllow: /\\nAllow: /use-case/\\nAllow: /blog\\nAllow: /blog/\\nAllow: /pricing\\nDisallow: /api/\\nDisallow: /classic/\\nDisallow: /webapp/\\nSitemap: {base}/sitemap.xml\\n"
-        return Response(body.replace("\\n", "\n"), mimetype="text/plain")
-
-
-    @app.route("/sitemap.xml")
-    def sitemap_xml():
-        from flask import Response
-        from xml.sax.saxutils import escape
-        base = public_base_url()
-        urls = [
-            base + "/",
-            base + "/blog",
-            base + "/pricing",
-            base + "/status",
-            *[base + "/use-case/" + x["slug"] for x in use_cases_for_marketing()],
-            *[base + "/blog/" + x["slug"] for x in blog_posts_for_marketing()],
-        ]
-        xml = '<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">' + "".join(f"<url><loc>{escape(u)}</loc></url>" for u in urls) + "</urlset>"
-        return Response(xml, mimetype="application/xml")
+        return Response("User-agent: *\nDisallow: /\n", mimetype="text/plain")
 
 
     @app.route("/healthz")
@@ -365,81 +254,3 @@ def register_cli(app):
         db.session.commit()
         print(f"API token for '{username}': {raw_token}")
 
-def use_cases_for_marketing():
-    return [
-        {"name": "Gadgets & Electronics", "slug": "gadgets-electronics", "headline": "Sales and inventory management for gadget businesses", "seo_title": "Sales App for Gadget & Electronics Businesses in Nigeria", "description": "Manage gadgets, electronics, accessories, sales, stock and profit with OmaSales.", "points": ["Track fast-moving gadgets and accessories.", "Record sales while keeping inventory accurate.", "See costs, shipping and profit in one dashboard."], "body": "OmaSales helps gadget and electronics businesses keep products, sales, stock and shipping operations together as they grow."},
-        {"name": "Supermarket", "slug": "supermarket", "headline": "A sales and stock app for supermarkets", "seo_title": "Sales App for Supermarkets in Nigeria", "description": "Manage supermarket sales, inventory, stock movements and business performance with OmaSales.", "points": ["Keep stock quantities visible.", "Record sales quickly.", "Monitor low-stock items and business KPIs."], "body": "Designed for busy retail operations where accurate stock and fast sales records matter."},
-        {"name": "Pharmacy", "slug": "pharmacy", "headline": "Sales and inventory management for pharmacies", "seo_title": "Sales and Inventory App for Pharmacies in Nigeria", "description": "Manage pharmacy stock, sales, inventory movements and business performance with OmaSales.", "points": ["Keep product quantities visible.", "Record sales and stock movements.", "Monitor low-stock items and performance."], "body": "OmaSales provides general inventory and sales controls for pharmacy businesses. It is not a substitute for regulated pharmacy, prescription or clinical software."},
-        {"name": "Fashion Store", "slug": "fashion-store", "headline": "Inventory and sales management for fashion stores", "seo_title": "Sales App for Fashion Stores in Nigeria", "description": "Track fashion inventory, sales, costs and stock with OmaSales.", "points": ["Organize products and stock.", "Record customer sales and totals.", "Understand costs and profit."], "body": "Keep your fashion business numbers together as your product range and sales volume grow."},
-        {"name": "Phone Accessories", "slug": "phone-accessories", "headline": "Sales and stock management for phone accessory shops", "seo_title": "Sales App for Phone Accessories Businesses in Nigeria", "description": "Manage fast-moving phone accessories, sales and stock with OmaSales.", "points": ["Track fast-moving products.", "Reduce stock surprises.", "Record sales and monitor performance."], "body": "OmaSales is suited to businesses with many small, fast-moving products and frequent stock changes."},
-        {"name": "Mini Mart", "slug": "mini-mart", "headline": "Simple inventory and sales management for mini marts", "seo_title": "Sales App for Mini Marts in Nigeria", "description": "Run mini-mart sales and inventory from one business management app.", "points": ["Track inventory.", "Record daily sales.", "Monitor low stock and profit."], "body": "Use one system to keep daily retail operations visible and easier to control."},
-        {"name": "Wholesaler", "slug": "wholesaler", "headline": "Sales, inventory and shipping management for wholesalers", "seo_title": "Sales App for Wholesalers in Nigeria", "description": "Manage wholesale sales, inventory, shipping batches and deliveries with OmaSales.", "points": ["Track stock and sales.", "Manage shipment batches and shipping costs.", "Prepare deliveries and settle shipping payments."], "body": "OmaSales combines inventory and sales with the shipping workflows needed by trading and wholesale businesses."},
-    ]
-
-
-def blog_posts_for_marketing():
-    return [
-        {
-            "slug": "best-pos-in-nigeria",
-            "title": "Best POS and sales apps in Nigeria: what a growing business should look for",
-            "description": "A practical guide to choosing a POS or sales app in Nigeria, including inventory, offline sales, profit and shipping workflows.",
-            "intro": "The best sales system is not simply the one with the longest feature list. For a Nigerian business, reliability, stock accuracy, useful reporting and the ability to keep working when connectivity is poor can matter more than visual extras.",
-            "sections": [
-                ("Start with stock accuracy", "A sales system should update stock as sales happen and make stock movements easy to understand. If the inventory number cannot be trusted, every report built on it becomes harder to trust."),
-                ("Check what happens offline", "Businesses should understand whether sales can be captured during connectivity problems and synchronized safely later. An offline-first design can prevent a temporary network problem from becoming a sales interruption."),
-                ("Look beyond the sale", "Costs, shipping, deliveries and profit can be just as important as recording the transaction. A system that connects those workflows gives owners a clearer picture of the business."),
-                ("Choose for your actual workflow", "A supermarket, fashion store, wholesaler and importer do not have identical needs. Start with the daily workflow and choose software that reduces the work rather than adding another place to enter the same information."),
-            ],
-        },
-        {
-            "slug": "inventory-management-for-small-business",
-            "title": "Inventory management for small businesses in Nigeria",
-            "description": "How Nigerian small businesses can improve stock accuracy, reduce stock surprises and make better sales decisions.",
-            "intro": "Inventory problems often start small: a sale is forgotten, a purchase is recorded late, or stock is counted differently by two people. A simple, consistent process can prevent those small gaps from becoming expensive surprises.",
-            "sections": [
-                ("Record every movement", "Stock should change because of a sale, adjustment, receipt or another identifiable business event. That makes unusual changes easier to investigate."),
-                ("Use low-stock visibility", "Low-stock alerts or dashboards help a business act before a popular product disappears from the shelf."),
-                ("Connect sales to inventory", "Entering a sale and updating stock as separate manual tasks creates avoidable opportunities for mistakes. Keeping the two connected is safer."),
-            ],
-        },
-        {
-            "slug": "offline-sales-app-nigeria",
-            "title": "Why an offline sales app matters for Nigerian businesses",
-            "description": "What offline-first sales software means and why local storage and reliable synchronization matter when internet access is interrupted.",
-            "intro": "Internet access is not equally reliable everywhere or at every moment. An offline-first sales app keeps essential work available locally, then synchronizes changes when connectivity returns.",
-            "sections": [
-                ("Keep working during outages", "A local copy of relevant business data allows staff to continue permitted work instead of waiting for a connection."),
-                ("Queue changes safely", "Offline writes need durable queues and idempotency so reconnecting does not create duplicate sales or lose changes."),
-                ("Make synchronization visible", "Users should be able to understand whether their recent changes are saved locally, synchronized, or waiting for another attempt."),
-            ],
-        },
-    ]
-
-
-def marketing_schema(*, page_name, description, url, faq=None, breadcrumb=None):
-    graph = [
-        {
-            "@type": "WebSite",
-            "name": "OmaSales",
-            "url": public_base_url(),
-            "publisher": {"@type": "Organization", "name": "OmaSales", "url": public_base_url()},
-        },
-        {
-            "@type": "WebPage",
-            "name": page_name,
-            "description": description,
-            "url": url,
-        },
-        {
-            "@type": "Product",
-            "name": "OmaSales",
-            "description": "Sales, inventory, shipping and delivery management software for businesses in Nigeria.",
-            "brand": {"@type": "Brand", "name": "OmaSales"},
-            "category": "Business management software",
-        },
-    ]
-    if faq:
-        graph.append({"@type": "FAQPage", "mainEntity": faq})
-    if breadcrumb:
-        graph.append({"@type": "BreadcrumbList", "itemListElement": breadcrumb})
-    return {"@context": "https://schema.org", "@graph": graph}
