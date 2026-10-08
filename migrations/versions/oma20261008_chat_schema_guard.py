@@ -29,6 +29,40 @@ def upgrade():
         # by the preceding chat migration chain.
         return
 
+    # Repair product pricing/media columns if a production database has
+    # an Alembic revision recorded but an incomplete physical schema.
+    if "products" in inspector.get_table_names():
+        product_definitions = (
+            sa.Column("supplier_cost", sa.Numeric(12, 2), nullable=True, server_default="0"),
+            sa.Column("inbound_shipping_cost", sa.Numeric(12, 2), nullable=True, server_default="0"),
+            sa.Column("markup_percent", sa.Numeric(8, 2), nullable=True, server_default="0"),
+            sa.Column("selling_price", sa.Numeric(12, 2), nullable=True, server_default="0"),
+            sa.Column("image_data", sa.LargeBinary(), nullable=True),
+            sa.Column("image_mimetype", sa.String(50), nullable=True),
+            sa.Column("image_filename", sa.String(255), nullable=True),
+            sa.Column("image_updated_at", sa.DateTime(), nullable=True),
+        )
+        present_products = _columns(inspector, "products")
+        for column in product_definitions:
+            if column.name not in present_products:
+                op.add_column("products", column)
+                present_products.add(column.name)
+                inspector.clear_cache()
+
+    # Repair profile-photo columns used by authenticated profile/chat payloads.
+    if "users" in inspector.get_table_names():
+        user_definitions = (
+            sa.Column("profile_photo_data", sa.LargeBinary(), nullable=True),
+            sa.Column("profile_photo_mimetype", sa.String(50), nullable=True),
+            sa.Column("profile_photo_updated_at", sa.DateTime(), nullable=True),
+        )
+        present_users = _columns(inspector, "users")
+        for column in user_definitions:
+            if column.name not in present_users:
+                op.add_column("users", column)
+                present_users.add(column.name)
+                inspector.clear_cache()
+
     definitions = (
         sa.Column("audio_data", sa.LargeBinary(), nullable=True),
         sa.Column("audio_mimetype", sa.String(50), nullable=True),
