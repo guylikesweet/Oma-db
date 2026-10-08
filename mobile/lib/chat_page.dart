@@ -736,6 +736,10 @@ class _ChatPageState extends State<ChatPage> {
     final content = '${message['content'] ?? ''}'.trim();
     if (content.isNotEmpty) return content;
 
+    if ('${message['audio_url'] ?? ''}'.isNotEmpty ||
+        message['_audio_bytes'] is Uint8List) {
+      return 'Voice message';
+    }
     if ('${message['attachment_url'] ?? ''}'.isNotEmpty ||
         message['_attachment_bytes'] is Uint8List) {
       return 'Photo';
