@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>OmaSales Business Guides | Sales, Inventory & Shipping</title>
+  <meta name="description" content="Practical guides for Nigerian businesses choosing sales, inventory and shipping software.">
+  <meta name="robots" content="index,follow">
+  <link rel="canonical" href="{{ canonical_url }}">
+  <link rel="icon" href="{{ url_for('static', filename='logo.png') }}">
+  <style>
+    :root{font-family:Inter,system-ui,-apple-system,"Segoe UI",sans-serif;color:#13251f;background:#fff}
+    *{box-sizing:border-box}body{margin:0}.wrap{max-width:980px;margin:auto;padding:0 22px}
+    .nav{height:72px;display:flex;align-items:center;justify-content:space-between}.brand img{width:46px;height:46px;object-fit:contain;display:block}
+    a{color:inherit}.cta{display:inline-block;background:#039664;color:#fff;padding:13px 19px;border-radius:10px;text-decoration:none;font-weight:800}
+    main{padding:60px 0}.intro{max-width:760px}h1{font-size:clamp(38px,6vw,60px);line-height:1.05;letter-spacing:-.04em;margin:0 0 16px}p{line-height:1.7;color:#5b6b66}
+    .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;margin-top:38px}.card{border:1px solid #e0e9e5;border-radius:16px;padding:22px;text-decoration:none}.card h2{font-size:22px;margin:0 0 10px}.read{color:#087b55;font-weight:800}
+    @media(max-width:760px){.grid{grid-template-columns:1fr}main{padding:40px 0}}
+  </style>
+</head>
+<body>
+<header class="wrap nav"><a class="brand" href="/" aria-label="OmaSales home"><img src="{{ url_for('static', filename='logo.png') }}" alt="OmaSales" width="46" height="46" loading="eager" decoding="async"></a><a class="cta" href="/webapp/">Open OmaSales</a></header>
+<main class="wrap"><div class="intro"><h1>Business guides for Nigerian retailers and traders</h1><p>Practical answers about sales, inventory, offline workflows and shipping — without pretending every business has the same needs.</p></div>
+<div class="grid">{% for post in posts %}<a class="card" href="/blog/{{ post.slug }}"><h2>{{ post.title }}</h2><p>{{ post.description }}</p><span class="read">Read guide →</span></a>{% endfor %}</div></main>
+</body></html>
