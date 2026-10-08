@@ -16,7 +16,8 @@
   <meta name="twitter:title" content="OmaSales — Sales, Stock & Shipping Management">
   <meta name="twitter:description" content="Sales, stock, shipping and delivery management in one app.">
   <meta name="twitter:image" content="{{ og_image }}">
-  <link rel="icon" href="{{ url_for('static', filename='webapp/favicon.png') }}">
+  <link rel="icon" href="{{ url_for('static', filename='logo.png') }}">
+  <link rel="preload" as="image" href="{{ url_for('static', filename='logo.png') }}" fetchpriority="high">
   
   <style>
     :root{font-family:Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#13251f;background:#fff}
@@ -36,7 +37,7 @@
   <script type="application/ld+json">{{ schema|tojson }}</script>
 </head>
 <body>
-<header class="wrap nav"><a class="brand" href="/" aria-label="OmaSales home"><img src="{{ url_for('static', filename='logo.png') }}" alt="OmaSales" width="46" height="46" loading="eager" decoding="async"></a><a class="cta" href="/webapp/">Open OmaSales</a></header>
+<header class="wrap nav"><a href="/blog" style="font-weight:700;text-decoration:none;margin-right:auto;margin-left:18px">Guides</a><a href="/pricing" style="font-weight:700;text-decoration:none;margin-right:18px">Pricing</a><a class="brand" href="/" aria-label="OmaSales home"><img src="{{ url_for('static', filename='logo.png') }}" alt="OmaSales" width="46" height="46" loading="eager" decoding="async"></a><a class="cta" href="/webapp/">Open OmaSales</a></header>
 <main>
 <section class="hero"><div class="wrap hero-grid">
   <div><h1>Run your sales without losing control of your stock.</h1><p>OmaSales brings sales, inventory, shipping, deliveries and profit into one place — with offline-first support for businesses that cannot afford to stop when the internet does.</p><a class="cta" href="/webapp/">Start using OmaSales</a></div>
@@ -50,7 +51,8 @@
 <section class="usecases"><div class="wrap"><h2>Find your workflow</h2><p class="lead">Purpose-built entry points for common business types.</p>
 {% for item in use_cases %}<a class="pill" href="/use-case/{{ item.slug }}">{{ item.name }}</a>{% endfor %}
 </div></section>
-<section><div class="wrap"><h2>Explore OmaSales</h2><p class="lead">Open the app to see the current product experience and available features. Public pricing will be added here when the plans are finalized.</p><a class="cta" href="/webapp/">Open OmaSales</a></div></section>
+<section><div class="wrap"><h2>Explore OmaSales</h2><p class="lead">Open the app to see the current product experience and available features. See practical business guides and the current pricing page while commercial plans are being finalized.</p><a class="cta" href="/webapp/">Open OmaSales</a></div></section>
+<section><div class="wrap"><h2>Learn before you choose</h2><p class="lead">Read practical guides about inventory, offline sales and choosing business software in Nigeria.</p><a class="cta" href="/blog">Read the guides</a></div></section>
 <section class="faq"><div class="wrap"><h2>Frequently asked questions</h2>
 <details><summary>Does OmaSales work when the internet is unavailable?</summary><p>The mobile application is designed around local data and an offline write queue, then synchronizes changes when connectivity returns.</p></details>
 <details><summary>Can OmaSales manage shipping?</summary><p>Yes. The system supports shipment batches, sea and air shipping workflows, shipping rates, delivery preparation and customer shipping settlement.</p></details>
