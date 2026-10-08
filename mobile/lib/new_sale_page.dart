@@ -6,17 +6,15 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'brand_loader.dart';
 import 'presentation/controllers/product_controller.dart';
 import 'presentation/controllers/sales_controller.dart';
-import 'data/sync_repository.dart';
+import 'presentation/providers/app_providers.dart';
 import 'core/network_errors.dart';
 
 class NewSalePage extends ConsumerStatefulWidget {
   const NewSalePage({
     super.key,
-    required this.repo,
     this.stocked = false,
   });
 
-  final SyncRepository repo;
 
   /// false = preorder sale (stock ignored, OMB-); true = stocked goods (stock
   /// checked and deducted, no shipping cost, OMBSTK-).
@@ -262,7 +260,7 @@ class _NewSalePageState extends ConsumerState<NewSalePage> {
         message = 'Sale saved — will sync once you\'re back online.';
         if (isOnline) {
           try {
-            await widget.repo.syncOnce();
+            await ref.read(syncRepositoryProvider).syncOnce();
             message = 'Sale saved and synced.';
           } catch (_) {
             message = 'Sale saved — will sync shortly.';
