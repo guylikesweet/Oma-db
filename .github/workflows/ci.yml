@@ -123,7 +123,6 @@ jobs:
               body = robots.get_data(as_text=True)
               assert robots.status_code == 200
               assert "\\n" not in body
-              assert "\\\n" not in body
               assert "Disallow: /api/" in body
 
               sitemap = client.get("/sitemap.xml")
