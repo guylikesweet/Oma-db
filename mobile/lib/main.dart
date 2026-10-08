@@ -1470,7 +1470,6 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
                                   context,
                                   MaterialPageRoute(
                                     builder: (_) => NewSalePage(
-                                      repo: widget.repo,
                                     ),
                                   ),
                                 ),
