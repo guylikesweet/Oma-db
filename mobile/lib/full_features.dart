@@ -720,6 +720,18 @@ class _WebProductsPageState extends State<WebProductsPage> {
     }
   }
 
+  Future<void> openProductDetails(Map<String, dynamic> product) async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => ProductDetailsPage(
+          api: widget.api,
+          product: product,
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -757,6 +769,7 @@ class _WebProductsPageState extends State<WebProductsPage> {
 
                         return Card(
                           child: ListTile(
+                            onTap: () => openProductDetails(product),
                             leading: _ProductThumb(api: widget.api, product: product),
                             title: Text(
                               '${product['name'] ?? ''}',
@@ -802,6 +815,143 @@ class _WebProductsPageState extends State<WebProductsPage> {
                       },
                     ),
             ),
+    );
+  }
+}
+
+class ProductDetailsPage extends StatelessWidget {
+  const ProductDetailsPage({
+    super.key,
+    required this.api,
+    required this.product,
+  });
+
+  final ApiClient api;
+  final Map<String, dynamic> product;
+
+  Widget _value(BuildContext context, String label, dynamic value) {
+    final text = value == null || '$value'.trim().isEmpty ? 'N/A' : '$value';
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 7),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 130,
+            child: Text(
+              label,
+              style: TextStyle(
+                fontWeight: FontWeight.w700,
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ),
+          Expanded(child: Text(text)),
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final hasImage = product['has_image'] == true;
+    final imageId = product['id'] as int?;
+    return Scaffold(
+      appBar: AppBar(
+        title: Text('${product['name'] ?? 'Product'}'),
+      ),
+      body: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          Card(
+            clipBehavior: Clip.antiAlias,
+            child: hasImage && imageId != null
+                ? FutureBuilder<Uint8List>(
+                    future: api.productImage(imageId),
+                    builder: (context, snapshot) {
+                      if (snapshot.hasError) {
+                        return const SizedBox(
+                          height: 260,
+                          child: Center(
+                            child: Icon(Icons.broken_image_outlined, size: 64),
+                          ),
+                        );
+                      }
+                      if (!snapshot.hasData) {
+                        return const SizedBox(
+                          height: 260,
+                          child: Center(child: BrandLoader()),
+                        );
+                      }
+                      return GestureDetector(
+                        onTap: () => showDialog<void>(
+                          context: context,
+                          builder: (_) => Dialog(
+                            child: InteractiveViewer(
+                              minScale: 0.8,
+                              maxScale: 4,
+                              child: Image.memory(
+                                snapshot.data!,
+                                fit: BoxFit.contain,
+                              ),
+                            ),
+                          ),
+                        ),
+                        child: SizedBox(
+                          height: 300,
+                          width: double.infinity,
+                          child: Image.memory(
+                            snapshot.data!,
+                            fit: BoxFit.contain,
+                          ),
+                        ),
+                      );
+                    },
+                  )
+                : const SizedBox(
+                    height: 220,
+                    child: Center(
+                      child: Icon(Icons.inventory_2_outlined, size: 72),
+                    ),
+                  ),
+          ),
+          const SizedBox(height: 16),
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '${product['name'] ?? 'Unnamed product'}',
+                    style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                          fontWeight: FontWeight.w800,
+                        ),
+                  ),
+                  const SizedBox(height: 6),
+                  if ('${product['sku'] ?? ''}'.trim().isNotEmpty)
+                    Text('SKU: ${product['sku']}'),
+                  const SizedBox(height: 14),
+                  _value(context, 'Selling price', product['selling_price']),
+                  _value(context, 'Supplier cost', product['supplier_cost']),
+                  _value(context, 'Landed cost', product['landed_cost'] ?? product['cost']),
+                  _value(context, 'Markup', product['markup_percent']),
+                  _value(context, 'Gross profit', product['gross_profit']),
+                  _value(context, 'Stock', product['stock']),
+                  _value(context, 'Length', product['length_cm'] == null ? null : '${product['length_cm']} cm'),
+                  _value(context, 'Width', product['width_cm'] == null ? null : '${product['width_cm']} cm'),
+                  _value(context, 'Height', product['height_cm'] == null ? null : '${product['height_cm']} cm'),
+                  _value(context, 'Actual weight', product['actual_weight_kg'] == null ? null : '${product['actual_weight_kg']} kg'),
+                  _value(context, 'CBM', product['cbm']),
+                  _value(context, 'Volumetric weight', product['volumetric_kg'] == null ? null : '${product['volumetric_kg']} kg'),
+                  _value(context, 'Inbound shipping', product['inbound_shipping_cost']),
+                  _value(context, 'Estimated shipping', product['estimated_shipping_cost']),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
