@@ -33,6 +33,7 @@
     /* Top bar with hamburger toggle only */
     .topbar { background:#212529; padding:10px 16px; display:flex; align-items:center; }
     .topbar a.home-link { color:#fff; text-decoration:none; font-size:15px; font-weight:600; margin-left:12px; }
+    .oma-topbar-logo{display:flex;align-items:center;margin-right:4px}.oma-topbar-logo img{height:34px;width:34px;object-fit:contain}.oma-topbar-logo:focus-visible{outline:2px solid #03b979;outline-offset:3px;border-radius:8px}
     #navToggle { background:none; border:none; color:#fff; font-size:22px; cursor:pointer; padding:4px 8px; line-height:1; }
 
     /* Off-canvas side nav: hidden by default, slides in when open */
@@ -68,6 +69,7 @@
     <div class="oma-page-loader-text">Please wait</div>
   </div>
   <div class="topbar">
+    <a class="oma-topbar-logo" href="{{ url_for('classic_home') }}" aria-label="Oma home"><img src="{{ url_for('static', filename='logo.png') }}" alt="Oma"></a>
     <button id="navToggle" aria-label="Open menu">&#9776;</button>
     <a class="home-link" href="{{ url_for('classic_home') }}">Home</a>
     <div class="oma-theme-control" title="Appearance">
@@ -84,7 +86,7 @@
   <div id="navBackdrop"></div>
   <nav id="sideNav">
     <button class="close-btn" id="navClose" aria-label="Close menu">&times;</button>
-    <div class="sidenav-header"><a href="{{ url_for('classic_home') }}">Home</a></div>
+    <div class="sidenav-header"><a href="{{ url_for('classic_home') }}"><img src="{{ url_for('static', filename='logo.png') }}" alt="Oma" style="height:34px;width:34px;object-fit:contain;vertical-align:middle;margin-right:8px">Home</a></div>
     <a class="nav-link-item" href="{{ url_for('product.index_view') }}">Products</a>
     <a class="nav-link-item" href="{{ url_for('sales.new_sale') }}">+ New Sale</a>
     <a class="nav-link-item" href="{{ url_for('sale.index_view') }}">Sales</a>
