@@ -31,7 +31,7 @@ flask seed-admin --reset        # explicitly reset the configured admin password
 flask run
 ```
 
-Visit `http://127.0.0.1:5000/` for the public OmaSales site. Open `http://127.0.0.1:5000/webapp/` for the Flutter Web application. The legacy Flask/Jinja interface is available under `/classic`.
+Visit `http://127.0.0.1:5000/` for the private staff entrypoint (it redirects to `/classic`). Open `http://127.0.0.1:5000/webapp/` for the Flutter Web application. The legacy Flask/Jinja staff interface is available under `/classic`.
 
 ## What's built
 
@@ -89,3 +89,7 @@ Firebase Cloud Messaging is used for push delivery. Notification intent is writt
 ## Cloud Android build (phone/Chromebook friendly)
 
 The repository includes `.github/workflows/build-oma-apk.yml`. It builds the Flutter Android APK/AAB in GitHub Actions, so Android Studio/Flutter do not need to be installed locally. The workflow is manual (`workflow_dispatch`) and performs backend/migration/API compatibility checks before analyzing and building.
+
+## Update 1.2 scope
+
+Oma is a private business operations system for the owner and staff of one business. It is not a multi-business SaaS platform. Update 1.2 therefore focuses on staff authentication, products, inventory, sales, offline/sync operation, batches, deliveries, shipping, reports, notifications and team communication. Customer accounts, public checkout, public product browsing, SaaS subscriptions, multi-business workspaces and marketing/SEO surfaces are deferred to the future public webstore phase. The underlying product, inventory, sales and API architecture is kept reusable for that later phase.
