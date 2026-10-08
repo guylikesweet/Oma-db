@@ -8,9 +8,8 @@ def test_production_requires_valid_public_base_url(monkeypatch):
     monkeypatch.setenv("ADMIN_PASSWORD", "password")
     monkeypatch.setenv("OMA_PUBLIC_BASE_URL", "not-a-url")
 
-    import config
-
     try:
+        import config
         try:
             importlib.reload(config)
         except RuntimeError as exc:
