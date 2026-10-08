@@ -1481,7 +1481,6 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
                                   context,
                                   MaterialPageRoute(
                                     builder: (_) => NewSalePage(
-                                      repo: widget.repo,
                                       stocked: true,
                                     ),
                                   ),
@@ -2350,7 +2349,6 @@ class _SalesPageState extends State<SalesPage> {
                 context,
                 MaterialPageRoute(
                   builder: (_) => NewSalePage(
-                    repo: widget.repo,
                     stocked: true,
                   ),
                 ),
@@ -2363,7 +2361,6 @@ class _SalesPageState extends State<SalesPage> {
                 context,
                 MaterialPageRoute(
                   builder: (_) => NewSalePage(
-                    repo: widget.repo,
                   ),
                 ),
               ).then((_) => setState(() {})),

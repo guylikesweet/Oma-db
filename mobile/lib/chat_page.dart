@@ -54,11 +54,14 @@ class _ChatPageState extends State<ChatPage> {
   List<Map<String, dynamic>> mentionOptions = [];
   bool mentionOpen = false;
   bool _initialMessageHandled = false;
+  bool _loadingOlder = false;
+  bool _hasOlderMessages = true;
 
   @override
   void initState() {
     super.initState();
     composer.addListener(_onComposerChanged);
+    scroll.addListener(_onScrollChanged);
     load();
     _loadMentionUsers();
     _scheduleNextPoll();
@@ -69,9 +72,46 @@ class _ChatPageState extends State<ChatPage> {
     poller?.cancel();
     poller = null;
     composer.removeListener(_onComposerChanged);
+    scroll.removeListener(_onScrollChanged);
     composer.dispose();
     scroll.dispose();
     super.dispose();
+  }
+
+  void _onScrollChanged() {
+    if (!scroll.hasClients || _loadingOlder || !_hasOlderMessages) return;
+    if (scroll.position.pixels > 120 || messages.isEmpty) return;
+    final numericIds = messages.map((m) => _asInt(m['id'])).whereType<int>();
+    if (numericIds.isEmpty) return;
+    _loadOlder(numericIds.reduce((a, b) => a < b ? a : b));
+  }
+
+  Future<void> _loadOlder(int beforeId) async {
+    if (_loadingOlder || !_hasOlderMessages || !mounted) return;
+    _loadingOlder = true;
+    try {
+      final olderRaw = await widget.api.chatMessages(limit: 100, beforeId: beforeId);
+      final older = olderRaw.whereType<Map>().map((m) => Map<String, dynamic>.from(m)).toList();
+      if (!mounted) return;
+      if (older.isEmpty) { _hasOlderMessages = false; return; }
+      final existingIds = messages.map((m) => '${m['id']}').toSet();
+      final additions = older.where((m) => !existingIds.contains('${m['id']}')).toList();
+      if (additions.isEmpty) { _hasOlderMessages = older.length >= 100; return; }
+      final oldHeight = scroll.position.maxScrollExtent;
+      final oldOffset = scroll.position.pixels;
+      setState(() {
+        messages = [...additions, ...messages]..sort((a, b) => (_asInt(a['id']) ?? 0).compareTo(_asInt(b['id']) ?? 0));
+      });
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || !scroll.hasClients) return;
+        scroll.jumpTo(oldOffset + (scroll.position.maxScrollExtent - oldHeight));
+      });
+      _hasOlderMessages = older.length >= 100;
+    } catch (_) {
+      // Older history is non-critical; keep the current timeline usable.
+    } finally {
+      _loadingOlder = false;
+    }
   }
 
   void _scheduleNextPoll() {
@@ -96,6 +136,7 @@ class _ChatPageState extends State<ChatPage> {
           .whereType<Map>()
           .map((message) => Map<String, dynamic>.from(message))
           .toList();
+      _hasOlderMessages = serverMessages.length >= 100;
 
       // Polling must never make an optimistic bubble disappear while a
       // request is still in flight (or after a failed send).
