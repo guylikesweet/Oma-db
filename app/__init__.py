@@ -158,11 +158,9 @@ def create_app(config_object="config.Config"):
 
     def public_base_url():
         """Return the configured canonical public origin for SEO URLs."""
-        configured = os.environ.get("OMA_PUBLIC_BASE_URL", "").strip().rstrip("/")
-        if configured.startswith(("https://", "http://")):
-            return configured
+        configured = app.config.get("OMA_PUBLIC_BASE_URL", "")
         if configured:
-            app.logger.warning("Ignoring invalid OMA_PUBLIC_BASE_URL; expected an http(s) URL.")
+            return configured
         return request.url_root.rstrip("/")
 
     @app.errorhandler(404)
