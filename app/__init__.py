@@ -7,7 +7,7 @@ from flask_cors import CORS
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 from app.csrf import init_csrf
-from datetime import datetime, timedelta
+from datetime import timedelta
 from sqlalchemy import text as sa_text
 import os
 import time
@@ -156,93 +156,22 @@ def create_app(config_object="config.Config"):
 
         register_cli(app)
 
-    def public_base_url():
-        """Return the configured canonical public origin for SEO URLs."""
-        configured = app.config.get("OMA_PUBLIC_BASE_URL", "")
-        if configured:
-            return configured
-        return request.url_root.rstrip("/")
-
-    @app.errorhandler(404)
-    def handle_not_found(error):
-        if request.path.startswith("/api/"):
-            return {"error": "Not found.", "message": "The requested API endpoint does not exist.", "request_id": getattr(g, "request_id", "unknown")}, 404
-        return error
-
-    @app.errorhandler(405)
-    def handle_method_not_allowed(error):
-        if request.path.startswith("/api/"):
-            return {"error": "Method not allowed.", "message": "This HTTP method is not supported for the requested API endpoint.", "request_id": getattr(g, "request_id", "unknown")}, 405
-        return error
-
-    @app.errorhandler(415)
-    def handle_unsupported_media_type(error):
-        if request.path.startswith("/api/"):
-            return {"error": "Unsupported media type.", "message": "This API endpoint expects a JSON request body.", "request_id": getattr(g, "request_id", "unknown")}, 415
-        return error
-
-    @app.errorhandler(500)
-    def handle_internal_error(error):
-        if request.path.startswith("/api/"):
-            app.logger.exception("Unhandled application exception request_id=%s", getattr(g, "request_id", "unknown"))
-            db.session.rollback()
-            return {"error": "Internal server error.", "message": "The server could not complete this request.", "request_id": getattr(g, "request_id", "unknown")}, 500
-        return error
-
     @app.route("/")
     def root():
-        use_cases = use_cases_for_marketing()
-        schema = {
-            "@context": "https://schema.org",
-            "@graph": [
-                {"@type": "Organization", "name": "OmaSales", "url": public_base_url()},
-                {"@type": "SoftwareApplication", "name": "OmaSales", "applicationCategory": "BusinessApplication", "operatingSystem": "Android, Web", "description": "Sales, inventory, shipping and delivery management for businesses."},
-                {"@type": "WebSite", "name": "OmaSales", "url": public_base_url()},
-                {"@type": "FAQPage", "mainEntity": [
-                    {"@type": "Question", "name": "Does OmaSales work when the internet is unavailable?", "acceptedAnswer": {"@type": "Answer", "text": "The mobile application is designed around local data and an offline write queue, then synchronizes changes when connectivity returns."}},
-                    {"@type": "Question", "name": "Can OmaSales manage shipping?", "acceptedAnswer": {"@type": "Answer", "text": "OmaSales supports shipment batches, sea and air shipping workflows, shipping rates, delivery preparation and customer shipping settlement."}},
-                    {"@type": "Question", "name": "Can I use OmaSales on Android and the web?", "acceptedAnswer": {"@type": "Answer", "text": "Yes. OmaSales includes Flutter Android and Flutter Web clients backed by the same Flask API."}}
-                ]}
-            ]
-        }
-        return render_template("marketing_home.html", use_cases=use_cases, year=datetime.utcnow().year,
-                               canonical_url=public_base_url() + "/", og_image=public_base_url() + url_for("static", filename="logo.png"),
-                               schema=schema)
+        """Internal staff entrypoint.
 
-
-    @app.route("/use-case/<slug>")
-    def use_case(slug):
-        item = next((x for x in use_cases_for_marketing() if x["slug"] == slug), None)
-        if item is None:
-            from flask import abort
-            abort(404)
-        schema = {
-            "@context": "https://schema.org",
-            "@type": "WebPage",
-            "name": item["seo_title"],
-            "description": item["description"],
-            "url": public_base_url() + request.path,
-            "isPartOf": {"@type": "WebSite", "name": "OmaSales", "url": public_base_url()},
-        }
-        return render_template("marketing_use_case.html", item=item, canonical_url=public_base_url() + request.path, 
-                               og_image=url_for("static", filename="logo.png", _external=True),
-                               schema=schema)
+        Oma is currently a private business operations system. The public
+        storefront is a future phase, so the root URL must not expose a SaaS
+        marketing surface or imply that Oma is a multi-business service.
+        """
+        return redirect(url_for("classic_home"))
 
     @app.route("/robots.txt")
     def robots_txt():
+        """Keep the private operations application out of search indexes."""
         from flask import Response
-        base = public_base_url()
-        body = f"User-agent: *\nAllow: /\nAllow: /use-case/\nDisallow: /api/\nDisallow: /classic/\nDisallow: /webapp/\nSitemap: {base}/sitemap.xml\n"
+        body = "User-agent: *\\nDisallow: /\\n"
         return Response(body, mimetype="text/plain")
-
-    @app.route("/sitemap.xml")
-    def sitemap_xml():
-        from flask import Response
-        from xml.sax.saxutils import escape
-        base = public_base_url()
-        urls = [base + "/", *[base + "/use-case/" + x["slug"] for x in use_cases_for_marketing()]]
-        xml = '<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">' + "".join(f"<url><loc>{escape(u)}</loc></url>" for u in urls) + "</urlset>"
-        return Response(xml, mimetype="application/xml")
 
 
     @app.route("/classic")
