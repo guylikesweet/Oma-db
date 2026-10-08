@@ -57,6 +57,12 @@ class Product(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(255), nullable=False)
     sku = db.Column(db.String(100), unique=True)
+    # Optional catalogue photo; upload layers cap media size and type.
+    image_data = db.Column(db.LargeBinary, nullable=True)
+    image_mimetype = db.Column(db.String(50), nullable=True)
+    image_filename = db.Column(db.String(255), nullable=True)
+    image_updated_at = db.Column(db.DateTime, nullable=True)
+
     # cost is the current landed/true inventory cost used for COGS.
     cost = db.Column(db.Numeric(12, 2), default=0.00)
     supplier_cost = db.Column(db.Numeric(12, 2), default=0.00)
