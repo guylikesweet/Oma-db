@@ -2210,12 +2210,21 @@ def mobile_admin_chat_cleanup():
     if not expected or not provided or not secrets.compare_digest(provided, expected):
         return jsonify({"error": "Unauthorized."}), 401
 
-    before = ChatMessage.query.filter(
+    cutoff = datetime.utcnow() - timedelta(days=30)
+    before_photos = ChatMessage.query.filter(
         ChatMessage.attachment_data.isnot(None),
-        ChatMessage.attachment_created_at < datetime.utcnow() - timedelta(days=30),
+        ChatMessage.attachment_created_at < cutoff,
+    ).count()
+    before_audio = ChatMessage.query.filter(
+        ChatMessage.audio_data.isnot(None),
+        ChatMessage.audio_created_at < cutoff,
     ).count()
     _chat_cleanup_expired_photos()
-    return jsonify({"ok": True, "expired_photos": before})
+    return jsonify({
+        "ok": True,
+        "expired_photos": before_photos,
+        "expired_audio": before_audio,
+    })
 
 
 @api_bp.route("/v1/chat/messages", methods=("GET",))
