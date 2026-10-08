@@ -1311,6 +1311,7 @@ class _ChatPageState extends State<ChatPage> {
       padding: const EdgeInsets.only(bottom: 4),
       child: _ChatAudioBubble(
         api: widget.api,
+        messageId: _asInt(message['id']),
         url: url,
         localBytes: local is Uint8List ? local : null,
         mimetype: message['audio_mimetype']?.toString(),
@@ -1819,8 +1820,9 @@ class _ChatPageState extends State<ChatPage> {
 }
 
 class _ChatAudioBubble extends StatefulWidget {
-  const _ChatAudioBubble({required this.api, required this.url, this.localBytes, this.mimetype});
+  const _ChatAudioBubble({required this.api, required this.messageId, required this.url, this.localBytes, this.mimetype});
   final ApiClient api;
+  final int? messageId;
   final String url;
   final Uint8List? localBytes;
   final String? mimetype;
@@ -1864,11 +1866,11 @@ class _ChatAudioBubbleState extends State<_ChatAudioBubble> {
       if (player.processingState == ProcessingState.completed) await player.seek(Duration.zero);
       if (player.audioSource == null) {
         setState(() { loading = true; error = null; });
-        final token = await widget.api.token();
-        final url = await widget.api.chatAudioUrl(widget.url);
-        await player.setUrl(url, headers: {
-          if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
-        });
+        if (widget.messageId == null) {
+          throw StateError('This voice message is not ready for playback.');
+        }
+        final url = await widget.api.chatAudioPlaybackUrl(widget.messageId!);
+        await player.setUrl(url);
       }
       setState(() => loading = false);
       await player.play();
