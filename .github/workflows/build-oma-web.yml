@@ -127,8 +127,8 @@ jobs:
       - name: Configure Firebase web messaging worker
         env:
           FCM_API_KEY: ${{ secrets.FCM_API_KEY }}
-          # FCM_APP_ID must be the Firebase Web app id (not the Android app id).
-          FCM_APP_ID: ${{ secrets.FCM_APP_ID }}
+          # Web uses its own Firebase app id; Android keeps the existing FCM_APP_ID secret.
+          FCM_WEB_APP_ID: ${{ secrets.FCM_WEB_APP_ID }}
           FCM_MESSAGING_SENDER_ID: ${{ secrets.FCM_MESSAGING_SENDER_ID }}
           FCM_PROJECT_ID: ${{ secrets.FCM_PROJECT_ID }}
           FCM_AUTH_DOMAIN: ${{ secrets.FCM_AUTH_DOMAIN }}
@@ -166,7 +166,7 @@ jobs:
             projectId: "${FCM_PROJECT_ID}",
             storageBucket: "${FCM_STORAGE_BUCKET}",
             messagingSenderId: "${FCM_MESSAGING_SENDER_ID}",
-            appId: "${FCM_APP_ID}"
+            appId: "${FCM_WEB_APP_ID}"
           });
           // Data-only FCM messages are rendered here while the Flutter page is
           // backgrounded/closed. Clicking the notification returns to the chat.
@@ -187,7 +187,7 @@ jobs:
         env:
           API_URL: ${{ github.event.inputs.api_url || 'https://oma-db.onrender.com/api' }}
           FCM_API_KEY: ${{ secrets.FCM_API_KEY }}
-          FCM_APP_ID: ${{ secrets.FCM_APP_ID }}
+          FCM_WEB_APP_ID: ${{ secrets.FCM_WEB_APP_ID }}
           FCM_MESSAGING_SENDER_ID: ${{ secrets.FCM_MESSAGING_SENDER_ID }}
           FCM_PROJECT_ID: ${{ secrets.FCM_PROJECT_ID }}
           FCM_AUTH_DOMAIN: ${{ secrets.FCM_AUTH_DOMAIN }}
@@ -196,18 +196,18 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          case "$FCM_APP_ID" in
+          case "$FCM_WEB_APP_ID" in
             *:web:*) ;;
-            *) echo "FCM_APP_ID must be the Firebase Web app id (it should contain :web:), not an Android app id."; exit 1 ;;
+            *) echo "FCM_WEB_APP_ID must be the Firebase Web app id (it should contain :web:)."; exit 1 ;;
           esac
-          if [ -z "$FCM_API_KEY" ] || [ -z "$FCM_APP_ID" ] || [ -z "$FCM_MESSAGING_SENDER_ID" ] || [ -z "$FCM_PROJECT_ID" ] || [ -z "$FCM_AUTH_DOMAIN" ] || [ -z "$FCM_STORAGE_BUCKET" ] || [ -z "$FCM_WEB_VAPID_KEY" ]; then
+          if [ -z "$FCM_API_KEY" ] || [ -z "$FCM_WEB_APP_ID" ] || [ -z "$FCM_MESSAGING_SENDER_ID" ] || [ -z "$FCM_PROJECT_ID" ] || [ -z "$FCM_AUTH_DOMAIN" ] || [ -z "$FCM_STORAGE_BUCKET" ] || [ -z "$FCM_WEB_VAPID_KEY" ]; then
             echo "Missing required Firebase Web configuration."
             exit 1
           fi
           flutter build web --release --base-href /webapp/ \
             --dart-define=API_BASE_URL="$API_URL" \
             --dart-define=FCM_API_KEY="$FCM_API_KEY" \
-            --dart-define=FCM_APP_ID="$FCM_APP_ID" \
+            --dart-define=FCM_APP_ID="$FCM_WEB_APP_ID" \
             --dart-define=FCM_MESSAGING_SENDER_ID="$FCM_MESSAGING_SENDER_ID" \
             --dart-define=FCM_PROJECT_ID="$FCM_PROJECT_ID" \
             --dart-define=FCM_AUTH_DOMAIN="$FCM_AUTH_DOMAIN" \
