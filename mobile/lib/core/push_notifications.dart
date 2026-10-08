@@ -10,7 +10,6 @@ import '../data/local_database.dart';
 import 'package:location/location.dart';
 
 import 'web_push_foreground.dart';
-import 'web_fcm_token.dart';
 
 class OmaPushNotifications {
   OmaPushNotifications._();
@@ -100,7 +99,7 @@ class OmaPushNotifications {
       }
 
       final token = kIsWeb
-          ? await getWebFcmToken(messaging, vapid)
+          ? await messaging.getToken(vapidKey: vapid)
           : await messaging.getToken();
 
       if (token == null || token.isEmpty) {
@@ -365,10 +364,7 @@ class OmaPushNotifications {
         return;
       }
       final token = kIsWeb
-          ? await getWebFcmToken(
-              messaging,
-              const String.fromEnvironment('FCM_WEB_VAPID_KEY'),
-            )
+          ? await messaging.getToken(vapidKey: const String.fromEnvironment('FCM_WEB_VAPID_KEY'))
           : await messaging.getToken();
       if (token == null || token.isEmpty) return;
       await _registerTokenWithRetry(
