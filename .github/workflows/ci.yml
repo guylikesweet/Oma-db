@@ -106,7 +106,7 @@ jobs:
 
               robots = client.get("/robots.txt")
               assert robots.status_code == 200
-              assert robots.get_data(as_text=True) == "User-agent: *\\nDisallow: /\\n"
+              assert robots.get_data(as_text=True) == "User-agent: *\nDisallow: /\n"
 
               api_missing = client.get("/api/v1/does-not-exist")
               assert api_missing.status_code == 404
