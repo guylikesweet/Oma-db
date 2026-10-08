@@ -159,8 +159,10 @@ def create_app(config_object="config.Config"):
     def public_base_url():
         """Return the configured canonical public origin for SEO URLs."""
         configured = os.environ.get("OMA_PUBLIC_BASE_URL", "").strip().rstrip("/")
-        if configured:
+        if configured.startswith(("https://", "http://")):
             return configured
+        if configured:
+            app.logger.warning("Ignoring invalid OMA_PUBLIC_BASE_URL; expected an http(s) URL.")
         return request.url_root.rstrip("/")
 
     @app.route("/")
@@ -180,7 +182,7 @@ def create_app(config_object="config.Config"):
             ]
         }
         return render_template("marketing_home.html", use_cases=use_cases, year=datetime.utcnow().year,
-                               canonical_url=public_base_url() + "/", og_image=url_for("static", filename="logo.png", _external=True),
+                               canonical_url=public_base_url() + "/", og_image=public_base_url() + url_for("static", filename="logo.png"),
                                schema=schema)
 
 
@@ -195,8 +197,8 @@ def create_app(config_object="config.Config"):
             "@type": "WebPage",
             "name": item["seo_title"],
             "description": item["description"],
-            "url": request.base_url,
-            "isPartOf": {"@type": "WebSite", "name": "OmaSales", "url": request.url_root},
+            "url": public_base_url() + request.path,
+            "isPartOf": {"@type": "WebSite", "name": "OmaSales", "url": public_base_url()},
         }
         return render_template("marketing_use_case.html", item=item, canonical_url=public_base_url() + request.path, 
                                og_image=url_for("static", filename="logo.png", _external=True),
