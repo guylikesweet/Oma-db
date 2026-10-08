@@ -48,10 +48,9 @@
 <div class="card"><h3>Shipping & delivery</h3><p>Manage batches, rates, deliveries and customer shipping settlement workflows.</p></div>
 </div></div></section>
 <section class="usecases"><div class="wrap"><h2>Find your workflow</h2><p class="lead">Purpose-built entry points for common business types.</p>
-<div>{{ use_cases|map(attribute='slug')|list|join('') }}</div>
 {% for item in use_cases %}<a class="pill" href="/use-case/{{ item.slug }}">{{ item.name }}</a>{% endfor %}
 </div></section>
-<section><div class="wrap"><h2>Pricing</h2><p class="lead">OmaSales pricing is being finalized for public self-service checkout. Contact the Oma team for the current plan and onboarding details rather than relying on an outdated price.</p><a class="cta" href="mailto:sales@omasales.app">Ask about pricing</a></div></section>
+<section><div class="wrap"><h2>Pricing</h2><p class="lead">OmaSales pricing is being finalized for public self-service checkout. Contact the Oma team for the current plan and onboarding details rather than relying on an outdated price.</p><a class="cta" href="/webapp/">View pricing &amp; plans</a></div></section>
 <section class="faq"><div class="wrap"><h2>Frequently asked questions</h2>
 <details><summary>Does OmaSales work when the internet is unavailable?</summary><p>The mobile application is designed around local data and an offline write queue, then synchronizes changes when connectivity returns.</p></details>
 <details><summary>Can OmaSales manage shipping?</summary><p>Yes. The system supports shipment batches, sea and air shipping workflows, shipping rates, delivery preparation and customer shipping settlement.</p></details>
