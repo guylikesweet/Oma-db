@@ -1582,42 +1582,97 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
                             value:
                                 '₦${_money(data['sales_today'])}',
                             icon: Icons.payments,
+                            onTap: () => Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => SalesPage(
+                                  api: widget.api,
+                                  local: widget.local,
+                                  repo: widget.repo,
+                                  refreshKey: widget.refreshKey,
+                                ),
+                              ),
+                            ),
                           ),
                           _Kpi(
                             title: 'Profit today',
                             value:
                                 '₦${_money(data['profit_today'])}',
                             icon: Icons.trending_up,
+                            onTap: () => Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => ReportsPage(api: widget.api),
+                              ),
+                            ),
                           ),
                           _Kpi(
                             title: 'Pending shipments',
                             value:
                                 '${data['pending_shipments'] ?? 0}',
                             icon: Icons.local_shipping,
+                            onTap: () => Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => BatchesPage(
+                                  api: widget.api,
+                                  repo: widget.repo,
+                                  isAdmin: AppSession.isAdmin,
+                                ),
+                              ),
+                            ),
                           ),
                           _Kpi(
                             title: 'Low stock',
                             value:
                                 '${data['low_stock_count'] ?? 0}',
                             icon: Icons.warning_amber,
+                            onTap: () => Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => ProductsPage(
+                                  api: widget.api,
+                                  local: widget.local,
+                                  repo: widget.repo,
+                                  refreshKey: widget.refreshKey,
+                                ),
+                              ),
+                            ),
                           ),
                           _Kpi(
                             title: 'Shipping owed',
                             value:
                                 '₦${data['shipping_owed'] ?? 0}',
                             icon: Icons.account_balance_wallet_outlined,
+                            onTap: () => Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => ReportsPage(api: widget.api),
+                              ),
+                            ),
                           ),
                           _Kpi(
                             title: 'Batches in transit',
                             value:
                                 '${data['batches_in_transit'] ?? 0}',
                             icon: Icons.flight_takeoff,
+                            onTap: () => Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => BatchesPage(
+                                  api: widget.api,
+                                  repo: widget.repo,
+                                  isAdmin: AppSession.isAdmin,
+                                ),
+                              ),
+                            ),
                           ),
                           _Kpi(
                             title: 'Sync exceptions',
                             value:
                                 '${data['sync_exceptions'] ?? 0}',
                             icon: Icons.sync_problem,
+                            onTap: () => widget.onSync(silent: false),
                           ),
                         ],
                       )
