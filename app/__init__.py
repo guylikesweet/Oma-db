@@ -156,15 +156,22 @@ def create_app(config_object="config.Config"):
 
         register_cli(app)
 
+    def public_base_url():
+        """Return the configured canonical public origin for SEO URLs."""
+        configured = os.environ.get("OMA_PUBLIC_BASE_URL", "").strip().rstrip("/")
+        if configured:
+            return configured
+        return request.url_root.rstrip("/")
+
     @app.route("/")
     def root():
         use_cases = use_cases_for_marketing()
         schema = {
             "@context": "https://schema.org",
             "@graph": [
-                {"@type": "Organization", "name": "OmaSales", "url": request.url_root.rstrip("/")},
+                {"@type": "Organization", "name": "OmaSales", "url": public_base_url()},
                 {"@type": "SoftwareApplication", "name": "OmaSales", "applicationCategory": "BusinessApplication", "operatingSystem": "Android, Web", "description": "Sales, inventory, shipping and delivery management for businesses."},
-                {"@type": "WebSite", "name": "OmaSales", "url": request.url_root},
+                {"@type": "WebSite", "name": "OmaSales", "url": public_base_url()},
                 {"@type": "FAQPage", "mainEntity": [
                     {"@type": "Question", "name": "Does OmaSales work when the internet is unavailable?", "acceptedAnswer": {"@type": "Answer", "text": "The mobile application is designed around local data and an offline write queue, then synchronizes changes when connectivity returns."}},
                     {"@type": "Question", "name": "Can OmaSales manage shipping?", "acceptedAnswer": {"@type": "Answer", "text": "OmaSales supports shipment batches, sea and air shipping workflows, shipping rates, delivery preparation and customer shipping settlement."}},
@@ -173,7 +180,7 @@ def create_app(config_object="config.Config"):
             ]
         }
         return render_template("marketing_home.html", use_cases=use_cases, year=datetime.utcnow().year,
-                               canonical_url=request.base_url, og_image=url_for("static", filename="logo.png", _external=True),
+                               canonical_url=public_base_url() + "/", og_image=url_for("static", filename="logo.png", _external=True),
                                schema=schema)
 
 
@@ -191,14 +198,14 @@ def create_app(config_object="config.Config"):
             "url": request.base_url,
             "isPartOf": {"@type": "WebSite", "name": "OmaSales", "url": request.url_root},
         }
-        return render_template("marketing_use_case.html", item=item, canonical_url=request.base_url,
+        return render_template("marketing_use_case.html", item=item, canonical_url=public_base_url() + request.path, 
                                og_image=url_for("static", filename="logo.png", _external=True),
                                schema=schema)
 
     @app.route("/robots.txt")
     def robots_txt():
         from flask import Response
-        base = request.url_root.rstrip("/")
+        base = public_base_url()
         body = f"User-agent: *\nAllow: /\nAllow: /use-case/\nDisallow: /api/\nDisallow: /classic/\nDisallow: /webapp/\nSitemap: {base}/sitemap.xml\n"
         return Response(body, mimetype="text/plain")
 
@@ -206,7 +213,7 @@ def create_app(config_object="config.Config"):
     def sitemap_xml():
         from flask import Response
         from xml.sax.saxutils import escape
-        base = request.url_root.rstrip("/")
+        base = public_base_url()
         urls = [base + "/", *[base + "/use-case/" + x["slug"] for x in use_cases_for_marketing()]]
         xml = '<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">' + "".join(f"<url><loc>{escape(u)}</loc></url>" for u in urls) + "</urlset>"
         return Response(xml, mimetype="application/xml")
