@@ -100,6 +100,8 @@ jobs:
               assert b"https://oma.example/static/logo.png" in home.data
               assert home.status_code == 200
               assert b"application/ld+json" in home.data
+              assert b'"Product"' in home.data
+              assert b'"FAQPage"' in home.data
               assert b'property="og:image"' in home.data
               assert b'<script src=' not in home.data
               hero = home.data.split(b"</section>", 1)[0]
