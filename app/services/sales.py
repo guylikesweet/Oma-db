@@ -310,6 +310,12 @@ def update_sale_status(sale_id, new_status):
     if new_status not in valid_statuses:
         raise SaleValidationError(f"Invalid status '{new_status}'.")
 
+    # Cancellation is terminal. A cancelled stock sale has already returned
+    # its inventory; allowing it to become active again would create stock
+    # without a corresponding sale deduction.
+    if sale.order_status == "Cancelled" and new_status != "Cancelled":
+        raise SaleValidationError("A cancelled sale cannot be reopened. Create a new sale instead.")
+
     if new_status == "Cancelled" and sale.order_status != "Cancelled" and sale.is_stock_sale:
         # Only stocked sales deducted stock, so only they restock.
         for item in sale.items:
