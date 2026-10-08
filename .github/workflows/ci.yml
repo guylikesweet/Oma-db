@@ -123,6 +123,7 @@ jobs:
                   assert response.headers.get("Referrer-Policy") == "strict-origin-when-cross-origin"
 
           print("Public marketing routes, SEO endpoints, headers, and 404 behavior passed.")
+          assert client.get("/").headers.get("Cache-Control") is None
           PY
           PY
 
