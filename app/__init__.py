@@ -263,6 +263,24 @@ def create_app(config_object="config.Config"):
         return render_template("marketing_blog_post.html", item=item, canonical_url=url, schema=schema, year=datetime.utcnow().year)
 
 
+    @app.route("/status")
+    def status_page():
+        database_ok = False
+        try:
+            db.session.execute(sa_text("SELECT 1"))
+            db.session.rollback()
+            database_ok = True
+        except Exception:
+            db.session.rollback()
+            app.logger.exception("Public status database probe failed")
+        return render_template(
+            "marketing_status.html",
+            canonical_url=public_base_url() + "/status",
+            database_ok=database_ok,
+            year=datetime.utcnow().year,
+        )
+
+
     @app.route("/pricing")
     def pricing():
         # Do not invent prices before commercial plans are finalized.
@@ -286,6 +304,7 @@ def create_app(config_object="config.Config"):
             base + "/",
             base + "/blog",
             base + "/pricing",
+            base + "/status",
             *[base + "/use-case/" + x["slug"] for x in use_cases_for_marketing()],
             *[base + "/blog/" + x["slug"] for x in blog_posts_for_marketing()],
         ]
