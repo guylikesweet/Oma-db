@@ -7,7 +7,7 @@ volumetric weight, shipping estimates, and profit are all calculated automatical
 - Python 3.11, Flask 3, Flask-Admin, Flask-Login, Flask-SQLAlchemy, Flask-Migrate, Flask-Limiter
 - Database: Postgres (Neon — free tier, does not expire or delete data on inactivity)
 - Hosting: Render Web Service + Gunicorn
-- Auth: Flask session login for the legacy `/classic` interface plus bearer-token authentication for Flutter Web/Android.
+- Auth: bearer-token authentication for Flutter Web/Android; the former Flask/Jinja staff website is retired.
 
 ## Local setup
 
@@ -31,7 +31,7 @@ flask seed-admin --reset        # explicitly reset the configured admin password
 flask run
 ```
 
-Visit `http://127.0.0.1:5000/` for the private staff entrypoint (it redirects to `/classic`). Open `http://127.0.0.1:5000/webapp/` for the Flutter Web application. The legacy Flask/Jinja staff interface is available under `/classic`.
+Visit `http://127.0.0.1:5000/` for the Flutter Web staff application. The compiled client is also available under `http://127.0.0.1:5000/webapp/`. The former `/classic` Flask/Jinja interface has been retired; old `/classic` bookmarks redirect to the Flutter application.
 
 ## What's built
 
@@ -76,7 +76,7 @@ Firebase Cloud Messaging is used for push delivery. Notification intent is writt
    (safe — already-applied migrations are skipped).
 5. On a new database only, open the Render Shell and run `flask seed-admin` once to create the configured admin.
    Use `flask seed-admin --reset` only when you explicitly want to reset that admin password.
-6. Visit your Render URL. The private staff entrypoint is served from `/` and redirects to `/classic`; the Flutter Web application is available at `/webapp/`. `/healthz` returns `{"status": "ok"}` for uptime monitoring.
+6. Visit your Render URL. The Flutter Web staff application is served from `/`; `/webapp/` remains available as its explicit SPA path. The former `/classic` interface is retired. `/healthz` returns `{"status": "ok"}` for uptime monitoring.
 
 ## Notes
 
@@ -88,7 +88,7 @@ Firebase Cloud Messaging is used for push delivery. Notification intent is writt
 
 ## Cloud Android build (phone/Chromebook friendly)
 
-The repository includes `.github/workflows/build-oma-apk.yml`. It builds the Flutter Android APK/AAB in GitHub Actions, so Android Studio/Flutter do not need to be installed locally. The workflow is manual (`workflow_dispatch`) and performs backend/migration/API compatibility checks before analyzing and building.
+The legacy Flask/Jinja staff website is no longer registered or served. Staff use Flutter Web/Android through the shared `/api/v1/*` backend.\n\nThe repository includes `.github/workflows/build-oma-apk.yml`. It builds the Flutter Android APK/AAB in GitHub Actions, so Android Studio/Flutter do not need to be installed locally. The workflow is manual (`workflow_dispatch`) and performs backend/migration/API compatibility checks before analyzing and building.
 
 ## Update 1.2 scope
 
