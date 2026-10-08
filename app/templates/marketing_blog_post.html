@@ -1,0 +1,14 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{{ item.title }} | OmaSales</title><meta name="description" content="{{ item.description }}"><meta name="robots" content="index,follow">
+<link rel="canonical" href="{{ canonical_url }}"><link rel="icon" href="{{ url_for('static', filename='logo.png') }}">
+<meta property="og:type" content="article"><meta property="og:title" content="{{ item.title }} | OmaSales"><meta property="og:description" content="{{ item.description }}"><meta property="og:url" content="{{ canonical_url }}"><meta property="og:image" content="{{ url_for('static', filename='logo.png', _external=True) }}">
+<script type="application/ld+json">{{ schema|tojson }}</script>
+<style>
+:root{font-family:Inter,system-ui,-apple-system,"Segoe UI",sans-serif;color:#13251f}body{margin:0}.wrap{max-width:800px;margin:auto;padding:0 22px}.nav{height:72px;display:flex;align-items:center;justify-content:space-between}.brand img{width:46px;height:46px;object-fit:contain;display:block}.cta{background:#039664;color:#fff;padding:13px 19px;border-radius:10px;text-decoration:none;font-weight:800}main{padding:60px 0}h1{font-size:clamp(38px,6vw,58px);line-height:1.06;letter-spacing:-.04em}h2{font-size:28px;margin-top:38px}p{font-size:18px;line-height:1.75;color:#53645f}.back{display:inline-block;margin-top:35px;color:#087b55;font-weight:800;text-decoration:none}
+</style></head>
+<body><header class="wrap nav"><a class="brand" href="/" aria-label="OmaSales home"><img src="{{ url_for('static', filename='logo.png') }}" alt="OmaSales" width="46" height="46" loading="eager" decoding="async"></a></header>
+<main class="wrap"><h1>{{ item.title }}</h1><p>{{ item.intro }}</p>{% for heading, body in item.sections %}<section><h2>{{ heading }}</h2><p>{{ body }}</p></section>{% endfor %}<a class="back" href="/blog">← More business guides</a></main>
+</body></html>
