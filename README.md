@@ -31,7 +31,20 @@ flask seed-admin --reset        # explicitly reset the configured admin password
 flask run
 ```
 
-Visit `http://127.0.0.1:5000/` for the Flutter Web staff application. The compiled client is also available under `http://127.0.0.1:5000/webapp/`. The former `/classic` Flask/Jinja interface has been retired; old `/classic` bookmarks redirect to the Flutter application.
+Visit `http://127.0.0.1:5000/` for the public OmaSales marketing site. The compiled Flutter Web staff application is available under `http://127.0.0.1:5000/webapp/`. The former `/classic` Flask/Jinja interface has been retired; old `/classic` bookmarks redirect to the Flutter application.
+
+## OmaSales update 1.2 — marketing, SEO and conversion
+
+The public marketing layer now includes:
+- lightweight Flask-rendered marketing pages with no blocking third-party scripts;
+- a single primary above-the-fold product CTA;
+- programmatic business use-case pages, including pharmacy;
+- an SEO guide funnel at `/blog` with article pages;
+- a transparent `/pricing` page that does not invent commercial prices;
+- a public `/status` page backed by a live database health probe;
+- canonical URLs, robots.txt, sitemap.xml, Open Graph/Twitter metadata and Schema.org structured data.
+
+Real testimonials, live customer activity, final pricing, a sub-45-second product demo, a custom production domain, and historical uptime monitoring still require real business inputs or external service configuration; the marketing code deliberately does not fabricate any of these.
 
 ## What's built
 
