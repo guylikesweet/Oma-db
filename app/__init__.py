@@ -152,6 +152,13 @@ def create_app(config_object="config.Config"):
         return redirect(url_for("webapp.serve_webapp"))
 
 
+    @app.route("/robots.txt")
+    def robots_txt():
+        """Keep the private staff application out of search indexes."""
+        from flask import Response
+        return Response("User-agent: *\\nDisallow: /\\n", mimetype="text/plain")
+
+
     @app.route("/healthz")
     def healthz():
         """Render health probe: report healthy only when the DB is reachable."""
