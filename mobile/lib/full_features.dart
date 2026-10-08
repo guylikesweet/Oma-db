@@ -1025,7 +1025,6 @@ class _WebSalesPageState extends State<WebSalesPage> {
               context,
               MaterialPageRoute(
                 builder: (_) => NewSalePage(
-                  repo: widget.repo,
                   stocked: true,
                 ),
               ),
