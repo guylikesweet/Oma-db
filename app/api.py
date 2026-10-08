@@ -84,6 +84,7 @@ def api_rate_limited(error):
 def api_internal_server_error(error):
     request_id = getattr(g, "request_id", "unknown")
     current_app.logger.exception("Unhandled API exception request_id=%s", request_id)
+    db.session.rollback()
     return jsonify({
         "error": "Internal server error.",
         "message": "The server could not complete this request.",
