@@ -10,6 +10,7 @@ def test_invoice_verification_uses_canonical_public_base_url(monkeypatch):
 
     app = Flask(__name__)
     app.config["SECRET_KEY"] = "test-secret"
+    app.config["OMA_PUBLIC_BASE_URL"] = "https://oma.example"
 
     sale = SimpleNamespace(
         id=42,
