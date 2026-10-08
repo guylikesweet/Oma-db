@@ -136,6 +136,7 @@ class _ChatPageState extends State<ChatPage> {
           .whereType<Map>()
           .map((message) => Map<String, dynamic>.from(message))
           .toList();
+      _hasOlderMessages = serverMessages.length >= 100;
 
       // Polling must never make an optimistic bubble disappear while a
       // request is still in flight (or after a failed send).
