@@ -1751,6 +1751,19 @@ class _ProductsPageState extends State<ProductsPage> {
   String q = '';
 
   @override
+  void initState() {
+    super.initState();
+    // Products are read from the local cache on every platform. Pull the
+    // server snapshot when this tab is first opened so a fresh install does
+    // not remain stuck on an empty local catalogue.
+    widget.repo.syncOnce().then((_) {
+      if (mounted) setState(() {});
+    }).catchError((_) {
+      // Keep the local cache usable while offline; a later refresh retries.
+    });
+  }
+
+  @override
   Widget build(BuildContext context) => Scaffold(
         appBar: AppBar(
           title: const Text('Products'),
