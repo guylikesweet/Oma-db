@@ -31,7 +31,7 @@ flask seed-admin --reset        # explicitly reset the configured admin password
 flask run
 ```
 
-Visit `http://127.0.0.1:5000/` for the Flutter Web application. The legacy Flask/Jinja interface is available under `/classic`.
+Visit `http://127.0.0.1:5000/` for the public OmaSales site. Open `http://127.0.0.1:5000/webapp/` for the Flutter Web application. The legacy Flask/Jinja interface is available under `/classic`.
 
 ## What's built
 
