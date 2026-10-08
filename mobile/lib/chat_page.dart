@@ -1221,6 +1221,7 @@ class _ChatPageState extends State<ChatPage> {
                   ),
                 ),
               if (attachmentBytes != null)
+                Container(
                   width: double.infinity,
                   margin: const EdgeInsets.only(bottom: 7),
                   padding: const EdgeInsets.all(7),
@@ -1815,6 +1816,7 @@ class _ChatPageState extends State<ChatPage> {
             ),
     );
   }
+}
 
 class _ChatAudioBubble extends StatefulWidget {
   const _ChatAudioBubble({required this.api, required this.url, this.localBytes, this.mimetype});
@@ -1930,6 +1932,4 @@ class _ChatAudioBubbleState extends State<_ChatAudioBubble> {
       ),
     );
   }
-}
-
 }
