@@ -61,6 +61,15 @@ def create_app(config_object="config.Config"):
 
     db.init_app(app)
     migrate.init_app(app, db)
+
+    # Render's current production database has previously reported Alembic
+    # revisions as applied while the physical schema was missing columns.
+    # Repair the small set of critical runtime columns before ORM-backed
+    # routes are registered. The guard is idempotent and production-only.
+    if os.environ.get("RENDER") and os.environ.get("DATABASE_URL"):
+        from scripts.repair_runtime_schema import repair as repair_runtime_schema
+
+        repair_runtime_schema()
     login_manager.init_app(app)
     limiter.init_app(app)
     init_csrf(app)
