@@ -163,8 +163,7 @@ def mobile_audit_log():
     if not g.api_user.is_admin:
         return jsonify({"error": "Admin access required."}), 403
 
-    limit = min(max(int(request.args.get("limit", 100)), 1), 500)
-    query = AuditLog.query.order_by(AuditLog.created_at.desc())
+    try:\n        limit = min(max(int(request.args.get("limit", 100)), 1), 500)\n    except (TypeError, ValueError):\n        return jsonify({"error": "Invalid limit. Use an integer from 1 to 500."}), 400\n    query = AuditLog.query.order_by(AuditLog.created_at.desc())
 
     action = (request.args.get("action") or "").strip()
     if action:
