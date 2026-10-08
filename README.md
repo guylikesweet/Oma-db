@@ -76,7 +76,7 @@ Firebase Cloud Messaging is used for push delivery. Notification intent is writt
    (safe — already-applied migrations are skipped).
 5. On a new database only, open the Render Shell and run `flask seed-admin` once to create the configured admin.
    Use `flask seed-admin --reset` only when you explicitly want to reset that admin password.
-6. Visit your Render URL. The Flutter Web application is served from `/`; `/webapp/` is also available for the compiled SPA assets. `/healthz` returns `{"status": "ok"}` for uptime monitoring.
+6. Visit your Render URL. The public OmaSales marketing site is served from `/`; the Flutter Web application is available at `/webapp/`. `/healthz` returns `{"status": "ok"}` for uptime monitoring.
 
 ## Notes
 
