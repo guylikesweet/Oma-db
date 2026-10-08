@@ -19,7 +19,7 @@
   </style>
 </head>
 <body>
-<header class="wrap nav"><a class="brand" href="/" aria-label="OmaSales home"><img src="{{ url_for('static', filename='logo.png') }}" alt="OmaSales" width="46" height="46" loading="eager" decoding="async"></a><a class="cta" href="/webapp/">Open OmaSales</a></header>
+<header class="wrap nav"><a class="brand" href="/" aria-label="OmaSales home"><img src="{{ url_for('static', filename='logo.png') }}" alt="OmaSales" width="46" height="46" loading="eager" decoding="async"></a></header>
 <main class="wrap"><div class="intro"><h1>Business guides for Nigerian retailers and traders</h1><p>Practical answers about sales, inventory, offline workflows and shipping — without pretending every business has the same needs.</p></div>
 <div class="grid">{% for post in posts %}<a class="card" href="/blog/{{ post.slug }}"><h2>{{ post.title }}</h2><p>{{ post.description }}</p><span class="read">Read guide →</span></a>{% endfor %}</div></main>
 </body></html>
