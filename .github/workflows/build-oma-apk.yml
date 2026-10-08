@@ -123,6 +123,9 @@ jobs:
               "/v1/chat/messages",
               "/v1/chat/messages/<int:message_id>",
               "/v1/chat/messages/<int:message_id>/react",
+              "/v1/chat/messages/<int:message_id>/audio-token",
+              "/v1/chat/messages/<int:message_id>/audio",
+              "/v1/products/<int:product_id>/image",
           ]
 
           missing = [
@@ -281,10 +284,16 @@ jobs:
           # --------------------------------------------------------
           # Flutter package checks
           # --------------------------------------------------------
-          if "local_auth: ^2.3.0" not in pubspec:
-              raise SystemExit(
-                  "Biometric dependency local_auth ^2.3.0 is missing."
-              )
+          for dependency in (
+              "local_auth: ^2.3.0",
+              "image_picker: ^1.1.2",
+              "record: ^5.2.1",
+              "just_audio: ^0.9.46",
+          ):
+              if dependency not in pubspec:
+                  raise SystemExit(
+                      f"Required Flutter dependency missing: {dependency}"
+                  )
 
           if "name: oma_mobile" not in pubspec:
               raise SystemExit(
@@ -302,7 +311,13 @@ jobs:
                   "Unexpected Dart SDK constraint."
               )
 
-          print("Flutter package configuration: OK")
+          if "image_data" not in models or "image_mimetype" not in models:
+              raise SystemExit("Product photo model fields are missing.")
+
+          if "audio_data" not in api or "audio_mimetype" not in api:
+              raise SystemExit("Team chat audio API support is missing.")
+
+          print("Flutter package and media configuration: OK")
 
           print("")
           print("Backend/mobile compatibility preflight: PASSED")

@@ -43,7 +43,7 @@ def create_app(config_object="config.Config"):
         response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
         response.headers.setdefault(
             "Permissions-Policy",
-            "camera=(), microphone=(), geolocation=()",
+            "camera=(), microphone=(self), geolocation=()",
         )
 
         # Public/static assets may be cached, but never apply this policy to
