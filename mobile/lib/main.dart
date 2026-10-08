@@ -3675,182 +3675,311 @@ class MorePage extends StatelessWidget {
   final Future<void> Function({bool silent}) onSync;
   final int refreshKey;
 
-  @override
-  Widget build(BuildContext context) => Scaffold(
-        appBar: AppBar(
-          title: const Text('More'),
-        ),
-        body: ListView(
-          padding: const EdgeInsets.all(16),
-          children: [
-            Card(
-              child: ListTile(
-                leading: const Icon(Icons.palette_outlined),
-                title: const Text('Appearance'),
-                subtitle: const Text(
-                  'System, sunset to sunrise, light or dark',
-                ),
-                trailing: const Icon(Icons.chevron_right),
-                onTap: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => const ThemeSettingsPage(),
-                  ),
-                ),
-              ),
-            ),
-            Card(
-              child: ListTile(
-                leading: const Icon(Icons.apps),
-                title: const Text('More features'),
-                subtitle: const Text(
-                  'Batches, deliveries, rates, reports, settings, users, clear test data',
-                ),
-                trailing:
-                    const Icon(Icons.chevron_right),
-                onTap: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => WebsiteFeaturesPage(
-                      api: api,
-                      local: local,
-                      repo: repo,
-                      refreshKey: refreshKey,
-                    ),
-                  ),
-                ),
-              ),
-            ),
-            // The offline sync queue only exists on the mobile build now —
-            // the web build creates sales directly online, so there's
-            // nothing here to show.
-            if (!kIsWeb)
-            Card(
-              child: ListTile(
-                leading:
-                    const Icon(Icons.cloud_sync),
-                title: const Text('Sync queue'),
-                subtitle: const Text(
-                  'Pending, failed and retrying operations',
-                ),
-                trailing:
-                    const Icon(Icons.chevron_right),
-                onTap: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => SyncQueuePage(
-                      repo: repo,
-                      local: local,
-                    ),
-                  ),
-                ),
-              ),
-            ),
-            Card(
-              child: ListTile(
-                leading: const Icon(Icons.account_circle_outlined),
-                title: const Text('My profile'),
-                subtitle: const Text('Username, profile photo and password'),
-                trailing: const Icon(Icons.chevron_right),
-                onTap: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => ProfilePage(api: api),
-                  ),
-                ),
-              ),
-            ),
-            if (!kIsWeb)
-            Card(
-              child: ListTile(
-                leading: const Icon(Icons.sync),
-                title: const Text('Sync now'),
-                onTap: () => onSync(silent: false),
-              ),
-            ),
-            if (!kIsWeb)
-            Card(
-              child: ListTile(
-                leading: const Icon(Icons.notifications_active_outlined),
-                title: const Text('Test push notifications'),
-                subtitle: const Text(
-                  'Send a test notification to this device',
-                ),
-                trailing: const Icon(Icons.chevron_right),
-                onTap: () async {
-                  final messenger = ScaffoldMessenger.of(context);
-                  try {
-                    final result = await api.testPushNotification();
-                    final sent = result['sent'] ?? 0;
-                    final errors = (result['errors'] as List?)
-                            ?.map((x) => '$x')
-                            .where((x) => x.isNotEmpty)
-                            .toList() ??
-                        const <String>[];
-                    if (sent > 0) {
-                      messenger.showSnackBar(
-                        const SnackBar(
-                          content: Text(
-                            'Push test sent. Check this device for the notification.',
-                          ),
-                        ),
-                      );
-                    } else {
-                      messenger.showSnackBar(
-                        SnackBar(
-                          content: Text(
-                            errors.isNotEmpty
-                                ? errors.first
-                                : 'Push test was not delivered.',
-                          ),
-                        ),
-                      );
-                    }
-                  } catch (e) {
-                    messenger.showSnackBar(
-                      SnackBar(content: Text('Push test failed: ${userFacingError(e)}')),
-                    );
-                  }
-                },
-              ),
-            ),
-            const SizedBox(height: 16),
-            OutlinedButton.icon(
-              onPressed: () async {
-                // Ask first, so a stray tap on this button can't sign
-                // the user out.
-                final sure = await showDialog<bool>(
-                  context: context,
-                  builder: (dialogContext) => AlertDialog(
-                    title: const Text('Log out?'),
-                    content: const Text(
-                      'Are you sure you want to log out?',
-                    ),
-                    actions: [
-                      TextButton(
-                        onPressed: () =>
-                            Navigator.pop(dialogContext, false),
-                        child: const Text('Cancel'),
-                      ),
-                      FilledButton(
-                        onPressed: () =>
-                            Navigator.pop(dialogContext, true),
-                        child: const Text('Log out'),
-                      ),
-                    ],
-                  ),
-                );
+  Future<void> _open(BuildContext context, Widget page) async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => page),
+    );
+  }
 
-                if (sure == true) {
-                  await onLogout();
-                }
-              },
-              icon: const Icon(Icons.logout),
-              label: const Text('Log out'),
-            ),
-          ],
+  Widget _section(BuildContext context, String title, List<Widget> children) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(4, 12, 4, 8),
+          child: Text(
+            title,
+            style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                  fontWeight: FontWeight.w800,
+                  color: Theme.of(context).colorScheme.primary,
+                ),
+          ),
+        ),
+        Card(
+          clipBehavior: Clip.antiAlias,
+          child: Column(children: children),
+        ),
+      ],
+    );
+  }
+
+  Widget _item(
+    BuildContext context, {
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    required VoidCallback onTap,
+    bool locked = false,
+    bool divider = true,
+  }) {
+    return ListTile(
+      dense: true,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 3),
+      leading: Icon(icon),
+      title: Text(title),
+      subtitle: Text(subtitle, maxLines: 1, overflow: TextOverflow.ellipsis),
+      trailing: Icon(locked ? Icons.lock_outline : Icons.chevron_right),
+      onTap: onTap,
+    );
+  }
+
+  Future<void> _testPush(BuildContext context) async {
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      final result = await api.testPushNotification();
+      final sent = result['sent'] ?? 0;
+      final errors = (result['errors'] as List?)
+              ?.map((x) => '$x')
+              .where((x) => x.isNotEmpty)
+              .toList() ??
+          const <String>[];
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            sent > 0
+                ? 'Push test sent. Check this device for the notification.'
+                : (errors.isNotEmpty
+                    ? errors.first
+                    : 'Push test was not delivered.'),
+          ),
         ),
       );
+    } catch (e) {
+      messenger.showSnackBar(
+        SnackBar(content: Text('Push test failed: ${userFacingError(e)}')),
+      );
+    }
+  }
+
+  Future<void> _logout(BuildContext context) async {
+    final sure = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Log out?'),
+        content: const Text('Are you sure you want to log out?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Log out'),
+          ),
+        ],
+      ),
+    );
+    if (sure == true) await onLogout();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isAdmin = AppSession.isAdmin;
+
+    return Scaffold(
+      appBar: AppBar(title: const Text('More')),
+      body: ListView(
+        padding: const EdgeInsets.fromLTRB(12, 4, 12, 24),
+        children: [
+          _section(context, 'Team', [
+            _item(
+              context,
+              icon: Icons.forum_outlined,
+              title: 'Team chat',
+              subtitle: 'Chat, @mentions, replies, reactions and voice messages',
+              onTap: () => _open(context, ChatPage(api: api)),
+            ),
+            _item(
+              context,
+              icon: Icons.account_circle_outlined,
+              title: 'My profile',
+              subtitle: 'Username, profile photo and password',
+              onTap: () => _open(context, ProfilePage(api: api)),
+              divider: false,
+            ),
+          ]),
+          _section(context, 'Logistics', [
+            _item(
+              context,
+              icon: Icons.timeline,
+              title: 'Order journey',
+              subtitle: 'Move orders through fulfilment and consolidation',
+              onTap: () => _open(context, JourneyPage(api: api)),
+            ),
+            _item(
+              context,
+              icon: Icons.inventory,
+              title: 'Shipment batches',
+              subtitle: 'Create, manage and mark batches arrived',
+              onTap: () => _open(
+                context,
+                BatchesPage(api: api, repo: repo, isAdmin: isAdmin),
+              ),
+            ),
+            _item(
+              context,
+              icon: Icons.delivery_dining,
+              title: 'Deliveries',
+              subtitle: 'Ready sales, consolidation, status and labels',
+              onTap: () => _open(context, DeliveriesPage(api: api, repo: repo)),
+            ),
+            _item(
+              context,
+              icon: Icons.price_change,
+              title: 'Rates',
+              subtitle: 'Courier and monthly shipping rates',
+              onTap: () => _open(context, RatesPage(api: api, isAdmin: isAdmin)),
+              divider: false,
+            ),
+          ]),
+          _section(context, 'Insights', [
+            _item(
+              context,
+              icon: Icons.bar_chart,
+              title: 'Reports',
+              subtitle: 'Sales, shipping and inventory reports',
+              onTap: () => _open(context, ReportsPage(api: api)),
+            ),
+            _item(
+              context,
+              icon: Icons.inventory_2_outlined,
+              title: 'Stock history',
+              subtitle: 'Inventory movement and adjustment history',
+              onTap: () => _open(
+                context,
+                ReportPage(
+                  title: 'Inventory Report',
+                  type: 'inventory',
+                  load: api.inventoryReport,
+                ),
+              ),
+            ),
+            _item(
+              context,
+              icon: Icons.apps,
+              title: 'All features',
+              subtitle: 'Full website feature directory',
+              onTap: () => _open(
+                context,
+                WebsiteFeaturesPage(
+                  api: api,
+                  local: local,
+                  repo: repo,
+                  refreshKey: refreshKey,
+                ),
+              ),
+              divider: false,
+            ),
+          ]),
+          _section(context, 'System', [
+            _item(
+              context,
+              icon: Icons.palette_outlined,
+              title: 'Appearance',
+              subtitle: 'System, sunset to sunrise, light or dark',
+              onTap: () => _open(context, const ThemeSettingsPage()),
+            ),
+            if (!kIsWeb)
+              _item(
+                context,
+                icon: Icons.cloud_sync,
+                title: 'Sync queue',
+                subtitle: 'Pending, failed and retrying offline operations',
+                onTap: () => _open(
+                  context,
+                  SyncQueuePage(repo: repo, local: local),
+                ),
+              ),
+            if (!kIsWeb)
+              _item(
+                context,
+                icon: Icons.sync,
+                title: 'Sync now',
+                subtitle: 'Synchronize this device with the server',
+                onTap: () => onSync(silent: false),
+              ),
+            if (!kIsWeb)
+              _item(
+                context,
+                icon: Icons.notifications_active_outlined,
+                title: 'Test push notifications',
+                subtitle: 'Send a test notification to this device',
+                onTap: () => _testPush(context),
+                divider: false,
+              )
+            else
+              _item(
+                context,
+                icon: Icons.settings_outlined,
+                title: 'Settings',
+                subtitle: isAdmin ? 'Business and label settings' : 'Admins only',
+                locked: !isAdmin,
+                onTap: isAdmin
+                    ? () => _open(context, SettingsPage(api: api))
+                    : () => ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('That page is restricted to admins.')),
+                        ),
+                divider: false,
+              ),
+          ]),
+          _section(context, 'Administration', [
+            _item(
+              context,
+              icon: Icons.settings_outlined,
+              title: 'Business settings',
+              subtitle: isAdmin ? 'Business and label settings' : 'Admins only',
+              locked: !isAdmin,
+              onTap: isAdmin
+                  ? () => _open(context, SettingsPage(api: api))
+                  : () => ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('That page is restricted to admins.')),
+                  ),
+            ),
+            _item(
+              context,
+              icon: Icons.people_outline,
+              title: 'Users',
+              subtitle: isAdmin ? 'Manage staff accounts' : 'Admins only',
+              locked: !isAdmin,
+              onTap: isAdmin
+                  ? () => _open(context, UsersPage(api: api))
+                  : () => ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('That page is restricted to admins.')),
+                  ),
+            ),
+            if (isAdmin)
+              _item(
+                context,
+                icon: Icons.history,
+                title: 'Audit log',
+                subtitle: 'Who changed what across the system',
+                onTap: () => _open(context, AuditLogPage(api: api)),
+              ),
+            _item(
+              context,
+              icon: Icons.delete_sweep,
+              title: 'Clear test data',
+              subtitle: isAdmin ? 'Confirmation and biometric verification required' : 'Admins only',
+              locked: !isAdmin,
+              onTap: isAdmin
+                  ? () => _open(context, ClearDataPage(api: api, local: local))
+                  : () => ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('That page is restricted to admins.')),
+                  ),
+              divider: false,
+            ),
+          ]),
+          const SizedBox(height: 20),
+          OutlinedButton.icon(
+            onPressed: () => _logout(context),
+            icon: const Icon(Icons.logout),
+            label: const Text('Log out'),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class ChangePasswordDialog extends StatefulWidget {
