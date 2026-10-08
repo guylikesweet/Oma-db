@@ -1036,7 +1036,7 @@ class _WebSalesPageState extends State<WebSalesPage> {
             onPressed: () => Navigator.push(
               context,
               MaterialPageRoute(
-                builder: (_) => NewSalePage(repo: widget.repo),
+                builder: (_) => const NewSalePage(),
               ),
             ).then((_) => load()),
             icon: const Icon(Icons.add_shopping_cart),
