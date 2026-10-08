@@ -472,6 +472,13 @@ def marketing_schema(*, page_name, description, url, faq=None, breadcrumb=None):
             "description": description,
             "url": url,
         },
+        {
+            "@type": "Product",
+            "name": "OmaSales",
+            "description": "Sales, inventory, shipping and delivery management software for businesses in Nigeria.",
+            "brand": {"@type": "Brand", "name": "OmaSales"},
+            "category": "Business management software",
+        },
     ]
     if faq:
         graph.append({"@type": "FAQPage", "mainEntity": faq})
