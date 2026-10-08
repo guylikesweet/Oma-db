@@ -7,7 +7,7 @@ from flask_cors import CORS
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 from app.csrf import init_csrf
-from datetime import datetime, timedelta
+from datetime import timedelta
 from sqlalchemy import text as sa_text
 from werkzeug.exceptions import HTTPException
 import os
@@ -146,134 +146,10 @@ def create_app(config_object="config.Config"):
         current_app.logger.exception("Unhandled browser exception request_id=%s", getattr(g, "request_id", "unknown"))
         return make_response("Internal Server Error", 500)
 
-    def public_base_url():
-        """Return the configured canonical public origin for SEO URLs."""
-        configured = app.config.get("OMA_PUBLIC_BASE_URL", "")
-        if configured:
-            return configured
-        return request.url_root.rstrip("/")
-
     @app.route("/")
     def root():
-        use_cases = use_cases_for_marketing()
-        faq = [
-            {"@type": "Question", "name": "Does OmaSales work when the internet is unavailable?", "acceptedAnswer": {"@type": "Answer", "text": "The mobile application is designed around local data and an offline write queue, then synchronizes changes when connectivity returns."}},
-            {"@type": "Question", "name": "Can OmaSales manage shipping?", "acceptedAnswer": {"@type": "Answer", "text": "OmaSales supports shipment batches, sea and air shipping workflows, shipping rates, delivery preparation and customer shipping settlement."}},
-            {"@type": "Question", "name": "Can I use OmaSales on Android and the web?", "acceptedAnswer": {"@type": "Answer", "text": "Yes. OmaSales includes Flutter Android and Flutter Web clients backed by the same Flask API."}},
-        ]
-        schema = marketing_schema(
-            page_name="OmaSales — Inventory, Sales & Shipping Management for Nigerian Businesses",
-            description="OmaSales helps Nigerian businesses manage sales, stock, shipping, deliveries and profit from one fast app, with offline support.",
-            url=public_base_url() + "/",
-            faq=faq,
-        )
-        return render_template(
-            "marketing_home.html",
-            use_cases=use_cases,
-            year=datetime.utcnow().year,
-            canonical_url=public_base_url() + "/",
-            og_image=public_base_url() + url_for("static", filename="logo.png"),
-            schema=schema,
-        )
-
-
-    @app.route("/use-case/<slug>")
-    def use_case(slug):
-        item = next((x for x in use_cases_for_marketing() if x["slug"] == slug), None)
-        if item is None:
-            from flask import abort
-            abort(404)
-        schema = marketing_schema(
-            page_name=item["seo_title"] + " | OmaSales",
-            description=item["description"],
-            url=public_base_url() + request.path,
-            breadcrumb=[
-                {"@type": "ListItem", "position": 1, "name": "OmaSales", "item": public_base_url() + "/"},
-                {"@type": "ListItem", "position": 2, "name": item["name"], "item": public_base_url() + request.path},
-            ],
-        )
-        return render_template(
-            "marketing_use_case.html",
-            item=item,
-            canonical_url=public_base_url() + request.path,
-            og_image=url_for("static", filename="logo.png", _external=True),
-            schema=schema,
-        )
-
-
-    @app.route("/blog")
-    def marketing_blog():
-        posts = blog_posts_for_marketing()
-        return render_template("marketing_blog.html", posts=posts, canonical_url=public_base_url() + "/blog", year=datetime.utcnow().year)
-
-
-    @app.route("/blog/<slug>")
-    def marketing_blog_post(slug):
-        item = next((x for x in blog_posts_for_marketing() if x["slug"] == slug), None)
-        if item is None:
-            from flask import abort
-            abort(404)
-        url = public_base_url() + request.path
-        schema = {
-            "@context": "https://schema.org",
-            "@type": "Article",
-            "headline": item["title"],
-            "description": item["description"],
-            "url": url,
-            "mainEntityOfPage": {"@type": "WebPage", "@id": url},
-            "author": {"@type": "Organization", "name": "OmaSales"},
-            "publisher": {"@type": "Organization", "name": "OmaSales", "url": public_base_url()},
-        }
-        return render_template("marketing_blog_post.html", item=item, canonical_url=url, schema=schema, year=datetime.utcnow().year)
-
-
-    @app.route("/status")
-    def status_page():
-        database_ok = False
-        try:
-            db.session.execute(sa_text("SELECT 1"))
-            db.session.rollback()
-            database_ok = True
-        except Exception:
-            db.session.rollback()
-            app.logger.exception("Public status database probe failed")
-        return render_template(
-            "marketing_status.html",
-            canonical_url=public_base_url() + "/status",
-            database_ok=database_ok,
-            year=datetime.utcnow().year,
-        )
-
-
-    @app.route("/pricing")
-    def pricing():
-        # Do not invent prices before commercial plans are finalized.
-        return render_template("marketing_pricing.html", canonical_url=public_base_url() + "/pricing", year=datetime.utcnow().year)
-
-
-    @app.route("/robots.txt")
-    def robots_txt():
-        from flask import Response
-        base = public_base_url()
-        body = f"User-agent: *\\nAllow: /\\nAllow: /use-case/\\nAllow: /blog\\nAllow: /blog/\\nAllow: /pricing\\nDisallow: /api/\\nDisallow: /classic/\\nDisallow: /webapp/\\nSitemap: {base}/sitemap.xml\\n"
-        return Response(body.replace("\\n", "\n"), mimetype="text/plain")
-
-
-    @app.route("/sitemap.xml")
-    def sitemap_xml():
-        from flask import Response
-        from xml.sax.saxutils import escape
-        base = public_base_url()
-        urls = [
-            base + "/",
-            base + "/blog",
-            base + "/pricing",
-            base + "/status",
-            *[base + "/use-case/" + x["slug"] for x in use_cases_for_marketing()],
-            *[base + "/blog/" + x["slug"] for x in blog_posts_for_marketing()],
-        ]
-        xml = '<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">' + "".join(f"<url><loc>{escape(u)}</loc></url>" for u in urls) + "</urlset>"
-        return Response(xml, mimetype="application/xml")
+        """Send staff to the supported Flutter Web application."""
+        return redirect(url_for("webapp.index"))
 
 
     @app.route("/healthz")
