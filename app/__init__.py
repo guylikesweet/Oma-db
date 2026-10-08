@@ -38,6 +38,24 @@ def create_app(config_object="config.Config"):
     @app.after_request
     def expose_request_id(response):
         response.headers["X-Request-ID"] = getattr(g, "request_id", "")
+        response.headers.setdefault("X-Content-Type-Options", "nosniff")
+        response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+        response.headers.setdefault(
+            "Permissions-Policy",
+            "camera=(), microphone=(), geolocation=()",
+        )
+
+        # Public/static assets may be cached, but never apply this policy to
+        # API responses or the Flutter SPA entrypoint.
+        if (
+            request.path.startswith("/static/")
+            or request.path.startswith("/webapp/")
+        ):
+            lower_path = request.path.lower()
+            if not lower_path.endswith("/") and not lower_path.endswith("index.html"):
+                response.headers.setdefault(
+                    "Cache-Control", "public, max-age=86400"
+                )
         return response
 
     db.init_app(app)
