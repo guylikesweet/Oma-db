@@ -152,6 +152,12 @@ def create_app(config_object="config.Config"):
         return redirect(url_for("webapp.serve_webapp"))
 
 
+    @app.route("/classic")
+    def retired_classic():
+        """Keep old bookmarks useful without reviving the retired UI."""
+        return redirect(url_for("webapp.serve_webapp"), code=301)
+
+
     @app.route("/robots.txt")
     def robots_txt():
         """Keep the private staff application out of search indexes."""
