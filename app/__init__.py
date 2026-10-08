@@ -156,7 +156,7 @@ def create_app(config_object="config.Config"):
     def robots_txt():
         """Keep the private staff application out of search indexes."""
         from flask import Response
-        return Response("User-agent: *\\nDisallow: /\\n", mimetype="text/plain")
+        return Response("User-agent: *\nDisallow: /\n", mimetype="text/plain")
 
 
     @app.route("/healthz")
