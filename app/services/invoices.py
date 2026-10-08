@@ -173,6 +173,25 @@ def _small_logo_bytes():
     return result
 
 
+def _small_product_image(product):
+    """Return a compact PNG for an invoice, or None when the product has no photo."""
+    raw = getattr(product, "image_data", None)
+    if not raw:
+        return None
+    try:
+        from PIL import Image as PILImage
+
+        img = PILImage.open(io.BytesIO(raw))
+        img.thumbnail((320, 320))
+        if img.mode not in ("RGB", "RGBA"):
+            img = img.convert("RGBA")
+        buf = io.BytesIO()
+        img.save(buf, format="PNG", optimize=True)
+        return buf.getvalue()
+    except Exception:
+        return None
+
+
 def generate_invoice_pdf(sale):
     """Returns a BytesIO buffer containing a one-page (or more, if there are
     many line items) A4 PDF invoice/receipt for this sale."""
@@ -290,9 +309,27 @@ def generate_invoice_pdf(sale):
     story.append(Spacer(1, 8 * mm))
 
     # ---- Line items ----
-    item_rows = [["Product", "Variant", "Qty", "Unit Price", "Line Total"]]
-    for li in ctx["line_items"]:
+    item_rows = [[
+        "Photo", "Product", "Variant", "Qty", "Unit Price", "Line Total",
+    ]]
+    for item, li in zip(sale.items, ctx["line_items"]):
+        photo_cell = ""
+        photo_bytes = _small_product_image(item.product) if item.product else None
+        if photo_bytes:
+            try:
+                reader = ImageReader(io.BytesIO(photo_bytes))
+                iw, ih = reader.getSize()
+                max_w, max_h = 14 * mm, 14 * mm
+                scale = min(max_w / iw, max_h / ih)
+                photo_cell = Image(
+                    io.BytesIO(photo_bytes),
+                    width=iw * scale,
+                    height=ih * scale,
+                )
+            except Exception:
+                photo_cell = ""
         item_rows.append([
+            photo_cell,
             Paragraph(_safe(li["product_name"]), normal_style),
             Paragraph(_safe(li["variant_note"]) if li["variant_note"] else "—", normal_style),
             str(li["qty"]),
@@ -302,15 +339,16 @@ def generate_invoice_pdf(sale):
 
     items_table = Table(
         item_rows,
-        colWidths=[65 * mm, 35 * mm, 15 * mm, 25 * mm, 27 * mm],
+        colWidths=[18 * mm, 47 * mm, 30 * mm, 14 * mm, 25 * mm, 33 * mm],
         repeatRows=1,
     )
     items_table.setStyle(TableStyle([
         ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#FFF1EB")),
         ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
         ("FONTSIZE", (0, 0), (-1, -1), 9),
-        ("ALIGN", (2, 0), (-1, -1), "RIGHT"),
-        ("ALIGN", (2, 0), (2, 0), "CENTER"),
+        ("ALIGN", (3, 0), (-1, -1), "RIGHT"),
+        ("ALIGN", (3, 0), (3, 0), "CENTER"),
+        ("ALIGN", (0, 0), (0, -1), "CENTER"),
         ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#cccccc")),
         ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
         ("TOPPADDING", (0, 0), (-1, -1), 4),
