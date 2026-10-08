@@ -1334,8 +1334,8 @@ class _OmaBottomNavigation extends StatelessWidget {
                           ),
                           child: Image.asset(
                             'assets/images/app_icon.png',
-                            width: 40,
-                            height: 40,
+                            width: 30,
+                            height: 30,
                             fit: BoxFit.contain,
                           ),
                         ),
