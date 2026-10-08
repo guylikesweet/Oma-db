@@ -1241,8 +1241,14 @@ class ApiClient {
     );
   }
 
-  Future<String> chatAudioUrl(String url) {
-    return Future.value(Uri.parse(AppConfig.apiBaseUrl).resolve(url).toString());
+  Future<String> chatAudioPlaybackUrl(int messageId) async {
+    final response = await _map(
+      'GET',
+      '/v1/chat/messages/$messageId/audio-token',
+    );
+    return Uri.parse(AppConfig.apiBaseUrl).resolve(
+      response['url']?.toString() ?? '',
+    ).toString();
   }
 
   Future<Uint8List> downloadChatAudio(String url) async {
