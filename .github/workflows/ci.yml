@@ -38,6 +38,7 @@ jobs:
       DATABASE_URL: sqlite:////tmp/oma-ci.db
       ADMIN_USERNAME: oma-ci-admin
       ADMIN_PASSWORD: oma-ci-password
+      OMA_PUBLIC_BASE_URL: https://oma-ci.example
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
