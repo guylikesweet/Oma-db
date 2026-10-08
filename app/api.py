@@ -23,6 +23,7 @@ from flask import Blueprint, request, jsonify, g, current_app
 from werkzeug.security import check_password_hash, generate_password_hash
 from werkzeug.utils import secure_filename
 from werkzeug.exceptions import RequestEntityTooLarge
+from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
 from sqlalchemy import inspect as sa_inspect, text as sa_text, or_
 from sqlalchemy.orm import joinedload, selectinload
 
@@ -2589,11 +2590,55 @@ def mobile_react_chat_message(message_id):
     return jsonify(_chat_message_json(message))
 
 
-@api_bp.route("/v1/chat/messages/<int:message_id>/audio", methods=("GET",))
+@api_bp.route("/v1/chat/messages/<int:message_id>/audio-token", methods=("GET",))
 @require_api_token
-def mobile_chat_audio(message_id):
+def mobile_chat_audio_token(message_id):
     message = ChatMessage.query.get_or_404(message_id)
     if g.api_user.created_at and message.created_at < g.api_user.created_at:
+        return jsonify({"error": "This message predates your account."}), 403
+    if not message.audio_data:
+        return jsonify({"error": "This voice recording has expired or no longer exists."}), 404
+    serializer = URLSafeTimedSerializer(
+        current_app.secret_key,
+        salt="oma-chat-audio",
+    )
+    media_token = serializer.dumps({
+        "user_id": g.api_user.id,
+        "message_id": message.id,
+    })
+    return jsonify({
+        "url": f"/api/v1/chat/messages/{message.id}/audio?media_token={media_token}",
+        "expires_in": 300,
+    })
+
+
+@api_bp.route("/v1/chat/messages/<int:message_id>/audio", methods=("GET",))
+def mobile_chat_audio(message_id):
+    message = ChatMessage.query.get_or_404(message_id)
+    user = getattr(g, "api_user", None)
+
+    if user is None:
+        token = (request.args.get("media_token") or "").strip()
+        if not token:
+            return jsonify({"error": "Authentication required."}), 401
+        try:
+            serializer = URLSafeTimedSerializer(
+                current_app.secret_key,
+                salt="oma-chat-audio",
+            )
+            payload = serializer.loads(token, max_age=300)
+        except (BadSignature, SignatureExpired):
+            return jsonify({"error": "This audio link has expired."}), 401
+        if (
+            not isinstance(payload, dict)
+            or int(payload.get("message_id") or 0) != message.id
+        ):
+            return jsonify({"error": "This audio link is invalid."}), 401
+        user = User.query.get(int(payload.get("user_id") or 0))
+        if user is None or not user.is_active:
+            return jsonify({"error": "This audio link is no longer valid."}), 401
+
+    if user.created_at and message.created_at < user.created_at:
         return jsonify({"error": "This message predates your account."}), 403
     if not message.audio_data:
         return jsonify({"error": "This voice recording has expired or no longer exists."}), 404
