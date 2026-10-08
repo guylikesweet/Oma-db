@@ -1,8 +1,8 @@
-from flask import Flask, redirect, url_for, render_template, session, request, flash, g, jsonify, make_response, current_app
+from flask import Flask, redirect, url_for, request, g, jsonify, make_response, current_app
 import click
 from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
-from flask_login import LoginManager, login_required
+from flask_login import LoginManager
 from flask_cors import CORS
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
@@ -65,34 +65,6 @@ def create_app(config_object="config.Config"):
     limiter.init_app(app)
     init_csrf(app)
     login_manager.login_view = "auth.login"
-    @app.before_request
-    def enforce_classic_inactivity_timeout():
-        # Flask-Login sessions are separate from the mobile bearer-token API.
-        # Refresh the activity timestamp on every authenticated browser request.
-        if not request.path.startswith("/api/"):
-            from flask_login import current_user, logout_user
-            if current_user.is_authenticated:
-                now = time.time()
-                last = session.get("last_activity")
-                if last is not None and now - float(last) >= 30 * 60:
-                    user = current_user
-                    from app.services.audit import record_audit
-                    record_audit(
-                        "logout.timeout",
-                        target_type="user",
-                        target_id=user.id,
-                        details={"source": "classic", "timeout_minutes": 30},
-                        user=user,
-                    )
-                    db.session.commit()
-                    logout_user()
-                    session.clear()
-                    flash("You were logged out after 30 minutes of inactivity.", "error")
-                    return redirect(url_for("auth.login", next=request.url))
-                session["last_activity"] = now
-                session.permanent = True
-
-
     # /api/* is called from the mobile app (no browser, no CORS involved)
     # and now also from the Flutter Web build — browsers enforce CORS on
     # any cross-origin fetch, so without this every request from the web
@@ -119,41 +91,19 @@ def create_app(config_object="config.Config"):
     with app.app_context():
         from app import models  # noqa: F401  (register models for migrations)
 
-        from app.auth import auth_bp
-        app.register_blueprint(auth_bp)
-
-        from app.sales import sales_bp
-        app.register_blueprint(sales_bp)
-
-        from app.batches import batches_bp
-        app.register_blueprint(batches_bp)
-
-        from app.delivery import delivery_bp
-        app.register_blueprint(delivery_bp)
-
-        from app.data_tools import data_tools_bp
-        app.register_blueprint(data_tools_bp)
-
-        from app.reports import reports_bp
-        app.register_blueprint(reports_bp)
-
+        # The Flutter Web/Android clients are now the only supported staff UI.
+        # The former Flask/Jinja "classic" website and Flask-Admin surface are
+        # intentionally no longer registered. Their modules remain in the
+        # repository temporarily so this retirement is reversible without
+        # touching the API/data layer.
         from app.api import api_bp
         app.register_blueprint(api_bp)
-
-        from app.classic_chat import classic_chat_bp
-        app.register_blueprint(classic_chat_bp)
-
-        from app.settings import settings_bp
-        app.register_blueprint(settings_bp)
 
         from app.webapp import webapp_bp
         app.register_blueprint(webapp_bp)
 
         from app.verify import verify_bp
         app.register_blueprint(verify_bp)
-
-        from app.admin_views import init_admin
-        init_admin(app)
 
         register_cli(app)
 
@@ -198,13 +148,12 @@ def create_app(config_object="config.Config"):
 
     @app.route("/")
     def root():
-        """Internal staff entrypoint.
+        """Serve the current Flutter Web staff application.
 
-        Oma is currently a private business operations system. The public
-        storefront is a future phase, so the root URL must not expose a SaaS
-        marketing surface or imply that Oma is a multi-business service.
+        The former Flask/Jinja classic website has been retired. The root
+        entrypoint now takes staff directly to the supported Flutter Web UI.
         """
-        return redirect(url_for("classic_home"))
+        return redirect(url_for("webapp.serve_webapp"))
 
     @app.route("/robots.txt")
     def robots_txt():
@@ -215,10 +164,9 @@ def create_app(config_object="config.Config"):
 
 
     @app.route("/classic")
-    @login_required
-    def classic_home():
-        from app.services.dashboard import get_kpis
-        return render_template("home.html", kpis=get_kpis())
+    def retired_classic():
+        """Keep old bookmarks useful without reviving the retired UI."""
+        return redirect(url_for("webapp.serve_webapp"), code=301)
 
     @app.route("/healthz")
     def healthz():
