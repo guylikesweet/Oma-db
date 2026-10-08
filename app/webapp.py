@@ -20,6 +20,15 @@ webapp_bp = Blueprint("webapp", __name__)
 WEBAPP_DIR = os.path.join(os.path.dirname(__file__), "static", "webapp")
 
 
+@webapp_bp.route("/firebase-messaging-sw.js")
+def serve_firebase_messaging_worker():
+    # Firebase Web Messaging looks for this exact origin-root filename when
+    # no custom ServiceWorkerRegistration is supplied by the Flutter plugin.
+    response = send_from_directory(WEBAPP_DIR, "firebase-messaging-sw.js")
+    response.headers["Cache-Control"] = "no-cache"
+    return response
+
+
 @webapp_bp.route("/webapp/")
 @webapp_bp.route("/webapp/<path:subpath>")
 def serve_webapp(subpath=""):
