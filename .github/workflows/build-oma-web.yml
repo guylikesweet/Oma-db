@@ -229,20 +229,6 @@ jobs:
           path: mobile/build/web
 
       # ------------------------------------------------------------
-      # 7. UPLOAD FOR GITHUB PAGES
-      #
-      # This is a TESTING convenience only — a stable, phone-friendly
-      # URL to click through the build on, since a downloaded zip can't
-      # be served locally from a phone. This is not the production
-      # hosting decision (step 10 in our plan); that may end up being
-      # this, Render, or somewhere else entirely.
-      # ------------------------------------------------------------
-      - name: Upload Pages artifact
-        uses: actions/upload-pages-artifact@v5
-        with:
-          path: mobile/build/web
-
-      # ------------------------------------------------------------
       # 8. COMMIT COMPILED WEB APP BACK INTO THE REPO
       #
       # Render auto-deploys on every push to this repo, but its build
@@ -302,22 +288,3 @@ jobs:
               sleep 2
             done
           fi
-
-  deploy-preview:
-    needs: build
-    runs-on: ubuntu-24.04
-    # The GitHub Pages copy is only a convenience preview. If Pages isn't
-    # enabled for the repo (Settings > Pages > Source: GitHub Actions) this
-    # job 404s - that must not mark the real build (which commits the web
-    # app that Render serves) as failed.
-    continue-on-error: true
-    permissions:
-      pages: write
-      id-token: write
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v5
