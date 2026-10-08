@@ -1200,7 +1200,10 @@ def mobile_delete_product(product_id):
         op, existing = _mobile_operation(data)
         if existing: return _mobile_replay(existing)
         p = Product.query.get_or_404(product_id)
-        if p.sale_items: raise ValueError("A product used in sales cannot be deleted.")
+        if p.sale_items or p.stock_logs:
+            raise ValueError("A product used in sales or stock history cannot be deleted.")
+        if p.stock:
+            raise ValueError("A product with stock cannot be deleted. Adjust its stock to zero first.")
         record_audit("product.delete", target_type="product", target_id=p.id,
                      details={"name": p.name, "source": "api"}, user=g.api_user)
         db.session.delete(p)
@@ -1245,9 +1248,18 @@ def mobile_sale_status(sale_id):
         if status is not None:
             status = str(status)
             if status not in {"New", "Packed", "Shipped", "Delivered", "Cancelled"}: raise ValueError("Invalid order status.")
+            if sale.order_status == "Cancelled" and status != "Cancelled":
+                raise ValueError("A cancelled sale cannot be reopened. Create a new sale instead.")
             if status == "Cancelled" and sale.order_status != "Cancelled" and sale.is_stock_sale:
+                # Lock each product before returning inventory so concurrent
+                # stock writers cannot race this cancellation.
                 for item in sale.items:
-                    product = Product.query.get(item.product_id)
+                    product = (
+                        Product.query
+                        .filter_by(id=item.product_id)
+                        .with_for_update()
+                        .first()
+                    )
                     if product:
                         product.stock += item.qty
                         db.session.add(StockLog(product_id=product.id, change_qty=item.qty, reason=f"Sale #{sale.id} Cancelled"))
@@ -1402,6 +1414,10 @@ def mobile_batch_sale(batch_id, sale_id):
             if s.is_stock_sale: raise ValueError("Stocked sales are not shipped in batches.")
             if b.status != ShipmentBatch.STATUS_IN_TRANSIT: raise ValueError("Batch is no longer in transit.")
             if s.order_status == "Cancelled": raise ValueError("Cancelled sales cannot be added.")
+            if s.shipping_payment_settled or s.delivery_id:
+                raise ValueError("A settled or delivered sale cannot be added to a batch.")
+            if s.batch_id is not None and s.batch_id != b.id:
+                raise ValueError("Sale already belongs to another shipment batch.")
             s.batch_id = b.id
             s.batch_assigned_at = datetime.utcnow()
             record_audit(
@@ -2464,9 +2480,14 @@ def mobile_delete_sale(sale_id):
         return jsonify({"error": "A sale with settled shipping cannot be deleted."}), 400
 
     try:
-        if sale.is_stock_sale:
+        if sale.is_stock_sale and sale.order_status != "Cancelled":
             for item in sale.items:
-                product = Product.query.get(item.product_id)
+                product = (
+                    Product.query
+                    .filter_by(id=item.product_id)
+                    .with_for_update()
+                    .first()
+                )
                 if product:
                     product.stock += item.qty
                     db.session.add(

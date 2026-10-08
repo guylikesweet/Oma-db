@@ -184,6 +184,16 @@ class ProductView(SecureModelView):
         super().on_model_change(form, model, is_created)
 
     def on_model_delete(self, model):
+        # Preserve historical inventory/sales records. A product referenced by
+        # a sale or stock log must be archived/left in place rather than
+        # hard-deleted, otherwise history and reporting become inconsistent.
+        if model.sale_items or model.stock_logs:
+            raise Exception(
+                "This product is part of existing sales or stock history and cannot be deleted. "
+                "Keep it in the catalogue for historical reporting."
+            )
+        if model.stock:
+            raise Exception("A product with stock cannot be deleted. Adjust its stock to zero first.")
         record_audit(
             "product.delete",
             target_type="product",
@@ -270,7 +280,7 @@ class SaleView(SecureModelView):
             raise Exception("Remove this sale from its delivery before deleting it.")
         if model.shipping_payment_settled:
             raise Exception("A sale with settled shipping cannot be deleted.")
-        if model.is_stock_sale:
+        if model.is_stock_sale and model.order_status != "Cancelled":
             for item in model.items:
                 product = (
                     Product.query

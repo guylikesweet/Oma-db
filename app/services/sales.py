@@ -10,7 +10,7 @@ At creation:
                                    (recalculated for real at batch arrival, by the batch's method)
   sales.total_amount           = subtotal_amount (goods only; shipping added once the batch arrives)
 """
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from datetime import date, timedelta
 import random
 import string
@@ -138,6 +138,8 @@ def create_sale(customer_name, customer_phone, customer_address, customer_state,
     is_stock = sale_type == SALE_TYPE_STOCK
     if not line_items:
         raise SaleValidationError("A sale needs at least one product line.")
+    if payment_status not in VALID_PAYMENT_STATUSES:
+        raise SaleValidationError("Invalid payment status.")
 
     products = {}
     requested = {}  # product_id -> total qty across ALL lines (one product can be on several lines, e.g. two colours)
@@ -222,7 +224,12 @@ def create_sale(customer_name, customer_phone, customer_address, customer_state,
     for line in line_items:
         product = products[line["product_id"]]
         qty = line["qty"]
-        unit_price = Decimal(str(line["unit_price"]))
+        try:
+            unit_price = Decimal(str(line["unit_price"]))
+        except (InvalidOperation, ValueError, TypeError):
+            raise SaleValidationError("Every sale line needs a valid price.")
+        if unit_price < 0:
+            raise SaleValidationError("Sale prices cannot be negative.")
         unit_cost = product.cost or Decimal("0")
 
         line_cbm = (product.cbm or Decimal("0")) * qty
@@ -309,6 +316,12 @@ def update_sale_status(sale_id, new_status):
     valid_statuses = {"New", "Packed", "Shipped", "Delivered", "Cancelled"}
     if new_status not in valid_statuses:
         raise SaleValidationError(f"Invalid status '{new_status}'.")
+
+    # Cancellation is terminal. A cancelled stock sale has already returned
+    # its inventory; allowing it to become active again would create stock
+    # without a corresponding sale deduction.
+    if sale.order_status == "Cancelled" and new_status != "Cancelled":
+        raise SaleValidationError("A cancelled sale cannot be reopened. Create a new sale instead.")
 
     if new_status == "Cancelled" and sale.order_status != "Cancelled" and sale.is_stock_sale:
         # Only stocked sales deducted stock, so only they restock.
