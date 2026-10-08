@@ -9,6 +9,7 @@ basedir = os.path.abspath(os.path.dirname(__file__))
 class Config:
     _secret_key = os.environ.get("SECRET_KEY")
     _production_database = bool(os.environ.get("DATABASE_URL"))
+    _public_base_url = os.environ.get("OMA_PUBLIC_BASE_URL", "").strip().rstrip("/")
 
     # Never allow the production deployment to silently fall back to a
     # predictable signing key. Local development may still use the explicit
@@ -29,6 +30,11 @@ class Config:
     if _production_database and not _admin_password:
         raise RuntimeError(
             "ADMIN_PASSWORD must be configured when DATABASE_URL is set."
+        )
+
+    if _production_database and not _public_base_url.startswith(("https://", "http://")):
+        raise RuntimeError(
+            "OMA_PUBLIC_BASE_URL must be configured as an http(s) URL when DATABASE_URL is set."
         )
 
     # Render/Supabase provide DATABASE_URL as postgres://... -> SQLAlchemy needs postgresql://
@@ -63,6 +69,7 @@ class Config:
 
     ADMIN_USERNAME = _admin_username or "admin"
     ADMIN_PASSWORD = _admin_password or "change-me"
+    OMA_PUBLIC_BASE_URL = _public_base_url
 
     # Default courier rate per CBM (Naira), used when seeding courier_rates
     DEFAULT_RATE_PER_CBM = 600000.00
