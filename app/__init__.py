@@ -165,6 +165,32 @@ def create_app(config_object="config.Config"):
             app.logger.warning("Ignoring invalid OMA_PUBLIC_BASE_URL; expected an http(s) URL.")
         return request.url_root.rstrip("/")
 
+    @app.errorhandler(404)
+    def handle_not_found(error):
+        if request.path.startswith("/api/"):
+            return {"error": "Not found.", "message": "The requested API endpoint does not exist.", "request_id": getattr(g, "request_id", "unknown")}, 404
+        return error
+
+    @app.errorhandler(405)
+    def handle_method_not_allowed(error):
+        if request.path.startswith("/api/"):
+            return {"error": "Method not allowed.", "message": "This HTTP method is not supported for the requested API endpoint.", "request_id": getattr(g, "request_id", "unknown")}, 405
+        return error
+
+    @app.errorhandler(415)
+    def handle_unsupported_media_type(error):
+        if request.path.startswith("/api/"):
+            return {"error": "Unsupported media type.", "message": "This API endpoint expects a JSON request body.", "request_id": getattr(g, "request_id", "unknown")}, 415
+        return error
+
+    @app.errorhandler(500)
+    def handle_internal_error(error):
+        if request.path.startswith("/api/"):
+            app.logger.exception("Unhandled application exception request_id=%s", getattr(g, "request_id", "unknown"))
+            db.session.rollback()
+            return {"error": "Internal server error.", "message": "The server could not complete this request.", "request_id": getattr(g, "request_id", "unknown")}, 500
+        raise error
+
     @app.route("/")
     def root():
         use_cases = use_cases_for_marketing()
