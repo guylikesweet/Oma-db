@@ -122,7 +122,7 @@ jobs:
               robots = client.get("/robots.txt")
               body = robots.get_data(as_text=True)
               assert robots.status_code == 200
-              assert "Sitemap:" in body
+              assert "\\n" not in body
               assert "\\\n" not in body
               assert "Disallow: /api/" in body
 
