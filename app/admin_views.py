@@ -7,7 +7,7 @@ from flask_login import current_user
 from werkzeug.security import generate_password_hash
 from markupsafe import Markup
 from sqlalchemy import inspect
-from wtforms import PasswordField
+from wtforms import PasswordField, FileField
 from wtforms.validators import Optional, Length
 
 from app import db
@@ -162,10 +162,11 @@ class ProductView(SecureModelView):
     )
     column_labels = {"adjust_stock_link": "Stock Adjustment"}
     form_columns = (
-        "name", "sku", "cost", "length_cm", "width_cm", "height_cm", "actual_weight_kg",
+        "name", "sku", "cost", "length_cm", "width_cm", "height_cm", "actual_weight_kg", "product_image",
     )
     column_sortable_list = ("id", "name", "sku", "stock")
     column_searchable_list = ("name", "sku")
+    form_extra_fields = {"product_image": FileField("Product photo", description="JPG/PNG/WebP, max 2 MB.")}
 
     def _adjust_stock_formatter(view, context, model, name):
         url = url_for("product.adjust_stock_view", product_id=model.id)
@@ -174,6 +175,19 @@ class ProductView(SecureModelView):
     column_formatters = {"adjust_stock_link": _adjust_stock_formatter}
 
     def on_model_change(self, form, model, is_created):
+        upload = getattr(form, "product_image", None)
+        if upload is not None and getattr(upload, "data", None):
+            raw = upload.data.read()
+            if len(raw) > 2 * 1024 * 1024:
+                raise ValueError("Product photo must be 2 MB or smaller.")
+            mimetype = (getattr(upload.data, "mimetype", None) or "").lower()
+            if mimetype not in {"image/jpeg", "image/png", "image/webp"}:
+                raise ValueError("Product photo must be JPG, PNG, or WebP.")
+            model.image_data = raw
+            model.image_mimetype = mimetype
+            model.image_filename = getattr(upload.data, "filename", None)
+            from datetime import datetime
+            model.image_updated_at = datetime.utcnow()
         record_audit(
             "product.create" if is_created else "product.update",
             target_type="product",

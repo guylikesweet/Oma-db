@@ -17,7 +17,7 @@ class LocalDatabase {
     final path = kIsWeb ? 'oma_mobile.db' : p.join(await getDatabasesPath(), 'oma_mobile.db');
     _db = await openDatabase(
       path,
-      version: 8,
+      version: 9,
       onCreate: (database, version) => _create(database),
       onUpgrade: (database, oldVersion, newVersion) async {
         if (oldVersion < 2) {
@@ -51,6 +51,9 @@ class LocalDatabase {
         if (oldVersion < 8) {
           await _createPerformanceIndexes(database);
         }
+        if (oldVersion < 9) {
+          await database.execute("ALTER TABLE products ADD COLUMN has_image INTEGER NOT NULL DEFAULT 0");
+        }
       },
     );
     return _db!;
@@ -62,7 +65,7 @@ class LocalDatabase {
       supplier_cost TEXT, inbound_shipping_cost TEXT, markup_percent TEXT, selling_price TEXT,
       length_cm REAL, width_cm REAL, height_cm REAL, cbm REAL,
       volumetric_kg REAL, actual_weight_kg REAL, stock INTEGER NOT NULL DEFAULT 0,
-      created_at TEXT, updated_at TEXT)''');
+      created_at TEXT, updated_at TEXT, has_image INTEGER NOT NULL DEFAULT 0)''');
     await database.execute('''CREATE TABLE sales (
       id INTEGER PRIMARY KEY, order_id TEXT, client_operation_id TEXT,
       sale_date TEXT, customer_name TEXT, customer_phone TEXT, customer_address TEXT,
@@ -361,7 +364,7 @@ class LocalDatabase {
       'selling_price': p['selling_price']?.toString() ?? '0',
       'length_cm': _num(p['length_cm']), 'width_cm': _num(p['width_cm']), 'height_cm': _num(p['height_cm']),
       'cbm': _num(p['cbm']), 'volumetric_kg': _num(p['volumetric_kg']), 'actual_weight_kg': _num(p['actual_weight_kg']),
-      'stock': p['stock'] ?? 0, 'created_at': p['created_at'], 'updated_at': p['updated_at'],
+      'stock': p['stock'] ?? 0, 'created_at': p['created_at'], 'updated_at': p['updated_at'], 'has_image': p['has_image'] == true ? 1 : 0,
     }, conflictAlgorithm: ConflictAlgorithm.replace);
   }
 

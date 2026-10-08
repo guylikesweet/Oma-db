@@ -323,6 +323,8 @@ def _product_json(p):
     return {
         "id": p.id,
         "name": p.name,
+        "has_image": bool(p.image_data),
+        "image_url": f"/api/v1/products/{p.id}/image" if p.image_data else None,
         "sku": p.sku,
         "cost": float(p.cost) if p.cost is not None else None,
         "supplier_cost": float(p.supplier_cost) if p.supplier_cost is not None else None,
@@ -688,6 +690,61 @@ def mobile_dashboard():
 @require_api_token
 def v1_products():
     return jsonify([_product_json(p) for p in Product.query.order_by(Product.name).all()])
+
+
+@api_bp.route("/v1/products/<int:product_id>/image", methods=("GET",))
+@require_api_token
+def product_image(product_id):
+    product = Product.query.get_or_404(product_id)
+    if not product.image_data or not product.image_mimetype:
+        return jsonify({"error": "This product has no photo."}), 404
+    response = current_app.response_class(product.image_data, mimetype=product.image_mimetype)
+    response.headers["Cache-Control"] = "private, max-age=300"
+    return response
+
+
+@api_bp.route("/v1/products/<int:product_id>/image", methods=("POST", "PUT"))
+@require_api_token
+def upload_product_image(product_id):
+    data = request.get_json(silent=True) or {}
+    encoded = str(data.get("image_base64") or "").strip()
+    if not encoded:
+        return jsonify({"error": "image_base64 is required."}), 400
+    if encoded.startswith("data:") and "," in encoded:
+        encoded = encoded.split(",", 1)[1]
+    try:
+        raw = base64.b64decode(encoded, validate=True)
+    except (ValueError, TypeError):
+        return jsonify({"error": "Invalid base64 image data."}), 400
+    if len(raw) > 2 * 1024 * 1024:
+        return jsonify({"error": "Product photo must be 2 MB or smaller."}), 413
+    mimetype = str(data.get("mimetype") or "").lower()
+    if mimetype not in {"image/jpeg", "image/png", "image/webp"}:
+        return jsonify({"error": "Product photo must be JPG, PNG, or WebP."}), 400
+    product = Product.query.get_or_404(product_id)
+    product.image_data = raw
+    product.image_mimetype = mimetype
+    product.image_filename = str(data.get("filename") or "")[:255] or None
+    product.image_updated_at = datetime.utcnow()
+    record_audit("product.image.update", target_type="product", target_id=product.id,
+                 details={"source": "api", "mimetype": mimetype, "bytes": len(raw)},
+                 user=g.api_user)
+    db.session.commit()
+    return jsonify(_product_json(product))
+
+
+@api_bp.route("/v1/products/<int:product_id>/image", methods=("DELETE",))
+@require_api_token
+def delete_product_image(product_id):
+    product = Product.query.get_or_404(product_id)
+    product.image_data = None
+    product.image_mimetype = None
+    product.image_filename = None
+    product.image_updated_at = None
+    record_audit("product.image.delete", target_type="product", target_id=product.id,
+                 details={"source": "api"}, user=g.api_user)
+    db.session.commit()
+    return jsonify(_product_json(product))
 
 
 @api_bp.route("/v1/sales", methods=("GET",))

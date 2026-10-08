@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'package:flutter/foundation.dart' show kIsWeb;
 
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:printing/printing.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -302,6 +303,10 @@ class _WebProductsPageState extends State<WebProductsPage> {
     final height = TextEditingController(text: '${old?['height_cm'] ?? ''}');
     final weight = TextEditingController(text: '${old?['actual_weight_kg'] ?? ''}');
     final stock = TextEditingController(text: '${old?['stock'] ?? 0}');
+    final imagePicker = ImagePicker();
+    XFile? pickedImage;
+    Uint8List? pickedImageBytes;
+    bool removeImage = false;
 
     String shippingMode = 'sea';
     bool calculating = false;
@@ -365,6 +370,31 @@ class _WebProductsPageState extends State<WebProductsPage> {
                   child: SingleChildScrollView(
                     child: Column(
                       children: [
+                        if (old != null && old['has_image'] == true && pickedImageBytes == null && !removeImage)
+                          FutureBuilder<Uint8List>(future: widget.api.productImage(old['id'] as int), builder: (context, snapshot) {
+                            if (!snapshot.hasData) return const SizedBox(height: 100, child: Center(child: Icon(Icons.image_outlined, size: 42)));
+                            return ClipRRect(borderRadius: BorderRadius.circular(14), child: Image.memory(snapshot.data!, height: 150, width: double.infinity, fit: BoxFit.cover));
+                          })
+                        else if (pickedImageBytes != null)
+                          ClipRRect(borderRadius: BorderRadius.circular(14), child: Image.memory(pickedImageBytes!, height: 150, width: double.infinity, fit: BoxFit.cover))
+                        else
+                          const SizedBox(height: 100, child: Center(child: Icon(Icons.add_photo_alternate_outlined, size: 42))),
+                        const SizedBox(height: 8),
+                        Row(children: [
+                          Expanded(child: OutlinedButton.icon(
+                            onPressed: calculating ? null : () async {
+                              final file = await imagePicker.pickImage(source: ImageSource.gallery, maxWidth: 1600, maxHeight: 1600, imageQuality: 85);
+                              if (file == null) return;
+                              final bytes = await file.readAsBytes();
+                              if (bytes.length > 2 * 1024 * 1024) { if (dialogContext.mounted) ScaffoldMessenger.of(dialogContext).showSnackBar(const SnackBar(content: Text('Choose a photo under 2 MB.'))); return; }
+                              setDialogState(() { pickedImage = file; pickedImageBytes = bytes; removeImage = false; });
+                            },
+                            icon: const Icon(Icons.photo_library_outlined), label: Text(pickedImage == null ? 'Add photo' : 'Change photo'),
+                          )),
+                          if ((old?['has_image'] == true || pickedImageBytes != null) && !removeImage)
+                            IconButton(tooltip: 'Remove photo', onPressed: calculating ? null : () => setDialogState(() { pickedImage = null; pickedImageBytes = null; removeImage = true; }), icon: const Icon(Icons.delete_outline)),
+                        ]),
+                        const SizedBox(height: 12),
                         TextField(controller: name, decoration: const InputDecoration(labelText: 'Name')),
                         const SizedBox(height: 12),
                         TextField(controller: sku, decoration: const InputDecoration(labelText: 'SKU')),
@@ -531,11 +561,22 @@ class _WebProductsPageState extends State<WebProductsPage> {
         'actual_weight_kg': double.tryParse(weight.text.trim()),
       };
 
+      Map<String, dynamic> saved;
       if (old == null) {
         data['stock'] = int.tryParse(stock.text.trim()) ?? 0;
-        await widget.api.createProduct(data);
+        saved = await widget.api.createProduct(data);
       } else {
-        await widget.api.updateProduct(old['id'] as int, data);
+        saved = await widget.api.updateProduct(old['id'] as int, data);
+      }
+      final savedId = (saved['id'] ?? old?['id']) as int?;
+      if (savedId != null) {
+        if (removeImage && old?['has_image'] == true) {
+          await widget.api.deleteProductImage(savedId);
+        } else if (pickedImageBytes != null && pickedImage != null) {
+          final filename = pickedImage!.name.toLowerCase();
+          final mimetype = filename.endsWith('.png') ? 'image/png' : filename.endsWith('.webp') ? 'image/webp' : 'image/jpeg';
+          await widget.api.uploadProductImage(savedId, pickedImageBytes!, mimetype: mimetype, filename: pickedImage!.name);
+        }
       }
 
       await load();
@@ -716,6 +757,7 @@ class _WebProductsPageState extends State<WebProductsPage> {
 
                         return Card(
                           child: ListTile(
+                            leading: _ProductThumb(api: widget.api, product: product),
                             title: Text(
                               '${product['name'] ?? ''}',
                             ),
@@ -761,6 +803,20 @@ class _WebProductsPageState extends State<WebProductsPage> {
                     ),
             ),
     );
+  }
+}
+
+class _ProductThumb extends StatelessWidget {
+  const _ProductThumb({required this.api, required this.product});
+  final ApiClient api;
+  final Map<String, dynamic> product;
+  @override
+  Widget build(BuildContext context) {
+    if (product['has_image'] != true) return const CircleAvatar(child: Icon(Icons.inventory_2_outlined));
+    return FutureBuilder<Uint8List>(future: api.productImage(product['id'] as int), builder: (context, snapshot) {
+      if (!snapshot.hasData) return const CircleAvatar(child: Icon(Icons.image_outlined));
+      return ClipRRect(borderRadius: BorderRadius.circular(10), child: Image.memory(snapshot.data!, width: 52, height: 52, fit: BoxFit.cover));
+    });
   }
 }
 
