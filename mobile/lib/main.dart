@@ -2045,8 +2045,9 @@ class _ProductDialogState extends State<ProductDialog> {
 
       final savedId = saved['id'] as int?;
       if (savedId != null) {
+        Map<String, dynamic>? mediaResult;
         if (removeImage && widget.product?['has_image'] == true) {
-          await widget.api.deleteProductImage(savedId);
+          mediaResult = await widget.api.deleteProductImage(savedId);
         } else if (pickedImageBytes != null && pickedImage != null) {
           final filename = pickedImage!.name.toLowerCase();
           final mimetype = filename.endsWith('.png')
@@ -2054,12 +2055,26 @@ class _ProductDialogState extends State<ProductDialog> {
               : filename.endsWith('.webp')
                   ? 'image/webp'
                   : 'image/jpeg';
-          await widget.api.uploadProductImage(
+          mediaResult = await widget.api.uploadProductImage(
             savedId,
             pickedImageBytes!,
             mimetype: mimetype,
             filename: pickedImage!.name,
           );
+        }
+
+        // Keep the local catalogue consistent immediately; otherwise the
+        // photo would exist on the server but the active page would still
+        // report has_image=false until the next full sync.
+        if (mediaResult != null) {
+          await widget.repo.local.applyChanges([
+            {
+              'entity_type': 'product',
+              'entity_id': savedId.toString(),
+              'operation': 'upsert',
+              'payload': mediaResult,
+            },
+          ]);
         }
       }
 
