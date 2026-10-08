@@ -103,6 +103,10 @@ jobs:
               assert b'property="og:image"' in home.data
               assert b'href="/"' in home.data
 
+              status = client.get("/status")
+              assert status.status_code == 200
+              assert b"OmaSales status" in status.data
+
               pricing = client.get("/pricing")
               assert pricing.status_code == 200
               assert b"OmaSales pricing" in pricing.data
@@ -149,6 +153,7 @@ jobs:
               assert "/use-case/pharmacy" in sitemap.get_data(as_text=True)
               assert "/blog/best-pos-in-nigeria" in sitemap.get_data(as_text=True)
               assert "/pricing" in sitemap.get_data(as_text=True)
+              assert "/status" in sitemap.get_data(as_text=True)
 
               for path in ("/", "/use-case/gadgets-electronics", "/robots.txt", "/sitemap.xml"):
                   response = client.get(path)
