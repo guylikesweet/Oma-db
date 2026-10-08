@@ -280,7 +280,7 @@ class SaleView(SecureModelView):
             raise Exception("Remove this sale from its delivery before deleting it.")
         if model.shipping_payment_settled:
             raise Exception("A sale with settled shipping cannot be deleted.")
-        if model.is_stock_sale:
+        if model.is_stock_sale and model.order_status != "Cancelled":
             for item in model.items:
                 product = (
                     Product.query
