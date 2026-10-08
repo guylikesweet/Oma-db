@@ -62,7 +62,7 @@ def signature_matches(sale, presented):
 
 
 def verify_url(sale):
-    base = os.environ.get("OMA_PUBLIC_BASE_URL", "").rstrip("/")
+    base = current_app.config.get("OMA_PUBLIC_BASE_URL", "").rstrip("/")
     if not base:
         base = request.url_root.rstrip("/")
         host = request.host.split(":")[0]
