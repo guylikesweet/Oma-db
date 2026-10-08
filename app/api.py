@@ -23,7 +23,7 @@ from flask import Blueprint, request, jsonify, g, current_app
 from werkzeug.security import check_password_hash, generate_password_hash
 from werkzeug.utils import secure_filename
 from werkzeug.exceptions import RequestEntityTooLarge
-from sqlalchemy import inspect as sa_inspect, text as sa_text
+from sqlalchemy import inspect as sa_inspect, text as sa_text, or_
 from sqlalchemy.orm import joinedload, selectinload
 
 from app import db, limiter
@@ -468,7 +468,7 @@ def _chat_audio_url(message):
 def _chat_cleanup_expired_photos():
     cutoff = datetime.utcnow() - timedelta(days=30)
     rows = ChatMessage.query.filter(
-        db.or_(
+        or_(
             ChatMessage.attachment_data.isnot(None),
             ChatMessage.audio_data.isnot(None),
         ),
