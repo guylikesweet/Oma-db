@@ -114,6 +114,10 @@ class _ChatPageState extends State<ChatPage> {
     }
   }
 
+  bool _isLocalMessage(Map<String, dynamic> message) {
+    return '${message['id'] ?? ''}'.startsWith('local-');
+  }
+
   void _scheduleNextPoll() {
     poller?.cancel();
     if (!mounted) return;
@@ -136,12 +140,34 @@ class _ChatPageState extends State<ChatPage> {
           .whereType<Map>()
           .map((message) => Map<String, dynamic>.from(message))
           .toList();
-      _hasOlderMessages = serverMessages.length >= 100;
+      // The first page establishes whether older history exists. Once
+      // pagination has reached the beginning, polling must not reset that
+      // state and repeatedly request the same empty page.
+      if (messages.isEmpty) {
+        _hasOlderMessages = serverMessages.length >= 100;
+      }
+
+      // Polling returns only the newest page. Preserve already-loaded older
+      // history instead of replacing it, otherwise every poll would silently
+      // discard messages fetched by _loadOlder().
+      final oldestServerId = serverMessages
+          .map((message) => _asInt(message['id']))
+          .whereType<int>()
+          .fold<int?>(null, (oldest, id) => oldest == null || id < oldest ? id : oldest);
+
+      final preservedOlderMessages = oldestServerId == null
+          ? messages.where((message) => !_isLocalMessage(message)).toList()
+          : messages
+              .where((message) {
+                final id = _asInt(message['id']);
+                return id != null && id < oldestServerId;
+              })
+              .toList();
 
       // Polling must never make an optimistic bubble disappear while a
       // request is still in flight (or after a failed send).
       final localMessages = messages
-          .where((message) => '${message['id'] ?? ''}'.startsWith('local-'))
+          .where(_isLocalMessage)
           .toList();
 
       final serverIds = serverMessages
@@ -149,11 +175,16 @@ class _ChatPageState extends State<ChatPage> {
           .toSet();
 
       final nextMessages = [
+        ...preservedOlderMessages.where(
+          (message) => !serverIds.contains('${message['id'] ?? ''}'),
+        ),
         ...serverMessages,
         ...localMessages.where(
           (message) => !serverIds.contains('${message['id'] ?? ''}'),
         ),
-      ];
+      ]..sort(
+          (a, b) => (_asInt(a['id']) ?? 0).compareTo(_asInt(b['id']) ?? 0),
+        );
 
       final previousLastId =
           messages.isEmpty ? null : messages.last['id'];
