@@ -1327,9 +1327,7 @@ class ApiClient {
 ), '');
     final uri = base.replace(path: '$basePath/v1/products/$id/image');
     final headers = <String, String>{'Accept': 'image/*'};
-    if (savedToken != null && savedToken.isNotEmpty) {
-      headers['Authorization'] = 'Bearer $savedToken';
-    }
+    if (savedToken != null && savedToken.isNotEmpty) headers['Authorization'] = 'Bearer $savedToken';
     final response = await _client.get(uri, headers: headers).timeout(const Duration(seconds: 30));
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw ApiException(response.statusCode, 'Could not load product photo.');
@@ -1337,21 +1335,12 @@ class ApiClient {
     return response.bodyBytes;
   }
 
-  Future<Map<String, dynamic>> uploadProductImage(
-    int id,
-    Uint8List bytes, {
-    required String mimetype,
-    String? filename,
-  }) {
-    return _map(
-      'POST',
-      '/v1/products/$id/image',
-      body: {
-        'image_base64': base64Encode(bytes),
-        'mimetype': mimetype,
-        if (filename != null && filename.isNotEmpty) 'filename': filename,
-      },
-    );
+  Future<Map<String, dynamic>> uploadProductImage(int id, Uint8List bytes, {required String mimetype, String? filename}) {
+    return _map('POST', '/v1/products/$id/image', body: {
+      'image_base64': base64Encode(bytes),
+      'mimetype': mimetype,
+      if (filename != null && filename.isNotEmpty) 'filename': filename,
+    });
   }
 
   Future<Map<String, dynamic>> deleteProductImage(int id) {
