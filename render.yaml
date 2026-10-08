@@ -5,7 +5,7 @@ services:
     plan: free
     buildCommand: >-
       pip install -r requirements.txt && flask db upgrade && flask db current && flask db heads && flask seed-admin
-    startCommand: "flask db upgrade && gunicorn run:app"
+    startCommand: "flask db upgrade heads && python scripts/repair_runtime_schema.py && gunicorn run:app"
     healthCheckPath: /healthz
     envVars:
       - key: FLASK_APP
