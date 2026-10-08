@@ -16,6 +16,7 @@ from app.api import (
     mobile_modify_chat_message,
     mobile_react_chat_message,
     mobile_chat_attachment,
+    mobile_chat_audio,
 )
 
 classic_chat_bp = Blueprint("classic_chat", __name__, url_prefix="/classic/chat")
@@ -84,6 +85,13 @@ def react(message_id):
 def attachment(message_id):
     _as_api_user()
     return mobile_chat_attachment.__wrapped__(message_id)
+
+
+@classic_chat_bp.route("/messages/<int:message_id>/audio", methods=("GET",))
+@login_required
+def audio(message_id):
+    _as_api_user()
+    return mobile_chat_audio(message_id)
 
 
 @classic_chat_bp.route("/csrf", methods=("GET",))
