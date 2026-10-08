@@ -20,11 +20,11 @@ importScripts("https://www.gstatic.com/firebasejs/11.6.1/firebase-messaging-comp
 
 firebase.initializeApp({
   apiKey: "AIzaSyD-cWVrIAgXFWc0bliJpEX0VDRYwHzzJG4",
-  authDomain: "",
+  authDomain: "omasales-5208e.firebaseapp.com",
   projectId: "omasales-5208e",
-  storageBucket: "",
+  storageBucket: "omasales-5208e.firebasestorage.app",
   messagingSenderId: "535490258779",
-  appId: "1:535490258779:android:3850066aa7afcb1dd81c7e"
+  appId: "1:535490258779:web:0370dbd88a24fbe9d81c7e"
 });
 // Data-only FCM messages are rendered here while the Flutter page is
 // backgrounded/closed. Clicking the notification returns to the chat.
