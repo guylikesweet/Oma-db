@@ -161,8 +161,19 @@ def create_app(config_object="config.Config"):
     def handle_http_error(error):
         """Return JSON errors for API clients while keeping staff pages HTML."""
         if request.path.startswith("/api/"):
+            api_error_names = {
+                400: "Bad request.",
+                401: "Unauthorized.",
+                403: "Forbidden.",
+                404: "Not found.",
+                405: "Method not allowed.",
+                409: "Conflict.",
+                413: "Request is too large.",
+                415: "Unsupported media type.",
+                429: "Too many requests.",
+            }
             return jsonify({
-                "error": error.name,
+                "error": api_error_names.get(error.code, error.name),
                 "message": error.description,
                 "request_id": getattr(g, "request_id", "unknown"),
             }), error.code
