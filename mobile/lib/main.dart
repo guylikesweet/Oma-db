@@ -1,9 +1,11 @@
 import 'dart:async';
+import 'dart:typed_data';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:sqflite/sqflite.dart' show databaseFactory;
 import 'package:sqflite_common_ffi_web/sqflite_ffi_web.dart';
 import 'brand_loader.dart';
@@ -1749,6 +1751,19 @@ class _ProductsPageState extends State<ProductsPage> {
   String q = '';
 
   @override
+  void initState() {
+    super.initState();
+    // Products are read from the local cache on every platform. Pull the
+    // server snapshot when this tab is first opened so a fresh install does
+    // not remain stuck on an empty local catalogue.
+    widget.repo.syncOnce().then((_) {
+      if (mounted) setState(() {});
+    }).catchError((_) {
+      // Keep the local cache usable while offline; a later refresh retries.
+    });
+  }
+
+  @override
   Widget build(BuildContext context) => Scaffold(
         appBar: AppBar(
           title: const Text('Products'),
@@ -1952,6 +1967,10 @@ class _ProductDialogState extends State<ProductDialog> {
 
   bool busy = false;
   String? error;
+  final ImagePicker imagePicker = ImagePicker();
+  XFile? pickedImage;
+  Uint8List? pickedImageBytes;
+  bool removeImage = false;
 
   @override
   void dispose() {
@@ -1989,8 +2008,9 @@ class _ProductDialogState extends State<ProductDialog> {
     setState(() => busy = true);
 
     try {
+      Map<String, dynamic> saved;
       if (widget.product == null) {
-        await widget.repo.createProductOnline(
+        saved = await widget.repo.createProductOnline(
           name: name.text,
           sku: sku.text,
           cost: landedCost.text,
@@ -2005,7 +2025,7 @@ class _ProductDialogState extends State<ProductDialog> {
           stock: int.tryParse(stock.text) ?? 0,
         );
       } else {
-        await widget.repo.updateProductOnline(
+        saved = await widget.repo.updateProductOnline(
           widget.product!['id'] as int,
           {
             'name': name.text,
@@ -2021,6 +2041,41 @@ class _ProductDialogState extends State<ProductDialog> {
             'actual_weight_kg': weight.text,
           },
         );
+      }
+
+      final savedId = saved['id'] as int?;
+      if (savedId != null) {
+        Map<String, dynamic>? mediaResult;
+        if (removeImage && widget.product?['has_image'] == true) {
+          mediaResult = await widget.api.deleteProductImage(savedId);
+        } else if (pickedImageBytes != null && pickedImage != null) {
+          final filename = pickedImage!.name.toLowerCase();
+          final mimetype = filename.endsWith('.png')
+              ? 'image/png'
+              : filename.endsWith('.webp')
+                  ? 'image/webp'
+                  : 'image/jpeg';
+          mediaResult = await widget.api.uploadProductImage(
+            savedId,
+            pickedImageBytes!,
+            mimetype: mimetype,
+            filename: pickedImage!.name,
+          );
+        }
+
+        // Keep the local catalogue consistent immediately; otherwise the
+        // photo would exist on the server but the active page would still
+        // report has_image=false until the next full sync.
+        if (mediaResult != null) {
+          await widget.repo.local.applyChanges([
+            {
+              'entity_type': 'product',
+              'entity_id': savedId.toString(),
+              'operation': 'upsert',
+              'payload': mediaResult,
+            },
+          ]);
+        }
       }
 
       if (mounted) {
@@ -2100,6 +2155,114 @@ class _ProductDialogState extends State<ProductDialog> {
                   controller: sku,
                   decoration:
                       const InputDecoration(labelText: 'SKU'),
+                ),
+                const SizedBox(height: 10),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    if (pickedImageBytes != null)
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(10),
+                        child: Image.memory(
+                          pickedImageBytes!,
+                          width: 64,
+                          height: 64,
+                          fit: BoxFit.cover,
+                        ),
+                      )
+                    else if (widget.product?['has_image'] == true && !removeImage)
+                      FutureBuilder<Uint8List>(
+                        future: widget.api.productImage(widget.product!['id'] as int),
+                        builder: (context, snapshot) {
+                          if (!snapshot.hasData) {
+                            return const SizedBox(
+                              width: 64,
+                              height: 64,
+                              child: Center(child: Icon(Icons.image_outlined)),
+                            );
+                          }
+                          return ClipRRect(
+                            borderRadius: BorderRadius.circular(10),
+                            child: Image.memory(
+                              snapshot.data!,
+                              width: 64,
+                              height: 64,
+                              fit: BoxFit.cover,
+                            ),
+                          );
+                        },
+                      )
+                    else
+                      const SizedBox(
+                        width: 64,
+                        height: 64,
+                        child: Icon(Icons.image_outlined),
+                      ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Wrap(
+                        spacing: 8,
+                        runSpacing: 6,
+                        children: [
+                          OutlinedButton.icon(
+                            onPressed: busy || calculating
+                                ? null
+                                : () async {
+                                    try {
+                                      final file = await imagePicker.pickImage(
+                                        source: ImageSource.gallery,
+                                        imageQuality: 90,
+                                      );
+                                      if (file == null) return;
+                                      final bytes = await file.readAsBytes();
+                                      if (bytes.length > 2 * 1024 * 1024) {
+                                        if (mounted) {
+                                          ScaffoldMessenger.of(context).showSnackBar(
+                                            const SnackBar(
+                                              content: Text('Choose a photo under 2 MB.'),
+                                            ),
+                                          );
+                                        }
+                                        return;
+                                      }
+                                      if (!mounted) return;
+                                      setState(() {
+                                        pickedImage = file;
+                                        pickedImageBytes = bytes;
+                                        removeImage = false;
+                                      });
+                                    } catch (e) {
+                                      if (mounted) {
+                                        setState(() => error = userFacingError(e));
+                                      }
+                                    }
+                                  },
+                            icon: const Icon(Icons.photo_library_outlined),
+                            label: Text(
+                              pickedImageBytes == null
+                                  ? (widget.product?['has_image'] == true
+                                      ? 'Change photo'
+                                      : 'Add photo')
+                                  : 'Change photo',
+                            ),
+                          ),
+                          if ((widget.product?['has_image'] == true || pickedImageBytes != null) &&
+                              !removeImage)
+                            OutlinedButton.icon(
+                              onPressed: busy || calculating
+                                  ? null
+                                  : () => setState(() {
+                                        pickedImage = null;
+                                        pickedImageBytes = null;
+                                        removeImage = true;
+                                      }),
+                              icon: const Icon(Icons.delete_outline),
+                              label: const Text('Remove'),
+                            ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
                 const SizedBox(height: 14),
                 TextField(
