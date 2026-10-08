@@ -30,5 +30,12 @@ def serve_webapp(subpath=""):
     if subpath:
         candidate = os.path.join(WEBAPP_DIR, subpath)
         if os.path.isfile(candidate):
-            return send_from_directory(WEBAPP_DIR, subpath)
-    return send_from_directory(WEBAPP_DIR, "index.html")
+            response = send_from_directory(WEBAPP_DIR, subpath)
+            response.headers.setdefault("Cache-Control", "public, max-age=86400")
+            return response
+
+    # The SPA entrypoint must remain revalidated so a new deployment can
+    # immediately point browsers at its new hashed JavaScript assets.
+    response = send_from_directory(WEBAPP_DIR, "index.html")
+    response.headers["Cache-Control"] = "no-cache"
+    return response
