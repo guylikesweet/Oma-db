@@ -2476,9 +2476,14 @@ def mobile_delete_sale(sale_id):
         return jsonify({"error": "A sale with settled shipping cannot be deleted."}), 400
 
     try:
-        if sale.is_stock_sale:
+        if sale.is_stock_sale and sale.order_status != "Cancelled":
             for item in sale.items:
-                product = Product.query.get(item.product_id)
+                product = (
+                    Product.query
+                    .filter_by(id=item.product_id)
+                    .with_for_update()
+                    .first()
+                )
                 if product:
                     product.stock += item.qty
                     db.session.add(
