@@ -137,7 +137,7 @@ jobs:
                   assert response.headers.get("Referrer-Policy") == "strict-origin-when-cross-origin"
 
           print("Public marketing routes, SEO endpoints, headers, and 404 behavior passed.")
-              assert home.headers.get("Cache-Control") is None
+          assert home.headers.get("Cache-Control") is None
           PY
 
       - name: Verify production SECRET_KEY fail-closed behavior
