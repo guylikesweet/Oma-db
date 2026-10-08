@@ -149,7 +149,7 @@ def create_app(config_object="config.Config"):
     @app.route("/")
     def root():
         """Send staff to the supported Flutter Web application."""
-        return redirect(url_for("webapp.index"))
+        return redirect(url_for("webapp.serve_webapp"))
 
 
     @app.route("/healthz")
