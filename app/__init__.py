@@ -155,7 +155,7 @@ def create_app(config_object="config.Config"):
             ]
         }
         return render_template("marketing_home.html", use_cases=use_cases, year=datetime.utcnow().year,
-                               canonical_url=request.url, og_image=url_for("static", filename="webapp/icons/Icon-192.png", _external=True),
+                               canonical_url=request.base_url, og_image=url_for("static", filename="logo.png", _external=True),
                                schema=schema)
 
 
@@ -170,11 +170,11 @@ def create_app(config_object="config.Config"):
             "@type": "WebPage",
             "name": item["seo_title"],
             "description": item["description"],
-            "url": request.url,
+            "url": request.base_url,
             "isPartOf": {"@type": "WebSite", "name": "OmaSales", "url": request.url_root},
         }
-        return render_template("marketing_use_case.html", item=item, canonical_url=request.url,
-                               og_image=url_for("static", filename="webapp/icons/Icon-192.png", _external=True),
+        return render_template("marketing_use_case.html", item=item, canonical_url=request.base_url,
+                               og_image=url_for("static", filename="logo.png", _external=True),
                                schema=schema)
 
     @app.route("/robots.txt")
