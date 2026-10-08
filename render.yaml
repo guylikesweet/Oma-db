@@ -18,3 +18,5 @@ services:
         sync: false
       - key: ADMIN_PASSWORD
         sync: false          # used by the manual flask seed-admin command
+      - key: OMA_PUBLIC_BASE_URL
+        value: https://oma-db.onrender.com
