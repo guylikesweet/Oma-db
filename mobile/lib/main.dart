@@ -1629,6 +1629,105 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
                         ),
                       ),
                     const SizedBox(height: 16),
+                    Text(
+                      'Quick access',
+                      style: Theme.of(context).textTheme.titleLarge,
+                    ),
+                    const SizedBox(height: 8),
+                    LayoutBuilder(
+                      builder: (context, constraints) {
+                        final columns = constraints.maxWidth > 760 ? 3 : 2;
+                        final shortcuts = <_DashboardShortcut>[
+                          _DashboardShortcut(
+                            icon: Icons.receipt_long,
+                            title: 'Sales & sale details',
+                            onTap: () => Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => SalesPage(
+                                  api: widget.api,
+                                  local: widget.local,
+                                  repo: widget.repo,
+                                  refreshKey: widget.refreshKey,
+                                ),
+                              ),
+                            ),
+                          ),
+                          _DashboardShortcut(
+                            icon: Icons.inventory_2,
+                            title: 'Products & product details',
+                            onTap: () => Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => ProductsPage(
+                                  api: widget.api,
+                                  local: widget.local,
+                                  repo: widget.repo,
+                                  refreshKey: widget.refreshKey,
+                                ),
+                              ),
+                            ),
+                          ),
+                          _DashboardShortcut(
+                            icon: Icons.local_shipping,
+                            title: 'Shipment batches',
+                            onTap: () => Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => BatchesPage(
+                                  api: widget.api,
+                                  repo: widget.repo,
+                                  isAdmin: AppSession.isAdmin,
+                                ),
+                              ),
+                            ),
+                          ),
+                          _DashboardShortcut(
+                            icon: Icons.timeline,
+                            title: 'Sales journey',
+                            onTap: () => Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => JourneyPage(api: widget.api),
+                              ),
+                            ),
+                          ),
+                          _DashboardShortcut(
+                            icon: Icons.delivery_dining,
+                            title: 'Deliveries',
+                            onTap: () => Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => DeliveriesPage(
+                                  api: widget.api,
+                                  repo: widget.repo,
+                                ),
+                              ),
+                            ),
+                          ),
+                          _DashboardShortcut(
+                            icon: Icons.bar_chart,
+                            title: 'Reports',
+                            onTap: () => Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => ReportsPage(api: widget.api),
+                              ),
+                            ),
+                          ),
+                        ];
+                        return GridView.count(
+                          crossAxisCount: columns,
+                          shrinkWrap: true,
+                          physics: const NeverScrollableScrollPhysics(),
+                          crossAxisSpacing: 8,
+                          mainAxisSpacing: 8,
+                          childAspectRatio: columns == 3 ? 3.2 : 2.8,
+                          children: shortcuts,
+                        );
+                      },
+                    ),
+                    const SizedBox(height: 16),
                     if ((data['low_stock_products'] as List?)
                             ?.isNotEmpty ==
                         true)
@@ -1684,34 +1783,87 @@ class _Kpi extends StatelessWidget {
     required this.title,
     required this.value,
     required this.icon,
+    this.onTap,
   });
 
   final String title;
   final String value;
   final IconData icon;
+  final VoidCallback? onTap;
 
   @override
-  Widget build(BuildContext c) => Card(
-        child: Padding(
-          padding: const EdgeInsets.all(12),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(icon),
-              const SizedBox(height: 5),
+  Widget build(BuildContext c) {
+    final card = Card(
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon),
+            const SizedBox(height: 5),
+            Text(
+              value,
+              style: Theme.of(c)
+                  .textTheme
+                  .titleLarge
+                  ?.copyWith(fontWeight: FontWeight.bold),
+            ),
+            Text(
+              title,
+              style: Theme.of(c).textTheme.bodySmall,
+            ),
+            if (onTap != null) ...[
+              const SizedBox(height: 4),
               Text(
-                value,
-                style: Theme.of(c)
-                    .textTheme
-                    .titleLarge
-                    ?.copyWith(fontWeight: FontWeight.bold),
-              ),
-              Text(
-                title,
-                style: Theme.of(c).textTheme.bodySmall,
+                'Tap to open',
+                style: Theme.of(c).textTheme.labelSmall,
               ),
             ],
+          ],
+        ),
+      ),
+    );
+    if (onTap == null) return card;
+    return InkWell(
+      borderRadius: BorderRadius.circular(12),
+      onTap: onTap,
+      child: card,
+    );
+  }
+}
+
+class _DashboardShortcut extends StatelessWidget {
+  const _DashboardShortcut({
+    required this.icon,
+    required this.title,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String title;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) => Card(
+        child: InkWell(
+          borderRadius: BorderRadius.circular(12),
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            child: Row(
+              children: [
+                Icon(icon),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    title,
+                    style: const TextStyle(fontWeight: FontWeight.w700),
+                  ),
+                ),
+                const Icon(Icons.chevron_right),
+              ],
+            ),
           ),
         ),
       );
