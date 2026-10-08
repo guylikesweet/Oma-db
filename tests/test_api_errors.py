@@ -7,6 +7,7 @@ class TestConfig:
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     SESSION_COOKIE_SECURE = False
     TESTING = True
+    PROPAGATE_EXCEPTIONS = False
 
 
 def make_app():
