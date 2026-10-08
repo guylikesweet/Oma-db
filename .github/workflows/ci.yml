@@ -103,6 +103,22 @@ jobs:
               assert b'property="og:image"' in home.data
               assert b'href="/"' in home.data
 
+              pricing = client.get("/pricing")
+              assert pricing.status_code == 200
+              assert b"OmaSales pricing" in pricing.data
+
+              blog = client.get("/blog")
+              assert blog.status_code == 200
+              assert b"Business guides for Nigerian retailers and traders" in blog.data
+
+              article = client.get("/blog/best-pos-in-nigeria")
+              assert article.status_code == 200
+              assert b"Best POS and sales apps in Nigeria" in article.data
+
+              pharmacy = client.get("/use-case/pharmacy")
+              assert pharmacy.status_code == 200
+              assert b"Sales and Inventory App for Pharmacies in Nigeria" in pharmacy.data
+
               use_case = client.get("/use-case/gadgets-electronics")
               assert use_case.status_code == 200
               assert b"Gadgets &amp; Electronics" in use_case.data or b"Gadgets & Electronics" in use_case.data
@@ -130,6 +146,9 @@ jobs:
               assert sitemap.status_code == 200
               assert "<urlset" in sitemap.get_data(as_text=True)
               assert "/use-case/gadgets-electronics" in sitemap.get_data(as_text=True)
+              assert "/use-case/pharmacy" in sitemap.get_data(as_text=True)
+              assert "/blog/best-pos-in-nigeria" in sitemap.get_data(as_text=True)
+              assert "/pricing" in sitemap.get_data(as_text=True)
 
               for path in ("/", "/use-case/gadgets-electronics", "/robots.txt", "/sitemap.xml"):
                   response = client.get(path)
