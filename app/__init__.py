@@ -1,4 +1,4 @@
-from flask import Flask, redirect, url_for, render_template, session, request, flash, g
+from flask import Flask, redirect, url_for, render_template, session, request, flash, g, jsonify, make_response, current_app
 import click
 from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
@@ -9,6 +9,7 @@ from flask_limiter.util import get_remote_address
 from app.csrf import init_csrf
 from datetime import timedelta
 from sqlalchemy import text as sa_text
+from werkzeug.exceptions import HTTPException
 import os
 import time
 import uuid
@@ -155,6 +156,34 @@ def create_app(config_object="config.Config"):
         init_admin(app)
 
         register_cli(app)
+
+    @app.errorhandler(HTTPException)
+    def handle_http_error(error):
+        """Return JSON errors for API clients while keeping staff pages HTML."""
+        if request.path.startswith("/api/"):
+            return jsonify({
+                "error": error.name,
+                "message": error.description,
+                "request_id": getattr(g, "request_id", "unknown"),
+            }), error.code
+        return error
+
+    @app.errorhandler(Exception)
+    def handle_unexpected_error(error):
+        """Return a safe JSON 500 for APIs and a simple HTML 500 for staff pages."""
+        if request.path.startswith("/api/"):
+            current_app.logger.exception(
+                "Unhandled application exception request_id=%s",
+                getattr(g, "request_id", "unknown"),
+            )
+            db.session.rollback()
+            return jsonify({
+                "error": "Internal server error.",
+                "message": "The server could not complete this request.",
+                "request_id": getattr(g, "request_id", "unknown"),
+            }), 500
+        current_app.logger.exception("Unhandled browser exception request_id=%s", getattr(g, "request_id", "unknown"))
+        return make_response("Internal Server Error", 500)
 
     @app.route("/")
     def root():
