@@ -1196,6 +1196,10 @@ class ApiClient {
     int? replyToId,
     String? attachmentBase64,
     String? attachmentFilename,
+    String? audioBase64,
+    String? audioFilename,
+    String? audioMimetype,
+    String? clientOperationId,
   }) {
     return _map(
       'POST',
@@ -1205,6 +1209,10 @@ class ApiClient {
         if (replyToId != null) 'reply_to_id': replyToId,
         if (attachmentBase64 != null) 'attachment_base64': attachmentBase64,
         if (attachmentFilename != null) 'attachment_filename': attachmentFilename,
+        if (audioBase64 != null) 'audio_base64': audioBase64,
+        if (audioFilename != null) 'audio_filename': audioFilename,
+        if (audioMimetype != null) 'audio_mimetype': audioMimetype,
+        if (clientOperationId != null) 'client_operation_id': clientOperationId,
       },
     );
   }
@@ -1231,6 +1239,31 @@ class ApiClient {
       '/v1/chat/messages/$id/react',
       body: {'emoji': emoji},
     );
+  }
+
+  Future<String> chatAudioPlaybackUrl(int messageId) async {
+    final response = await _map(
+      'GET',
+      '/v1/chat/messages/$messageId/audio-token',
+    );
+    return Uri.parse(AppConfig.apiBaseUrl).resolve(
+      response['url']?.toString() ?? '',
+    ).toString();
+  }
+
+  Future<Uint8List> downloadChatAudio(String url) async {
+    final tokenValue = await token();
+    final response = await _client.get(
+      Uri.parse(AppConfig.apiBaseUrl).resolve(url),
+      headers: {
+        if (tokenValue != null && tokenValue.isNotEmpty)
+          'Authorization': 'Bearer $tokenValue',
+      },
+    );
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw ApiException(response.statusCode, 'Unable to download the voice recording.');
+    }
+    return response.bodyBytes;
   }
 
   Future<Uint8List> downloadChatAttachment(String url) async {

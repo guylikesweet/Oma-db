@@ -23,7 +23,8 @@ from flask import Blueprint, request, jsonify, g, current_app
 from werkzeug.security import check_password_hash, generate_password_hash
 from werkzeug.utils import secure_filename
 from werkzeug.exceptions import RequestEntityTooLarge
-from sqlalchemy import inspect as sa_inspect, text as sa_text
+from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
+from sqlalchemy import inspect as sa_inspect, text as sa_text, or_
 from sqlalchemy.orm import joinedload, selectinload
 
 from app import db, limiter
@@ -461,17 +462,33 @@ def _chat_attachment_url(message):
     return f"/api/v1/chat/messages/{message.id}/attachment" if message.attachment_data else None
 
 
+def _chat_audio_url(message):
+    return f"/api/v1/chat/messages/{message.id}/audio" if message.audio_data else None
+
+
 def _chat_cleanup_expired_photos():
     cutoff = datetime.utcnow() - timedelta(days=30)
     rows = ChatMessage.query.filter(
-        ChatMessage.attachment_data.isnot(None),
-        ChatMessage.attachment_created_at < cutoff,
+        or_(
+            ChatMessage.attachment_data.isnot(None),
+            ChatMessage.audio_data.isnot(None),
+        ),
+        db.or_(
+            ChatMessage.attachment_created_at < cutoff,
+            ChatMessage.audio_created_at < cutoff,
+        ),
     ).all()
     for row in rows:
-        row.attachment_data = None
-        row.attachment_mimetype = None
-        row.attachment_filename = None
-        row.attachment_created_at = None
+        if row.attachment_data and row.attachment_created_at and row.attachment_created_at < cutoff:
+            row.attachment_data = None
+            row.attachment_mimetype = None
+            row.attachment_filename = None
+            row.attachment_created_at = None
+        if row.audio_data and row.audio_created_at and row.audio_created_at < cutoff:
+            row.audio_data = None
+            row.audio_mimetype = None
+            row.audio_filename = None
+            row.audio_created_at = None
     if rows:
         db.session.commit()
 
@@ -516,6 +533,11 @@ def _chat_message_json(message):
         "attachment_url": _chat_attachment_url(message),
         "attachment_filename": message.attachment_filename if message.attachment_data else None,
         "attachment_mimetype": message.attachment_mimetype if message.attachment_data else None,
+        "audio_url": _chat_audio_url(message),
+        "audio_filename": message.audio_filename if message.audio_data else None,
+        "audio_mimetype": message.audio_mimetype if message.audio_data else None,
+        "has_audio": bool(message.audio_data),
+        "client_operation_id": message.client_operation_id,
         "reactions": reactions,
         "my_reactions": my_reactions,
         "reply_to": (
@@ -542,6 +564,10 @@ def _chat_message_json(message):
                 "attachment_url": _chat_attachment_url(reply),
                 "attachment_filename": reply.attachment_filename if reply.attachment_data else None,
                 "attachment_mimetype": reply.attachment_mimetype if reply.attachment_data else None,
+                "audio_url": _chat_audio_url(reply),
+                "audio_filename": reply.audio_filename if reply.audio_data else None,
+                "audio_mimetype": reply.audio_mimetype if reply.audio_data else None,
+                "has_audio": bool(reply.audio_data),
             }
             if reply is not None
             else None
@@ -2185,12 +2211,21 @@ def mobile_admin_chat_cleanup():
     if not expected or not provided or not secrets.compare_digest(provided, expected):
         return jsonify({"error": "Unauthorized."}), 401
 
-    before = ChatMessage.query.filter(
+    cutoff = datetime.utcnow() - timedelta(days=30)
+    before_photos = ChatMessage.query.filter(
         ChatMessage.attachment_data.isnot(None),
-        ChatMessage.attachment_created_at < datetime.utcnow() - timedelta(days=30),
+        ChatMessage.attachment_created_at < cutoff,
+    ).count()
+    before_audio = ChatMessage.query.filter(
+        ChatMessage.audio_data.isnot(None),
+        ChatMessage.audio_created_at < cutoff,
     ).count()
     _chat_cleanup_expired_photos()
-    return jsonify({"ok": True, "expired_photos": before})
+    return jsonify({
+        "ok": True,
+        "expired_photos": before_photos,
+        "expired_audio": before_audio,
+    })
 
 
 @api_bp.route("/v1/chat/messages", methods=("GET",))
@@ -2257,7 +2292,8 @@ def mobile_chat_diagnostic():
             "id", "sender_user_id", "content", "original_content", "edited_at",
             "edited_by_user_id", "deleted_at", "deleted_by_user_id",
             "attachment_data", "attachment_mimetype", "attachment_filename",
-            "attachment_created_at", "reply_to_id", "created_at",
+            "attachment_created_at", "audio_data", "audio_mimetype", "audio_filename",
+            "audio_created_at", "client_operation_id", "reply_to_id", "created_at",
         ],
         "chat_reactions": ["id", "message_id", "user_id", "emoji", "created_at"],
         "chat_mentions": ["id", "message_id", "user_id", "created_at"],
@@ -2301,7 +2337,16 @@ def mobile_create_chat_message():
     data = request.get_json(silent=True) or {}
     content = str(data.get("content") or "").strip()
     attachment_b64 = str(data.get("attachment_base64") or "").strip()
-    if not content and not attachment_b64:
+    audio_b64 = str(data.get("audio_base64") or "").strip()
+    client_operation_id = str(data.get("client_operation_id") or "").strip()[:100] or None
+    if client_operation_id:
+        existing = ChatMessage.query.filter_by(
+            client_operation_id=client_operation_id,
+            sender_user_id=g.api_user.id,
+        ).first()
+        if existing is not None:
+            return jsonify(_chat_message_json(existing)), 200
+    if not content and not attachment_b64 and not audio_b64:
         return jsonify({"error": "Message cannot be empty."}), 400
     if len(content) > 4000:
         return jsonify({"error": "Message is too long. Maximum is 4000 characters."}), 400
@@ -2328,6 +2373,31 @@ def mobile_create_chat_message():
         attachment = None
         attachment_mimetype = None
         attachment_filename = None
+        audio = None
+        audio_mimetype = None
+        audio_filename = None
+        if audio_b64 and attachment_b64:
+            raise ValueError("A message can contain a photo or a voice recording, not both.")
+        if audio_b64:
+            try:
+                audio = base64.b64decode(audio_b64, validate=True)
+            except Exception:
+                raise ValueError("Invalid audio data.")
+            if len(audio) > 8 * 1024 * 1024:
+                raise ValueError("Voice recording is too large. Maximum upload is 8 MB.")
+            requested_mimetype = str(data.get("audio_mimetype") or "audio/wav").lower().strip()
+            allowed_audio = {
+                "audio/wav", "audio/x-wav", "audio/wave",
+                "audio/webm", "audio/ogg", "audio/mp4", "audio/m4a",
+                "audio/aac", "audio/mpeg",
+            }
+            if requested_mimetype not in allowed_audio:
+                raise ValueError("Unsupported voice recording format.")
+            audio_mimetype = requested_mimetype
+            safe_name = secure_filename(str(data.get("audio_filename") or "voice-message.wav"))[:180] or "voice-message.wav"
+            audio_filename = safe_name
+            if audio_mimetype in {"audio/x-wav", "audio/wave"}:
+                audio_mimetype = "audio/wav"
         if attachment_b64:
             try:
                 raw = base64.b64decode(attachment_b64, validate=True)
@@ -2362,6 +2432,11 @@ def mobile_create_chat_message():
             attachment_mimetype=attachment_mimetype,
             attachment_filename=attachment_filename,
             attachment_created_at=datetime.utcnow() if attachment else None,
+            audio_data=audio,
+            audio_mimetype=audio_mimetype,
+            audio_filename=audio_filename,
+            audio_created_at=datetime.utcnow() if audio else None,
+            client_operation_id=client_operation_id,
         )
         db.session.add(message)
         db.session.flush()
@@ -2384,7 +2459,12 @@ def mobile_create_chat_message():
             "chat.message",
             target_type="chat_message",
             target_id=message.id,
-            details={"reply_to_id": reply_to_id, "mention_user_ids": sorted(mentioned_ids), "has_photo": bool(attachment)},
+            details={
+                "reply_to_id": reply_to_id,
+                "mention_user_ids": sorted(mentioned_ids),
+                "has_photo": bool(attachment),
+                "has_audio": bool(audio),
+            },
             user=g.api_user,
         )
 
@@ -2508,6 +2588,66 @@ def mobile_react_chat_message(message_id):
     if request.method == "POST" and reaction is not None:
         _schedule_outbox_flush()
     return jsonify(_chat_message_json(message))
+
+
+@api_bp.route("/v1/chat/messages/<int:message_id>/audio-token", methods=("GET",))
+@require_api_token
+def mobile_chat_audio_token(message_id):
+    message = ChatMessage.query.get_or_404(message_id)
+    if g.api_user.created_at and message.created_at < g.api_user.created_at:
+        return jsonify({"error": "This message predates your account."}), 403
+    if not message.audio_data:
+        return jsonify({"error": "This voice recording has expired or no longer exists."}), 404
+    serializer = URLSafeTimedSerializer(
+        current_app.secret_key,
+        salt="oma-chat-audio",
+    )
+    media_token = serializer.dumps({
+        "user_id": g.api_user.id,
+        "message_id": message.id,
+    })
+    return jsonify({
+        "url": f"/api/v1/chat/messages/{message.id}/audio?media_token={media_token}",
+        "expires_in": 300,
+    })
+
+
+@api_bp.route("/v1/chat/messages/<int:message_id>/audio", methods=("GET",))
+def mobile_chat_audio(message_id):
+    message = ChatMessage.query.get_or_404(message_id)
+    user = getattr(g, "api_user", None)
+
+    if user is None:
+        token = (request.args.get("media_token") or "").strip()
+        if not token:
+            return jsonify({"error": "Authentication required."}), 401
+        try:
+            serializer = URLSafeTimedSerializer(
+                current_app.secret_key,
+                salt="oma-chat-audio",
+            )
+            payload = serializer.loads(token, max_age=300)
+        except (BadSignature, SignatureExpired):
+            return jsonify({"error": "This audio link has expired."}), 401
+        if (
+            not isinstance(payload, dict)
+            or int(payload.get("message_id") or 0) != message.id
+        ):
+            return jsonify({"error": "This audio link is invalid."}), 401
+        user = User.query.get(int(payload.get("user_id") or 0))
+        if user is None or not user.is_active:
+            return jsonify({"error": "This audio link is no longer valid."}), 401
+
+    if user.created_at and message.created_at < user.created_at:
+        return jsonify({"error": "This message predates your account."}), 403
+    if not message.audio_data:
+        return jsonify({"error": "This voice recording has expired or no longer exists."}), 404
+    from flask import Response
+    response = Response(message.audio_data, mimetype=message.audio_mimetype or "audio/wav")
+    response.headers["Content-Disposition"] = f'inline; filename="{message.audio_filename or "voice-message.wav"}"'
+    response.headers["Cache-Control"] = "private, no-store"
+    response.headers["Pragma"] = "no-cache"
+    return response
 
 
 @api_bp.route("/v1/chat/messages/<int:message_id>/attachment", methods=("GET",))

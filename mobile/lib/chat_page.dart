@@ -1,10 +1,13 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:just_audio/just_audio.dart';
+import 'package:record/record.dart';
 import 'package:share_plus/share_plus.dart';
 
 import 'brand_loader.dart';
@@ -26,8 +29,16 @@ class _ChatPageState extends State<ChatPage> {
   final TextEditingController composer = TextEditingController();
   final ScrollController scroll = ScrollController();
   final ImagePicker picker = ImagePicker();
+  final AudioRecorder audioRecorder = AudioRecorder();
   Uint8List? attachmentBytes;
   String? attachmentName;
+  Uint8List? audioDraftBytes;
+  String? audioDraftName;
+  bool recordingAudio = false;
+  int recordingSeconds = 0;
+  Timer? recordingTimer;
+  StreamSubscription<Uint8List>? audioStreamSubscription;
+  final List<Uint8List> audioChunks = [];
   bool emojiOpen = false;
   final Map<int, Uint8List> photoCache = {};
   final Map<int, Uint8List> avatarCache = {};
@@ -75,6 +86,9 @@ class _ChatPageState extends State<ChatPage> {
     scroll.removeListener(_onScrollChanged);
     composer.dispose();
     scroll.dispose();
+    recordingTimer?.cancel();
+    audioStreamSubscription?.cancel();
+    audioRecorder.dispose();
     super.dispose();
   }
 
@@ -290,53 +304,49 @@ class _ChatPageState extends State<ChatPage> {
 
   Future<void> send() async {
     final text = composer.text.trim();
-    if (text.isEmpty && attachmentBytes == null) return;
-
+    if (text.isEmpty && attachmentBytes == null && audioDraftBytes == null) return;
+    if (attachmentBytes != null && audioDraftBytes != null) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Choose either a photo or a voice recording.')));
+      return;
+    }
     final replyId = replyTo?['id'];
     final localId = 'local-${++_localSequence}';
-    final now = DateTime.now().toIso8601String();
+    final operationId = 'chat-${DateTime.now().microsecondsSinceEpoch}-${_localSequence}';
     final localPhoto = attachmentBytes;
-    final localName = attachmentName;
+    final localPhotoName = attachmentName;
+    final localAudio = audioDraftBytes;
+    final localAudioName = audioDraftName;
     final optimistic = <String, dynamic>{
-      'id': localId,
-      'sender_user_id': AppSession.userId,
+      'id': localId, 'sender_user_id': AppSession.userId,
       'sender_username': AppSession.username.isEmpty ? 'You' : AppSession.username,
-      'content': text,
-      'created_at': now,
-      'reply_to': replyTo,
-      '_status': 'sending',
-      '_attachment_bytes': localPhoto,
-      'attachment_filename': localName,
+      'content': text, 'created_at': DateTime.now().toIso8601String(),
+      'reply_to': replyTo, '_status': 'sending',
+      '_attachment_bytes': localPhoto, 'attachment_filename': localPhotoName,
+      '_audio_bytes': localAudio, 'audio_filename': localAudioName,
+      'audio_mimetype': localAudio == null ? null : 'audio/wav',
+      'client_operation_id': operationId,
     };
-
     setState(() {
-      _sendingCount++;
-      messages = [...messages, optimistic];
-      composer.clear();
-      replyTo = null;
-      attachmentBytes = null;
-      attachmentName = null;
-      emojiOpen = false;
+      _sendingCount++; messages = [...messages, optimistic]; composer.clear();
+      replyTo = null; attachmentBytes = null; attachmentName = null;
+      audioDraftBytes = null; audioDraftName = null; emojiOpen = false;
     });
     _scrollToBottom();
-
     try {
       final sent = await widget.api.sendChatMessage(
         text,
-        replyToId: replyId is int ? replyId : int.tryParse('$replyId'),
+        replyToId: replyId is int ? replyId : int.tryParse('${replyId}'),
         attachmentBase64: localPhoto == null ? null : base64Encode(localPhoto),
-        attachmentFilename: localName,
+        attachmentFilename: localPhotoName,
+        audioBase64: localAudio == null ? null : base64Encode(localAudio),
+        audioFilename: localAudioName,
+        audioMimetype: localAudio == null ? null : 'audio/wav',
+        clientOperationId: operationId,
       );
-
       if (!mounted) return;
       setState(() {
-        messages = messages
-            .map(
-              (message) => message['id'] == localId
-                  ? <String, dynamic>{...sent, '_status': 'sent'}
-                  : message,
-            )
-            .toList();
+        messages = messages.map((message) => message['id'] == localId
+          ? <String, dynamic>{...sent, '_status': 'sent'} : message).toList();
         _sendingCount = _sendingCount > 0 ? _sendingCount - 1 : 0;
       });
       _scrollToBottom();
@@ -344,17 +354,97 @@ class _ChatPageState extends State<ChatPage> {
       if (!mounted) return;
       showNetworkError(context, e, onRetry: () => _retryFailedMessage(optimistic));
       setState(() {
-        messages = messages
-            .map(
-              (message) => message['id'] == localId
-                  ? <String, dynamic>{...message, '_status': 'failed'}
-                  : message,
-            )
-            .toList();
+        messages = messages.map((message) => message['id'] == localId
+          ? <String, dynamic>{...message, '_status': 'failed'} : message).toList();
         _sendingCount = _sendingCount > 0 ? _sendingCount - 1 : 0;
       });
-      _scrollToBottom();
     }
+  }
+
+  Future<void> startAudioRecording() async {
+    if (recordingAudio) return;
+    if (attachmentBytes != null) setState(() { attachmentBytes = null; attachmentName = null; });
+    try {
+      if (!await audioRecorder.hasPermission()) {
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Microphone permission is required for voice messages.')));
+        return;
+      }
+      audioChunks.clear();
+      final stream = await audioRecorder.startStream(const RecordConfig(
+        encoder: AudioEncoder.pcm16bits, sampleRate: 16000, numChannels: 1,
+        echoCancel: true, noiseSuppress: true, autoGain: true,
+      ));
+      audioStreamSubscription = stream.listen((chunk) => audioChunks.add(Uint8List.fromList(chunk)));
+      recordingSeconds = 0;
+      if (mounted) setState(() => recordingAudio = true);
+      recordingTimer?.cancel();
+      recordingTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+        if (!mounted || !recordingAudio) { timer.cancel(); return; }
+        setState(() => recordingSeconds++);
+        if (recordingSeconds >= 90) stopAudioRecording();
+      });
+    } catch (e) {
+      audioChunks.clear();
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Could not start recording: $e')));
+    }
+  }
+
+  Future<void> stopAudioRecording() async {
+    if (!recordingAudio) return;
+    recordingTimer?.cancel(); recordingTimer = null;
+    try {
+      await audioRecorder.stop();
+      await audioStreamSubscription?.cancel(); audioStreamSubscription = null;
+      final raw = <int>[];
+      for (final chunk in audioChunks) raw.addAll(chunk);
+      audioChunks.clear();
+      if (raw.isEmpty) throw StateError('No audio was captured.');
+      final wav = _wavFromPcm16(Uint8List.fromList(raw), 16000, 1);
+      if (wav.length > 8 * 1024 * 1024) throw StateError('Voice recording is too large. Keep it shorter.');
+      if (mounted) setState(() {
+        recordingAudio = false;
+        audioDraftBytes = wav;
+        audioDraftName = 'voice-${DateTime.now().millisecondsSinceEpoch}.wav';
+      });
+    } catch (e) {
+      audioChunks.clear();
+      if (mounted) {
+        setState(() => recordingAudio = false);
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Could not finish recording: $e')));
+      }
+    }
+  }
+
+  Future<void> cancelAudioRecording() async {
+    recordingTimer?.cancel(); recordingTimer = null;
+    try { await audioRecorder.cancel(); } catch (_) {}
+    await audioStreamSubscription?.cancel(); audioStreamSubscription = null;
+    audioChunks.clear();
+    if (mounted) setState(() {
+      recordingAudio = false; recordingSeconds = 0; audioDraftBytes = null; audioDraftName = null;
+    });
+  }
+
+  Uint8List _wavFromPcm16(Uint8List pcm, int sampleRate, int channels) {
+    const bytesPerSample = 2;
+    final header = ByteData(44);
+    void ascii(int offset, String value) {
+      for (var i = 0; i < value.length; i++) header.setUint8(offset + i, value.codeUnitAt(i));
+    }
+    ascii(0, 'RIFF'); header.setUint32(4, 36 + pcm.length, Endian.little);
+    ascii(8, 'WAVE'); ascii(12, 'fmt '); header.setUint32(16, 16, Endian.little);
+    header.setUint16(20, 1, Endian.little); header.setUint16(22, channels, Endian.little);
+    header.setUint32(24, sampleRate, Endian.little);
+    header.setUint32(28, sampleRate * channels * bytesPerSample, Endian.little);
+    header.setUint16(32, channels * bytesPerSample, Endian.little); header.setUint16(34, 16, Endian.little);
+    ascii(36, 'data'); header.setUint32(40, pcm.length, Endian.little);
+    return Uint8List.fromList([...header.buffer.asUint8List(), ...pcm]);
+  }
+
+  String _recordingLabel() {
+    final minutes = (recordingSeconds ~/ 60).toString().padLeft(2, '0');
+    final seconds = (recordingSeconds % 60).toString().padLeft(2, '0');
+    return '$minutes:$seconds';
   }
 
   Future<void> pickPhoto() async {
@@ -459,7 +549,29 @@ class _ChatPageState extends State<ChatPage> {
     if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Copied ✨'), behavior: SnackBarBehavior.floating));
   }
 
+  Future<void> downloadAudio(Map<String, dynamic> message) async {
+    final url = '${message['audio_url'] ?? ''}';
+    if (url.isEmpty) return;
+    try {
+      final bytes = message['_audio_bytes'] is Uint8List
+          ? message['_audio_bytes'] as Uint8List
+          : await widget.api.downloadChatAudio(url);
+      await Share.shareXFiles([
+        XFile.fromData(
+          bytes,
+          name: '${message['audio_filename'] ?? 'voice-message.wav'}',
+          mimeType: '${message['audio_mimetype'] ?? 'audio/wav'}',
+        ),
+      ], text: 'Oma team chat voice message');
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(userFacingError(e))),
+      );
+    }
+  }
+
   Future<void> downloadPhoto(Map<String, dynamic> message) async {
+
     final id = int.tryParse('${message['id']}');
     final url = '${message['attachment_url'] ?? ''}';
     if (id == null || url.isEmpty) return;
@@ -508,6 +620,9 @@ class _ChatPageState extends State<ChatPage> {
     final hasPhoto =
         message['attachment_url']?.toString().isNotEmpty == true ||
         message['_attachment_bytes'] is Uint8List;
+    final hasAudio =
+        message['audio_url']?.toString().isNotEmpty == true ||
+        message['_audio_bytes'] is Uint8List;
 
     final action = await showModalBottomSheet<String>(
       context: context,
@@ -569,6 +684,12 @@ class _ChatPageState extends State<ChatPage> {
                     icon: Icons.download_rounded,
                     label: 'Save photo',
                   ),
+                if (hasAudio)
+                  item(
+                    value: 'saveAudio',
+                    icon: Icons.download_rounded,
+                    label: 'Save voice message',
+                  ),
               ],
             ),
           ),
@@ -597,6 +718,9 @@ class _ChatPageState extends State<ChatPage> {
       case 'save':
         await downloadPhoto(message);
         break;
+      case 'saveAudio':
+        await downloadAudio(message);
+        break;
     }
   }
 
@@ -612,6 +736,10 @@ class _ChatPageState extends State<ChatPage> {
     final content = '${message['content'] ?? ''}'.trim();
     if (content.isNotEmpty) return content;
 
+    if ('${message['audio_url'] ?? ''}'.isNotEmpty ||
+        message['_audio_bytes'] is Uint8List) {
+      return 'Voice message';
+    }
     if ('${message['attachment_url'] ?? ''}'.isNotEmpty ||
         message['_attachment_bytes'] is Uint8List) {
       return 'Photo';
@@ -910,27 +1038,22 @@ class _ChatPageState extends State<ChatPage> {
 
   Future<void> _retryFailedMessage(Map<String, dynamic> message) async {
     if (sending) return;
-
     final content = '${message['content'] ?? ''}';
     final localAttachment = message['_attachment_bytes'];
     final filename = message['attachment_filename']?.toString();
-
+    final localAudio = message['_audio_bytes'];
+    final audioName = message['audio_filename']?.toString();
     setState(() {
-      messages = messages
-          .where((item) => item['id'] != message['id'])
-          .toList();
+      messages = messages.where((item) => item['id'] != message['id']).toList();
       composer.text = content;
-      composer.selection = TextSelection.collapsed(
-        offset: composer.text.length,
-      );
+      composer.selection = TextSelection.collapsed(offset: composer.text.length);
       attachmentBytes = localAttachment is Uint8List ? localAttachment : null;
       attachmentName = filename;
+      audioDraftBytes = localAudio is Uint8List ? localAudio : null;
+      audioDraftName = audioName;
       final reply = message['reply_to'];
-      replyTo = reply is Map
-          ? Map<String, dynamic>.from(reply)
-          : null;
+      replyTo = reply is Map ? Map<String, dynamic>.from(reply) : null;
     });
-
     await send();
   }
 
@@ -1045,6 +1168,58 @@ class _ChatPageState extends State<ChatPage> {
                   contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 9),
                 ),
               ),
+              if (recordingAudio)
+                Container(
+                  width: double.infinity,
+                  margin: const EdgeInsets.only(bottom: 7),
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).colorScheme.errorContainer,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(Icons.mic_rounded, color: Theme.of(context).colorScheme.onErrorContainer),
+                      const SizedBox(width: 8),
+                      Expanded(child: Text('Recording ${_recordingLabel()}')),
+                      IconButton(
+                        tooltip: 'Cancel',
+                        onPressed: cancelAudioRecording,
+                        icon: const Icon(Icons.close_rounded),
+                      ),
+                      IconButton.filled(
+                        tooltip: 'Stop',
+                        onPressed: stopAudioRecording,
+                        icon: const Icon(Icons.stop_rounded),
+                      ),
+                    ],
+                  ),
+                )
+              else if (audioDraftBytes != null)
+                Container(
+                  width: double.infinity,
+                  margin: const EdgeInsets.only(bottom: 7),
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).colorScheme.secondaryContainer,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.graphic_eq_rounded),
+                      const SizedBox(width: 8),
+                      const Expanded(child: Text('Voice message ready to send')),
+                      IconButton(
+                        tooltip: 'Discard recording',
+                        onPressed: () => setState(() {
+                          audioDraftBytes = null;
+                          audioDraftName = null;
+                        }),
+                        icon: const Icon(Icons.delete_outline_rounded),
+                      ),
+                    ],
+                  ),
+                ),
               if (attachmentBytes != null)
                 Container(
                   width: double.infinity,
@@ -1099,8 +1274,13 @@ class _ChatPageState extends State<ChatPage> {
                   ),
                   IconButton(
                     tooltip: 'Photo',
-                    onPressed: pickPhoto,
+                    onPressed: recordingAudio || audioDraftBytes != null ? null : pickPhoto,
                     icon: const Icon(Icons.photo_outlined),
+                  ),
+                  IconButton(
+                    tooltip: 'Voice message',
+                    onPressed: sending || recordingAudio ? null : startAudioRecording,
+                    icon: const Icon(Icons.mic_none_rounded),
                   ),
                   const Spacer(),
                   IconButton.filled(
@@ -1120,6 +1300,21 @@ class _ChatPageState extends State<ChatPage> {
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _audioWidget(Map<String, dynamic> message) {
+    final local = message['_audio_bytes'];
+    final url = message['audio_url']?.toString() ?? '';
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 4),
+      child: _ChatAudioBubble(
+        api: widget.api,
+        messageId: _asInt(message['id']),
+        url: url,
+        localBytes: local is Uint8List ? local : null,
+        mimetype: message['audio_mimetype']?.toString(),
       ),
     );
   }
@@ -1399,6 +1594,9 @@ class _ChatPageState extends State<ChatPage> {
                                   if (attachmentUrl.isNotEmpty ||
                                       message['_attachment_bytes'] is Uint8List)
                                     _photoWidget(message),
+                                  if ('${message['audio_url'] ?? ''}'.isNotEmpty ||
+                                      message['_audio_bytes'] is Uint8List)
+                                    _audioWidget(message),
                                   if (reply is Map)
                                     _quotedMessage(
                                       Map<String, dynamic>.from(reply),
@@ -1617,6 +1815,123 @@ class _ChatPageState extends State<ChatPage> {
                 _composer(),
               ],
             ),
+    );
+  }
+}
+
+class _ChatAudioBubble extends StatefulWidget {
+  const _ChatAudioBubble({required this.api, required this.messageId, required this.url, this.localBytes, this.mimetype});
+  final ApiClient api;
+  final int? messageId;
+  final String url;
+  final Uint8List? localBytes;
+  final String? mimetype;
+
+  @override
+  State<_ChatAudioBubble> createState() => _ChatAudioBubbleState();
+}
+
+class _ChatAudioBubbleState extends State<_ChatAudioBubble> {
+  final AudioPlayer player = AudioPlayer();
+  StreamSubscription<Duration>? positionSubscription;
+  StreamSubscription<Duration?>? durationSubscription;
+  Duration position = Duration.zero;
+  Duration? duration;
+  bool loading = false;
+  String? error;
+
+  @override
+  void initState() {
+    super.initState();
+    positionSubscription = player.positionStream.listen((value) {
+      if (mounted) setState(() => position = value);
+    });
+    durationSubscription = player.durationStream.listen((value) {
+      if (mounted) setState(() => duration = value);
+    });
+  }
+
+  @override
+  void dispose() {
+    positionSubscription?.cancel();
+    durationSubscription?.cancel();
+    player.dispose();
+    super.dispose();
+  }
+
+  Future<void> toggle() async {
+    if (loading) return;
+    try {
+      if (player.playing) { await player.pause(); return; }
+      if (player.processingState == ProcessingState.completed) await player.seek(Duration.zero);
+      if (player.audioSource == null) {
+        setState(() { loading = true; error = null; });
+        if (widget.messageId == null) {
+          throw StateError('This voice message is not ready for playback.');
+        }
+        final url = await widget.api.chatAudioPlaybackUrl(widget.messageId!);
+        await player.setUrl(url);
+      }
+      setState(() => loading = false);
+      await player.play();
+    } catch (e) {
+      if (mounted) setState(() { loading = false; error = e.toString(); });
+    }
+  }
+
+  String _durationLabel(Duration value) {
+    final minutes = value.inMinutes.toString().padLeft(2, '0');
+    final seconds = (value.inSeconds % 60).toString().padLeft(2, '0');
+    return '$minutes:$seconds';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final total = duration ?? Duration.zero;
+    final maxMs = total.inMilliseconds <= 0 ? 1 : total.inMilliseconds;
+    final currentMs = position.inMilliseconds.clamp(0, maxMs);
+    return Container(
+      width: 250,
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surface.withOpacity(.18),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        children: [
+          IconButton(
+            visualDensity: VisualDensity.compact,
+            onPressed: toggle,
+            icon: loading
+                ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                : Icon(player.playing ? Icons.pause_rounded : Icons.play_arrow_rounded),
+          ),
+          Expanded(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Slider(
+                  value: currentMs.toDouble(),
+                  max: maxMs.toDouble(),
+                  onChanged: duration == null ? null : (value) => player.seek(Duration(milliseconds: value.round())),
+                ),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: Text(
+                    _durationLabel(position > total && total > Duration.zero ? total : position),
+                    style: const TextStyle(fontSize: 10),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          if (error != null)
+            const Padding(
+              padding: EdgeInsets.only(left: 4),
+              child: Icon(Icons.error_outline_rounded, size: 18),
+            ),
+        ],
+      ),
     );
   }
 }

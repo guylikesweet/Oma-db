@@ -480,6 +480,15 @@ class ChatMessage(db.Model):
     attachment_mimetype = db.Column(db.String(50), nullable=True)
     attachment_filename = db.Column(db.String(255), nullable=True)
     attachment_created_at = db.Column(db.DateTime, nullable=True)
+    # Voice messages are stored durably in Postgres for the same reason as
+    # chat photos: Render's local filesystem is not durable across deploys.
+    audio_data = db.Column(db.LargeBinary, nullable=True)
+    audio_mimetype = db.Column(db.String(50), nullable=True)
+    audio_filename = db.Column(db.String(255), nullable=True)
+    audio_created_at = db.Column(db.DateTime, nullable=True)
+    # Lets offline retries safely replay a send without creating duplicate
+    # messages when the first request committed but its response was lost.
+    client_operation_id = db.Column(db.String(100), nullable=True, unique=True, index=True)
     reply_to_id = db.Column(
         db.Integer,
         db.ForeignKey("chat_messages.id", ondelete="SET NULL"),
