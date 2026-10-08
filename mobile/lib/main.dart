@@ -1363,8 +1363,8 @@ class _OmaBottomNavigation extends StatelessWidget {
                                 // Keep the logo comfortably inside the circle.
                                 Image.asset(
                                   'assets/images/app_icon.png',
-                                  width: 24,
-                                  height: 24,
+                                  width: 30,
+                                  height: 30,
                                   fit: BoxFit.contain,
                                 ),
                               ],
