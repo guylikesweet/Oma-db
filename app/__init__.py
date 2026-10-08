@@ -199,7 +199,7 @@ def create_app(config_object="config.Config"):
     def robots_txt():
         from flask import Response
         base = request.url_root.rstrip("/")
-        body = f"User-agent: *\\nAllow: /\\nAllow: /use-case/\\nDisallow: /api/\\nDisallow: /classic/\\nDisallow: /webapp/\\nSitemap: {base}/sitemap.xml\\n"
+        body = f"User-agent: *\nAllow: /\nAllow: /use-case/\nDisallow: /api/\nDisallow: /classic/\nDisallow: /webapp/\nSitemap: {base}/sitemap.xml\n"
         return Response(body, mimetype="text/plain")
 
     @app.route("/sitemap.xml")
