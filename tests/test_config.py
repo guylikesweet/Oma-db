@@ -10,15 +10,15 @@ def test_production_requires_valid_public_base_url(monkeypatch):
 
     import config
 
-    importlib.reload(config)
     try:
         try:
-            config.Config
-        except RuntimeError:
-            pass
+            importlib.reload(config)
+        except RuntimeError as exc:
+            assert "OMA_PUBLIC_BASE_URL" in str(exc)
         else:
             raise AssertionError("Config accepted an invalid production public base URL")
     finally:
+        monkeypatch.setenv("OMA_PUBLIC_BASE_URL", "https://oma.example")
         importlib.reload(config)
 
 
