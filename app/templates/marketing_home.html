@@ -17,7 +17,7 @@
   <meta name="twitter:description" content="Sales, stock, shipping and delivery management in one app.">
   <meta name="twitter:image" content="{{ og_image }}">
   <link rel="icon" href="{{ url_for('static', filename='webapp/favicon.png') }}">
-  <link rel="preload" as="image" href="{{ url_for('static', filename='webapp/icons/Icon-192.png') }}" fetchpriority="high">
+  
   <style>
     :root{font-family:Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#13251f;background:#fff}
     *{box-sizing:border-box}body{margin:0}a{color:inherit}
@@ -25,7 +25,7 @@
     .brand{display:flex;align-items:center;text-decoration:none}.brand img{display:block;width:46px;height:46px;object-fit:contain}.nav a{font-weight:700;text-decoration:none}
     .hero{padding:70px 0 55px;background:linear-gradient(180deg,#f1fbf7 0,#fff 100%)}.hero-grid{display:grid;grid-template-columns:1.2fr .8fr;gap:50px;align-items:center}
     h1{font-size:clamp(42px,6vw,68px);line-height:1.02;letter-spacing:-.045em;margin:0 0 22px}.hero p{font-size:20px;line-height:1.6;color:#53645f;max-width:680px}
-    .cta{display:inline-flex;align-items:center;justify-content:center;margin-top:12px;padding:15px 24px;border-radius:12px;background:#039664;color:#fff;text-decoration:none;font-weight:800;box-shadow:0 8px 25px #03966430}
+    .cta{display:inline-flex;align-items:center;justify-content:center;margin-top:12px;padding:15px 24px;border-radius:12px;background:#039664;color:#fff;text-decoration:none;font-weight:800;box-shadow:0 8px 25px #03966430}.cta:focus-visible,.brand:focus-visible,.pill:focus-visible{outline:3px solid #10231d;outline-offset:3px}
     .hero-card{background:#10231d;color:#fff;border-radius:24px;padding:28px;box-shadow:0 20px 50px #10231d25}.hero-card strong{font-size:18px}.metric{padding:20px 0;border-bottom:1px solid #ffffff1a}.metric:last-child{border:0}.metric b{display:block;font-size:28px}
     section{padding:72px 0}h2{font-size:38px;letter-spacing:-.03em;margin:0 0 14px}.lead{color:#61706b;font-size:18px;line-height:1.6}.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;margin-top:32px}.card{border:1px solid #e4ebe8;border-radius:18px;padding:24px;background:#fff}.card h3{margin:0 0 9px}.card p{color:#61706b;line-height:1.6;margin:0}
     .usecases{background:#f7faf9}.pill{display:inline-block;padding:9px 13px;border-radius:999px;background:#e8f6f0;margin:5px;text-decoration:none;font-weight:700;color:#087b55}
