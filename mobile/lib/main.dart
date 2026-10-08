@@ -1205,10 +1205,13 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
                   labelType: NavigationRailLabelType.all,
                   leading: Padding(
                     padding: const EdgeInsets.only(top: 12, bottom: 18),
-                    child: Icon(
-                      Icons.storefront_rounded,
-                      color: Theme.of(context).colorScheme.primary,
-                      size: 30,
+                    child: InkWell(
+                      onTap: () => setState(() => tab = 2),
+                      borderRadius: BorderRadius.circular(14),
+                      child: Padding(
+                        padding: const EdgeInsets.all(4),
+                        child: Image.asset('assets/images/app_icon.png', width: 38, height: 38),
+                      ),
                     ),
                   ),
                   destinations: const [
@@ -1329,10 +1332,11 @@ class _OmaBottomNavigation extends StatelessWidget {
                               ),
                             ],
                           ),
-                          child: Icon(
-                            selected ? item.$2 : item.$1,
-                            color: Colors.white,
-                            size: 31,
+                          child: Image.asset(
+                            'assets/images/app_icon.png',
+                            width: 40,
+                            height: 40,
+                            fit: BoxFit.contain,
                           ),
                         ),
                       ),
