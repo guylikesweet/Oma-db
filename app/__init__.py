@@ -189,7 +189,7 @@ def create_app(config_object="config.Config"):
             app.logger.exception("Unhandled application exception request_id=%s", getattr(g, "request_id", "unknown"))
             db.session.rollback()
             return {"error": "Internal server error.", "message": "The server could not complete this request.", "request_id": getattr(g, "request_id", "unknown")}, 500
-        raise error
+        return error
 
     @app.route("/")
     def root():
