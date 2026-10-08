@@ -7,14 +7,14 @@ Oma uses Firebase Cloud Messaging (FCM). Firebase Cloud Messaging is a no-cost F
 Add these repository secrets before building the Flutter APK/web app:
 
 - FCM_API_KEY
-- FCM_APP_ID
+- FCM_APP_ID (Firebase Web app id; it must look like `1:<sender>:web:<id>`)
 - FCM_MESSAGING_SENDER_ID
 - FCM_PROJECT_ID
 - FCM_AUTH_DOMAIN
 - FCM_STORAGE_BUCKET
 - FCM_WEB_VAPID_KEY
 
-These values come from the Firebase project Web/Android app configuration and Cloud Messaging Web Push certificates.
+Use the **Web app** configuration for `FCM_APP_ID`, not the Android app id. The remaining values come from the Firebase project Web app configuration and Cloud Messaging Web Push certificates.
 
 ## Render
 
