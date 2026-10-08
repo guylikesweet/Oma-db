@@ -65,6 +65,8 @@ def add_sale_to_batch(batch_id, sale_id):
         raise BatchValidationError("Sale not found.")
     if sale.order_status == "Cancelled":
         raise BatchValidationError("Cannot add a cancelled sale to a batch.")
+    if sale.shipping_payment_settled or sale.delivery_id:
+        raise BatchValidationError("This sale has already been settled or assigned to delivery and cannot be added to a batch.")
     if sale.is_stock_sale:
         raise BatchValidationError("Stocked sales are not shipped in batches.")
 
@@ -137,6 +139,10 @@ def update_batch_sales(batch_id, *, add_sale_ids=None, remove_sale_ids=None, com
             if sale.order_status == "Cancelled":
                 raise BatchValidationError(
                     f"Sale #{sale.id} is cancelled and cannot be added."
+                )
+            if sale.shipping_payment_settled or sale.delivery_id:
+                raise BatchValidationError(
+                    f"Sale #{sale.id} is already settled or assigned to delivery."
                 )
             if sale.is_stock_sale:
                 raise BatchValidationError(
