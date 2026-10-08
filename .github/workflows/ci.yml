@@ -90,9 +90,13 @@ jobs:
           python - <<'PY'
           from app import create_app
 
+          import os
+          os.environ["OMA_PUBLIC_BASE_URL"] = "https://oma.example"
           app = create_app()
           with app.test_client() as client:
               home = client.get("/")
+              assert b"https://oma.example/" in home.data
+              assert b"https://oma.example/static/logo.png" in home.data
               assert home.status_code == 200
               assert b"application/ld+json" in home.data
               assert b'property="og:image"' in home.data
