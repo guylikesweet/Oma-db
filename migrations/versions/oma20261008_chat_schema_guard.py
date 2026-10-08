@@ -23,11 +23,7 @@ def upgrade():
     bind = op.get_bind()
     inspector = inspect(bind)
 
-    if "chat_messages" not in inspector.get_table_names():
-        # The normal chat migrations should create this table. Do not silently
-        # fabricate a partial schema here; the missing table must be repaired
-        # by the preceding chat migration chain.
-        return
+    chat_table_missing = "chat_messages" not in inspector.get_table_names()
 
     # Repair product pricing/media columns if a production database has
     # an Alembic revision recorded but an incomplete physical schema.
@@ -62,6 +58,12 @@ def upgrade():
                 op.add_column("users", column)
                 present_users.add(column.name)
                 inspector.clear_cache()
+
+    if chat_table_missing:
+        # The normal chat migrations should create this table. Do not silently
+        # fabricate a partial schema here; product/profile repairs above are
+        # still valid even when the chat table needs a separate repair.
+        return
 
     definitions = (
         sa.Column("audio_data", sa.LargeBinary(), nullable=True),
