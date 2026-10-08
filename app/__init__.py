@@ -140,12 +140,65 @@ def create_app(config_object="config.Config"):
 
     @app.route("/")
     def root():
-        # The Flutter web app is now the main site. Its index.html declares
-        # <base href="/webapp/">, so every asset it loads still resolves
-        # under /webapp/ (served by webapp_bp) - no rebuild needed. The app
-        # handles its own login, hence no @login_required here.
-        from app.webapp import serve_webapp
-        return serve_webapp("")
+        use_cases = use_cases_for_marketing()
+            {"name": "Pharmacy", "slug": "pharmacy", "headline": "Sales and inventory management for pharmacies", "seo_title": "Sales App for Pharmacies in Nigeria", "description": "Keep pharmacy sales, stock levels, product costs and daily operations organized with OmaSales.", "points": ["Track products and stock movements.", "Record sales while keeping inventory accurate.", "See sales and profit information in one dashboard."], "body": "OmaSales gives pharmacy operators a single operational view instead of relying on disconnected notebooks, spreadsheets and messages."},
+            {"name": "Supermarket", "slug": "supermarket", "headline": "A sales and stock app for supermarkets", "seo_title": "Sales App for Supermarkets in Nigeria", "description": "Manage supermarket sales, inventory, stock movements and business performance with OmaSales.", "points": ["Keep stock quantities visible.", "Record sales quickly.", "Monitor low-stock items and business KPIs."], "body": "Designed for busy retail operations where accurate stock and fast sales records matter."},
+            {"name": "Fashion Store", "slug": "fashion-store", "headline": "Inventory and sales management for fashion stores", "seo_title": "Sales App for Fashion Stores in Nigeria", "description": "Track fashion inventory, sales, costs and stock with OmaSales.", "points": ["Organize products and stock.", "Record customer sales and totals.", "Understand costs and profit."], "body": "Keep your fashion business numbers together as your product range and sales volume grow."},
+            {"name": "Phone Accessories", "slug": "phone-accessories", "headline": "Sales and stock management for phone accessory shops", "seo_title": "Sales App for Phone Accessories Businesses in Nigeria", "description": "Manage fast-moving phone accessories, sales and stock with OmaSales.", "points": ["Track fast-moving products.", "Reduce stock surprises.", "Record sales and monitor performance."], "body": "OmaSales is suited to businesses with many small, fast-moving products and frequent stock changes."},
+            {"name": "Mini Mart", "slug": "mini-mart", "headline": "Simple inventory and sales management for mini marts", "seo_title": "Sales App for Mini Marts in Nigeria", "description": "Run mini-mart sales and inventory from one business management app.", "points": ["Track inventory.", "Record daily sales.", "Monitor low stock and profit."], "body": "Use one system to keep daily retail operations visible and easier to control."},
+            {"name": "Wholesaler", "slug": "wholesaler", "headline": "Sales, inventory and shipping management for wholesalers", "seo_title": "Sales App for Wholesalers in Nigeria", "description": "Manage wholesale sales, inventory, shipping batches and deliveries with OmaSales.", "points": ["Track stock and sales.", "Manage shipment batches and shipping costs.", "Prepare deliveries and settle shipping payments."], "body": "OmaSales combines inventory and sales with the shipping workflows needed by trading and wholesale businesses."},
+        ]
+        schema = {
+            "@context": "https://schema.org",
+            "@graph": [
+                {"@type": "Organization", "name": "OmaSales", "url": request.url_root.rstrip("/")},
+                {"@type": "SoftwareApplication", "name": "OmaSales", "applicationCategory": "BusinessApplication", "operatingSystem": "Android, Web", "description": "Sales, inventory, shipping and delivery management for businesses."},
+                {"@type": "WebSite", "name": "OmaSales", "url": request.url_root},
+                {"@type": "FAQPage", "mainEntity": [
+                    {"@type": "Question", "name": "Does OmaSales work when the internet is unavailable?", "acceptedAnswer": {"@type": "Answer", "text": "The mobile application is designed around local data and an offline write queue, then synchronizes changes when connectivity returns."}},
+                    {"@type": "Question", "name": "Can OmaSales manage shipping?", "acceptedAnswer": {"@type": "Answer", "text": "OmaSales supports shipment batches, sea and air shipping workflows, shipping rates, delivery preparation and customer shipping settlement."}},
+                    {"@type": "Question", "name": "Can I use OmaSales on Android and the web?", "acceptedAnswer": {"@type": "Answer", "text": "Yes. OmaSales includes Flutter Android and Flutter Web clients backed by the same Flask API."}}
+                ]}
+            ]
+        }
+        return render_template("marketing_home.html", use_cases=use_cases, year=datetime.utcnow().year,
+                               canonical_url=request.url, og_image=url_for("static", filename="webapp/icons/Icon-192.png", _external=True),
+                               schema=schema)
+
+    @app.route("/use-case/<slug>")
+    def use_case(slug):
+        item = next((x for x in use_cases_for_marketing() if x["slug"] == slug), None)
+        if item is None:
+            from flask import abort
+            abort(404)
+        schema = {
+            "@context": "https://schema.org",
+            "@type": "WebPage",
+            "name": item["seo_title"],
+            "description": item["description"],
+            "url": request.url,
+            "isPartOf": {"@type": "WebSite", "name": "OmaSales", "url": request.url_root},
+        }
+        return render_template("marketing_use_case.html", item=item, canonical_url=request.url,
+                               og_image=url_for("static", filename="webapp/icons/Icon-192.png", _external=True),
+                               schema=schema)
+
+    @app.route("/robots.txt")
+    def robots_txt():
+        from flask import Response
+        base = request.url_root.rstrip("/")
+        body = f"User-agent: *\\nAllow: /\\nAllow: /use-case/\\nDisallow: /api/\\nDisallow: /classic/\\nDisallow: /webapp/\\nSitemap: {base}/sitemap.xml\\n"
+        return Response(body, mimetype="text/plain")
+
+    @app.route("/sitemap.xml")
+    def sitemap_xml():
+        from flask import Response
+        from xml.sax.saxutils import escape
+        base = request.url_root.rstrip("/")
+        urls = [base + "/", *[base + "/use-case/" + x["slug"] for x in use_cases_for_marketing()]]
+        xml = '<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">' + "".join(f"<url><loc>{escape(u)}</loc></url>" for u in urls) + "</urlset>"
+        return Response(xml, mimetype="application/xml")
+
 
     @app.route("/classic")
     @login_required
@@ -240,3 +293,4 @@ def register_cli(app):
         user.biometric_credential_hash = None
         db.session.commit()
         print(f"API token for '{username}': {raw_token}")
+\n\ndef use_cases_for_marketing():\n    return [\n        {"name": "Pharmacy", "slug": "pharmacy", "headline": "Sales and inventory management for pharmacies", "seo_title": "Sales App for Pharmacies in Nigeria", "description": "Keep pharmacy sales, stock levels, product costs and daily operations organized with OmaSales.", "points": ["Track products and stock movements.", "Record sales while keeping inventory accurate.", "See sales and profit information in one dashboard."], "body": "OmaSales gives pharmacy operators a single operational view instead of relying on disconnected notebooks, spreadsheets and messages."},\n        {"name": "Supermarket", "slug": "supermarket", "headline": "A sales and stock app for supermarkets", "seo_title": "Sales App for Supermarkets in Nigeria", "description": "Manage supermarket sales, inventory, stock movements and business performance with OmaSales.", "points": ["Keep stock quantities visible.", "Record sales quickly.", "Monitor low-stock items and business KPIs."], "body": "Designed for busy retail operations where accurate stock and fast sales records matter."},\n        {"name": "Fashion Store", "slug": "fashion-store", "headline": "Inventory and sales management for fashion stores", "seo_title": "Sales App for Fashion Stores in Nigeria", "description": "Track fashion inventory, sales, costs and stock with OmaSales.", "points": ["Organize products and stock.", "Record customer sales and totals.", "Understand costs and profit."], "body": "Keep your fashion business numbers together as your product range and sales volume grow."},\n        {"name": "Phone Accessories", "slug": "phone-accessories", "headline": "Sales and stock management for phone accessory shops", "seo_title": "Sales App for Phone Accessories Businesses in Nigeria", "description": "Manage fast-moving phone accessories, sales and stock with OmaSales.", "points": ["Track fast-moving products.", "Reduce stock surprises.", "Record sales and monitor performance."], "body": "OmaSales is suited to businesses with many small, fast-moving products and frequent stock changes."},\n        {"name": "Mini Mart", "slug": "mini-mart", "headline": "Simple inventory and sales management for mini marts", "seo_title": "Sales App for Mini Marts in Nigeria", "description": "Run mini-mart sales and inventory from one business management app.", "points": ["Track inventory.", "Record daily sales.", "Monitor low stock and profit."], "body": "Use one system to keep daily retail operations visible and easier to control."},\n        {"name": "Wholesaler", "slug": "wholesaler", "headline": "Sales, inventory and shipping management for wholesalers", "seo_title": "Sales App for Wholesalers in Nigeria", "description": "Manage wholesale sales, inventory, shipping batches and deliveries with OmaSales.", "points": ["Track stock and sales.", "Manage shipment batches and shipping costs.", "Prepare deliveries and settle shipping payments."], "body": "OmaSales combines inventory and sales with the shipping workflows needed by trading and wholesale businesses."},\n    ]\n
