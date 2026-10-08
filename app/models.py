@@ -682,9 +682,14 @@ def _json_value(value):
 
 
 def _model_payload(obj):
+    # Never place binary media in the JSON mobile change feed. Product photos
+    # are fetched through the authenticated image endpoint; the sync payload
+    # carries only metadata.
+    binary_columns = {"image_data", "profile_photo_data", "attachment_data"}
     return {
         column.name: _json_value(getattr(obj, column.name))
         for column in obj.__table__.columns
+        if column.name not in binary_columns
     }
 
 
