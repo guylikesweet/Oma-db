@@ -387,16 +387,23 @@ jobs:
         run: |
           set -euo pipefail
 
-          if [ ! -d android ]; then
-            echo "Android project does not exist."
-            echo "Creating Android project..."
+          if [ ! -f android/app/build.gradle ] && \
+             [ ! -f android/app/build.gradle.kts ]; then
+            echo "A complete Android Gradle project was not found."
+            echo "Regenerating the Android platform scaffold..."
+
+            # This workflow recreates Android-specific files on every build;
+            # the app's Dart source and assets live outside this directory.
+            # Remove an incomplete scaffold so Flutter cannot mistake it for
+            # a valid platform project and skip generating the Gradle files.
+            rm -rf android
 
             flutter create \
               --platforms=android \
               --org com.example \
               .
           else
-            echo "Android project already exists."
+            echo "Android Gradle project found."
           fi
 
           # Remove old Java activity if present.
