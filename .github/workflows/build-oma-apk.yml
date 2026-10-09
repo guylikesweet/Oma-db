@@ -785,26 +785,26 @@ jobs:
               settings_plugin_check = 'id "com.google.gms.google-services" version "4.5.0" apply false'
 
           if "com.google.gms.google-services" not in settings_text:
-              plugins_match = re.search(r"(?m)^plugins\\s*\\{", settings_text)
+              plugins_match = re.search(r"(?m)^plugins\s*\{", settings_text)
               if not plugins_match:
                   raise SystemExit(f"Could not find plugins {{ block in {settings}.")
               settings_text = (
                   settings_text[:plugins_match.end()]
-                  + "\\n    " + plugin_id
+                  + "\n    " + plugin_id
                   + settings_text[plugins_match.end():]
               )
           else:
               # Normalize an existing plugin declaration to match this DSL.
               if settings.suffix == ".kts":
                   settings_text = re.sub(
-                      r'(?m)^([ \\t]*)id "com\\.google\\.gms\\.google-services" version "4\\.5\\.0" apply false[ \\t]*$',
-                      r'\\1id("com.google.gms.google-services") version "4.5.0" apply false',
+                      r'(?m)^([ \t]*)id "com\.google\.gms\.google-services" version "4\.5\.0" apply false[ \t]*$',
+                      r'\1id("com.google.gms.google-services") version "4.5.0" apply false',
                       settings_text,
                   )
               else:
                   settings_text = re.sub(
-                      r'(?m)^([ \\t]*)id\\("com\\.google\\.gms\\.google-services"\\) version "4\\.5\\.0" apply false[ \\t]*$',
-                      r'\\1id "com.google.gms.google-services" version "4.5.0" apply false',
+                      r'(?m)^([ \t]*)id\("com\.google\.gms\.google-services"\) version "4\.5\.0" apply false[ \t]*$',
+                      r'\1id "com.google.gms.google-services" version "4.5.0" apply false',
                       settings_text,
                   )
 
@@ -814,25 +814,25 @@ jobs:
               app_plugin = 'id "com.google.gms.google-services"'
 
           if "com.google.gms.google-services" not in app_text:
-              plugins_match = re.search(r"(?m)^plugins\\s*\\{", app_text)
+              plugins_match = re.search(r"(?m)^plugins\s*\{", app_text)
               if not plugins_match:
                   raise SystemExit(f"Could not find plugins {{ block in {app_gradle}.")
               app_text = (
                   app_text[:plugins_match.end()]
-                  + "\\n    " + app_plugin
+                  + "\n    " + app_plugin
                   + app_text[plugins_match.end():]
               )
           else:
               if app_gradle.suffix == ".kts":
                   app_text = re.sub(
-                      r'(?m)^([ \\t]*)id "com\\.google\\.gms\\.google-services"[ \\t]*$',
-                      r'\\1id("com.google.gms.google-services")',
+                      r'(?m)^([ \t]*)id "com\.google\.gms\.google-services"[ \t]*$',
+                      r'\1id("com.google.gms.google-services")',
                       app_text,
                   )
               else:
                   app_text = re.sub(
-                      r'(?m)^([ \\t]*)id\\("com\\.google\\.gms\\.google-services"\\)[ \\t]*$',
-                      r'\\1id "com.google.gms.google-services"',
+                      r'(?m)^([ \t]*)id\("com\.google\.gms\.google-services"\)[ \t]*$',
+                      r'\1id "com.google.gms.google-services"',
                       app_text,
                   )
 
