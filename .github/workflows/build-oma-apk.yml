@@ -1045,12 +1045,12 @@ jobs:
 
           """
               if "keystorePropertiesFile" not in s:
-                  android_match = re.search(r"(?m)^android\\s*\\{", s)
+                  android_match = re.search(r"(?m)^android\s*\{", s)
                   if not android_match:
                       raise SystemExit(f"Could not locate android {{ block in {path}.")
                   s = s[:android_match.start()] + loader + s[android_match.start():]
 
-              android_match = re.search(r"(?m)^android\\s*\\{", s)
+              android_match = re.search(r"(?m)^android\s*\{", s)
               if not android_match:
                   raise SystemExit(f"Could not locate android {{ block in {path}.")
 
@@ -1065,75 +1065,75 @@ jobs:
               }
 
           """
-                  build_types = re.search(r"(?m)^([ \\t]*)buildTypes\\s*\\{", s)
+                  build_types = re.search(r"(?m)^([ \t]*)buildTypes\s*\{", s)
                   if not build_types:
                       raise SystemExit(f"Could not locate buildTypes {{ block in {path}.")
                   s = s[:build_types.start()] + signing + s[build_types.start():]
 
-              build_types = re.search(r"(?m)^([ \\t]*)buildTypes\\s*\\{", s)
+              build_types = re.search(r"(?m)^([ \t]*)buildTypes\s*\{", s)
               if not build_types:
                   raise SystemExit(f"Could not locate buildTypes {{ block in {path}.")
               tail = s[build_types.end():]
-              release = re.search(r"(?m)^([ \\t]*)getByName\\(\\"release\\"\\)\\s*\\{|^([ \\t]*)release\\s*\\{", tail)
+              release = re.search(r"(?m)^([ \t]*)getByName\(\"release\"\)\s*\{|^([ \t]*)release\s*\{", tail)
               if not release:
                   raise SystemExit(f"Could not locate release build type in {path}.")
               indent = release.group(1) or release.group(2) or "        "
               release_abs = build_types.end() + release.end()
               release_indent = indent
-              close = re.search(r"(?m)^" + re.escape(release_indent) + r"\\}", s[release_abs:])
+              close = re.search(r"(?m)^" + re.escape(release_indent) + r"\}", s[release_abs:])
               if not close:
                   raise SystemExit(f"Could not locate release block end in {path}.")
               block = s[release_abs:release_abs + close.start()]
-              block = re.sub(r"(?m)^[ \\t]*signingConfig\\s*=.*(?:\\n|$)", "", block)
-              block = "\\n" + release_indent + "    signingConfig = signingConfigs.getByName(\\"release\\")" + block
+              block = re.sub(r"(?m)^[ \t]*signingConfig\s*=.*(?:\n|$)", "", block)
+              block = "\n" + release_indent + "    signingConfig = signingConfigs.getByName(\"release\")" + block
               s = s[:release_abs] + block + s[release_abs + close.start():]
 
               if "signingConfigs.getByName(\"release\")" not in s:
                   raise SystemExit("Kotlin DSL release signing was not configured.")
           else:
               if "keystorePropertiesFile" not in s:
-                  android_match = re.search(r"(?m)^android\\s*\\{", s)
+                  android_match = re.search(r"(?m)^android\s*\{", s)
                   if not android_match:
                       raise SystemExit(f"Could not locate android {{ block in {path}.")
                   prefix = (
-                      "def keystoreProperties = new Properties()\\n"
-                      "def keystorePropertiesFile = rootProject.file('key.properties')\\n"
-                      "if (keystorePropertiesFile.exists()) {\\n"
-                      "    keystoreProperties.load(new FileInputStream(keystorePropertiesFile))\\n"
-                      "}\\n\\n"
+                      "def keystoreProperties = new Properties()\n"
+                      "def keystorePropertiesFile = rootProject.file('key.properties')\n"
+                      "if (keystorePropertiesFile.exists()) {\n"
+                      "    keystoreProperties.load(new FileInputStream(keystorePropertiesFile))\n"
+                      "}\n\n"
                   )
                   s = s[:android_match.start()] + prefix + s[android_match.start():]
 
-              build_types = re.search(r"(?m)^([ \\t]*)buildTypes\\s*\\{", s)
+              build_types = re.search(r"(?m)^([ \t]*)buildTypes\s*\{", s)
               if not build_types:
                   raise SystemExit(f"Could not locate buildTypes {{ block in {path}.")
               if "signingConfigs {" not in s:
                   indent = build_types.group(1)
                   signing = (
-                      f"{indent}signingConfigs {{\\n"
-                      f"{indent}    release {{\\n"
-                      f"{indent}        keyAlias keystoreProperties['keyAlias']\\n"
-                      f"{indent}        keyPassword keystoreProperties['keyPassword']\\n"
-                      f"{indent}        storeFile keystoreProperties['storeFile'] ? file(keystoreProperties['storeFile']) : null\\n"
-                      f"{indent}        storePassword keystoreProperties['storePassword']\\n"
-                      f"{indent}    }}\\n{indent}}}\\n\\n"
+                      f"{indent}signingConfigs {{\n"
+                      f"{indent}    release {{\n"
+                      f"{indent}        keyAlias keystoreProperties['keyAlias']\n"
+                      f"{indent}        keyPassword keystoreProperties['keyPassword']\n"
+                      f"{indent}        storeFile keystoreProperties['storeFile'] ? file(keystoreProperties['storeFile']) : null\n"
+                      f"{indent}        storePassword keystoreProperties['storePassword']\n"
+                      f"{indent}    }}\n{indent}}}\n\n"
                   )
                   s = s[:build_types.start()] + signing + s[build_types.start():]
 
-              build_types = re.search(r"(?m)^([ \\t]*)buildTypes\\s*\\{", s)
+              build_types = re.search(r"(?m)^([ \t]*)buildTypes\s*\{", s)
               tail = s[build_types.end():]
-              release = re.search(r"(?m)^([ \\t]*)release\\s*\\{", tail)
+              release = re.search(r"(?m)^([ \t]*)release\s*\{", tail)
               if not release:
                   raise SystemExit(f"Could not locate release block in {path}.")
               release_abs = build_types.end() + release.end()
               release_indent = release.group(1)
-              close = re.search(r"(?m)^" + re.escape(release_indent) + r"\\}", s[release_abs:])
+              close = re.search(r"(?m)^" + re.escape(release_indent) + r"\}", s[release_abs:])
               if not close:
                   raise SystemExit(f"Could not locate release block end in {path}.")
               block = s[release_abs:release_abs + close.start()]
               signing_line = release_indent + "    signingConfig signingConfigs.release"
-              block = re.sub(r"(?m)^[ \\t]*signingConfig(?:[ \\t]*=[ \\t]*)?[ \\t]+signingConfigs\\.[A-Za-z0-9_]+[ \\t]*(?:\\n|$)", "", block)
-              block = "\\n" + signing_line + block
+              block = re.sub(r"(?m)^[ \t]*signingConfig(?:[ \t]*=[ \t]*)?[ \t]+signingConfigs\.[A-Za-z0-9_]+[ \t]*(?:\n|$)", "", block)
+              block = "\n" + signing_line + block
               s = s[:release_abs] + block + s[release_abs + close.start():]
               if "signingConfig signingConfigs.release" not in s:
                   raise SystemExit("Groovy release signing was not configured.")
