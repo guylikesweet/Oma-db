@@ -71,7 +71,7 @@ class _WebsiteFeaturesPageState extends State<WebsiteFeaturesPage> {
     final isAdmin = AppSession.isAdmin;
     return Scaffold(
       appBar: AppBar(
-        title: const Text('All Website Features'),
+        title: const Text('More Features'),
         actions: [
           Padding(
             padding: const EdgeInsets.only(right: 12),
@@ -85,7 +85,7 @@ class _WebsiteFeaturesPageState extends State<WebsiteFeaturesPage> {
         ],
       ),
       body: ListView(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.fromLTRB(14, 12, 14, 24),
         children: [
           if (error != null)
             Card(
@@ -100,24 +100,24 @@ class _WebsiteFeaturesPageState extends State<WebsiteFeaturesPage> {
               ),
             ),
 
-          _tile(
-            Icons.inventory_2,
-            'Manage products',
-            'Admin changes require biometric verification (stock adjustments remain routine).',
-            () => open(WebProductsPage(api: widget.api, repo: widget.repo)),
-          ),
-
+          _sectionLabel(Icons.bolt, 'Daily operations',
+              'Products, sales and stock management'),
           _tile(
             Icons.receipt_long,
             'Manage sales',
-            'Shipping settlement requires biometric verification.',
+            'View and manage customer orders and sales records',
             () => open(WebSalesPage(api: widget.api, repo: widget.repo)),
           ),
-
+          _tile(
+            Icons.inventory_2,
+            'Manage products',
+            'Product details, prices, stock and product photos',
+            () => open(WebProductsPage(api: widget.api, repo: widget.repo)),
+          ),
           _tile(
             Icons.inventory,
             'Stock log',
-            'Inventory and stock records',
+            'Review inventory movement and stock records',
             () => open(
               ReportPage(
                 title: 'Inventory Report',
@@ -127,34 +127,35 @@ class _WebsiteFeaturesPageState extends State<WebsiteFeaturesPage> {
             ),
           ),
 
+          _sectionLabel(Icons.local_shipping_outlined, 'Shipping & fulfilment',
+              'Move orders from preparation through delivery'),
           _tile(
-            Icons.local_shipping,
+            Icons.inventory_2_outlined,
             'Shipment batches',
-            'Create and manage batches; biometric verification is required when marking a batch arrived.',
+            'Create and manage batches; arrival changes require biometric verification',
             () => open(BatchesPage(api: widget.api, repo: widget.repo, isAdmin: isAdmin)),
           ),
-
           _tile(
             Icons.timeline,
             'Order journey',
-            'Move orders through fulfilled, CN transit and consolidation in bulk',
+            'Update order progress through fulfilment, transit and consolidation',
             () => open(JourneyPage(api: widget.api)),
           ),
-
           _tile(
             Icons.delivery_dining,
             'Deliveries',
-            'Ready sales, consolidation, status and labels',
+            'Manage ready orders, delivery status and parcel labels',
             () => open(DeliveriesPage(api: widget.api, repo: widget.repo)),
           ),
-
           _tile(
             Icons.price_change,
             'Rates',
-            'Courier and monthly rates — biometric verification is required for edits.',
+            'Courier and monthly shipping rates; edits require biometric verification',
             () => open(RatesPage(api: widget.api, isAdmin: isAdmin)),
           ),
 
+          _sectionLabel(Icons.insights, 'Reports & insights',
+              'Understand sales, shipping and inventory performance'),
           _tile(
             Icons.bar_chart,
             'Reports',
@@ -162,62 +163,98 @@ class _WebsiteFeaturesPageState extends State<WebsiteFeaturesPage> {
             () => open(ReportsPage(api: widget.api)),
           ),
 
+          _sectionLabel(Icons.groups_outlined, 'Team & account',
+              'Communicate with colleagues and manage your sign-in'),
+          _tile(
+            Icons.forum_outlined,
+            'Team chat',
+            'Team conversations, @mentions, replies and shared attachments',
+            () => open(ChatPage(api: widget.api)),
+          ),
+          _tile(
+            Icons.account_circle_outlined,
+            'My account',
+            'Change your username or password',
+            () => open(ProfilePage(api: widget.api)),
+          ),
+
+          _sectionLabel(Icons.admin_panel_settings_outlined, 'Administration',
+              'Business configuration and protected administrative tools'),
           _tile(
             Icons.settings,
             'Settings',
             isAdmin
-                ? 'Business and label settings — biometric verification required to save'
+                ? 'Business details, branding and label settings'
                 : 'Business and label settings — admins only',
             isAdmin
                 ? () => open(SettingsPage(api: widget.api))
                 : _adminOnlySnack,
             locked: !isAdmin,
           ),
-
-          _tile(
-            Icons.lock_reset,
-            'My account',
-            'Change your username or password',
-            () => open(ProfilePage(api: widget.api)),
-          ),
-
-          _tile(
-            Icons.forum_outlined,
-            'Team chat',
-            'Converse with the whole team, mention users with @, and reply to messages.',
-            () => open(ChatPage(api: widget.api)),
-          ),
-
           _tile(
             Icons.people,
             'Users',
             isAdmin
-                ? 'Add or remove users — biometric verification required'
-                : 'Add or remove users — admins only',
+                ? 'Add or remove team members; biometric verification required'
+                : 'User management — admins only',
             isAdmin
                 ? () => open(UsersPage(api: widget.api))
                 : _adminOnlySnack,
             locked: !isAdmin,
           ),
-
           if (isAdmin)
             _tile(
               Icons.history,
               'Audit log',
-              'Who changed what across the system',
+              'Review who changed what across the system',
               () => open(AuditLogPage(api: widget.api)),
             ),
-
           _tile(
             Icons.delete_sweep,
             'Clear test data',
             isAdmin
-                ? 'Confirmation + biometric verification required'
-                : 'Confirmation-protected test-data cleanup — admins only',
+                ? 'Remove test records after confirmation and biometric verification'
+                : 'Test-data cleanup — admins only',
             isAdmin
                 ? () => open(ClearDataPage(api: widget.api, local: widget.local))
                 : _adminOnlySnack,
             locked: !isAdmin,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _sectionLabel(IconData icon, String title, String subtitle) {
+    final scheme = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(4, 18, 4, 6),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 34,
+            height: 34,
+            decoration: BoxDecoration(
+              color: scheme.primaryContainer.withOpacity(.72),
+              borderRadius: BorderRadius.circular(11),
+            ),
+            child: Icon(icon, size: 19, color: scheme.onPrimaryContainer),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title, style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.w800,
+                )),
+                const SizedBox(height: 2),
+                Text(subtitle, style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: scheme.onSurfaceVariant,
+                )),
+              ],
+            ),
           ),
         ],
       ),
@@ -232,9 +269,22 @@ class _WebsiteFeaturesPageState extends State<WebsiteFeaturesPage> {
     bool locked = false,
   }) {
     return Card(
+      margin: const EdgeInsets.symmetric(vertical: 3),
+      clipBehavior: Clip.antiAlias,
       child: ListTile(
-        leading: Icon(icon),
-        title: Text(title),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 3),
+        leading: Container(
+          width: 40,
+          height: 40,
+          decoration: BoxDecoration(
+            color: Theme.of(context).colorScheme.surfaceContainerHighest.withOpacity(.65),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Icon(icon, size: 21),
+        ),
+        title: Text(title, style: const TextStyle(fontWeight: FontWeight.w700)),
+        subtitle: Text(subtitle, maxLines: 2, overflow: TextOverflow.ellipsis),
+        isThreeLine: false,
         trailing: Icon(locked ? Icons.lock_outline : Icons.chevron_right),
         onTap: onTap,
       ),
