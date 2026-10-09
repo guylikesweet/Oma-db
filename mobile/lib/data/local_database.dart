@@ -364,7 +364,8 @@ class LocalDatabase {
       'selling_price': p['selling_price']?.toString() ?? '0',
       'length_cm': _num(p['length_cm']), 'width_cm': _num(p['width_cm']), 'height_cm': _num(p['height_cm']),
       'cbm': _num(p['cbm']), 'volumetric_kg': _num(p['volumetric_kg']), 'actual_weight_kg': _num(p['actual_weight_kg']),
-      'stock': p['stock'] ?? 0, 'created_at': p['created_at'], 'updated_at': p['updated_at'], 'has_image': p['has_image'] == true ? 1 : 0,
+      'stock': p['stock'] ?? 0, 'created_at': p['created_at'], 'updated_at': p['updated_at'],
+      'has_image': (p['has_image'] == true || p['has_image'] == 1 || '${p['has_image']}'.toLowerCase() == 'true') ? 1 : 0,
     }, conflictAlgorithm: ConflictAlgorithm.replace);
   }
 
