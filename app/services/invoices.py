@@ -442,11 +442,11 @@ def generate_invoice_pdf(sale):
         Paragraph("<b>TRACK YOUR ORDER &amp; VERIFY THIS INVOICE</b>", normal_style),
         Paragraph(f"Verification code: <b>{sig_grouped}</b>", normal_style),
         Paragraph(
-            "Scan the QR code, tap the order ID, or open the link below to see "
-            "where your order is right now and to confirm this invoice against "
-            "our records. The page shows the real items and amount paid. "
-            "If it does not match this document, or says the code is invalid, "
-            "the invoice has been altered and should not be trusted.",
+            "Scan the QR code or open/click the link below to both verify this "
+            "invoice against our records and view the live tracking journey for "
+            "your products, including their current progress toward delivery. "
+            "The page shows the recorded items and amount paid. If the details "
+            "do not match this document or verification fails, do not trust it.",
             small_muted,
         ),
         Paragraph(_safe(ctx["verify_url"]), small_muted),
