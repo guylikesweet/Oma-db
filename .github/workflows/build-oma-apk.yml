@@ -774,55 +774,85 @@ jobs:
           settings_text = settings.read_text(encoding="utf-8")
           app_text = app_gradle.read_text(encoding="utf-8")
 
-          plugin_id = 'id "com.google.gms.google-services" version "4.5.0" apply false'
-          if plugin_id not in settings_text:
-              plugins_match = re.search(
-                  r"(?m)^plugins\s*\{",
-                  settings_text,
-              )
+          # Gradle Kotlin DSL requires function-call syntax:
+          # id("plugin") version "x" apply false
+          # Groovy DSL uses: id "plugin" version "x" apply false
+          if settings.suffix == ".kts":
+              plugin_id = 'id("com.google.gms.google-services") version "4.5.0" apply false'
+              settings_plugin_check = 'id("com.google.gms.google-services") version "4.5.0" apply false'
+          else:
+              plugin_id = 'id "com.google.gms.google-services" version "4.5.0" apply false'
+              settings_plugin_check = 'id "com.google.gms.google-services" version "4.5.0" apply false'
+
+          if "com.google.gms.google-services" not in settings_text:
+              plugins_match = re.search(r"(?m)^plugins\\s*\\{", settings_text)
               if not plugins_match:
-                  raise SystemExit(
-                      f"Could not find plugins {{ block in {settings}."
-                  )
+                  raise SystemExit(f"Could not find plugins {{ block in {settings}.")
               settings_text = (
                   settings_text[:plugins_match.end()]
-                  + "\n    "
-                  + plugin_id
+                  + "\\n    " + plugin_id
                   + settings_text[plugins_match.end():]
               )
-
-          app_plugin = 'id "com.google.gms.google-services"'
-          if app_plugin not in app_text:
-              plugins_match = re.search(
-                  r"(?m)^plugins\s*\{",
-                  app_text,
-              )
-              if not plugins_match:
-                  raise SystemExit(
-                      f"Could not find plugins {{ block in {app_gradle}."
+          else:
+              # Normalize an existing plugin declaration to match this DSL.
+              if settings.suffix == ".kts":
+                  settings_text = re.sub(
+                      r'(?m)^([ \\t]*)id "com\\.google\\.gms\\.google-services" version "4\\.5\\.0" apply false[ \\t]*$',
+                      r'\\1id("com.google.gms.google-services") version "4.5.0" apply false',
+                      settings_text,
                   )
+              else:
+                  settings_text = re.sub(
+                      r'(?m)^([ \\t]*)id\\("com\\.google\\.gms\\.google-services"\\) version "4\\.5\\.0" apply false[ \\t]*$',
+                      r'\\1id "com.google.gms.google-services" version "4.5.0" apply false',
+                      settings_text,
+                  )
+
+          if app_gradle.suffix == ".kts":
+              app_plugin = 'id("com.google.gms.google-services")'
+          else:
+              app_plugin = 'id "com.google.gms.google-services"'
+
+          if "com.google.gms.google-services" not in app_text:
+              plugins_match = re.search(r"(?m)^plugins\\s*\\{", app_text)
+              if not plugins_match:
+                  raise SystemExit(f"Could not find plugins {{ block in {app_gradle}.")
               app_text = (
                   app_text[:plugins_match.end()]
-                  + "\n    "
-                  + app_plugin
+                  + "\\n    " + app_plugin
                   + app_text[plugins_match.end():]
               )
+          else:
+              if app_gradle.suffix == ".kts":
+                  app_text = re.sub(
+                      r'(?m)^([ \\t]*)id "com\\.google\\.gms\\.google-services"[ \\t]*$',
+                      r'\\1id("com.google.gms.google-services")',
+                      app_text,
+                  )
+              else:
+                  app_text = re.sub(
+                      r'(?m)^([ \\t]*)id\\("com\\.google\\.gms\\.google-services"\\)[ \\t]*$',
+                      r'\\1id "com.google.gms.google-services"',
+                      app_text,
+                  )
 
           settings.write_text(settings_text, encoding="utf-8")
           app_gradle.write_text(app_text, encoding="utf-8")
 
-          # Final checks prevent a partially configured Firebase build.
+          # Verify syntax matches the actual file type.
           final_settings = settings.read_text(encoding="utf-8")
           final_app = app_gradle.read_text(encoding="utf-8")
+          if settings.suffix == ".kts":
+              if 'id("com.google.gms.google-services") version "4.5.0" apply false' not in final_settings:
+                  raise SystemExit("Kotlin DSL Google Services plugin declaration is missing or invalid.")
+          elif 'id "com.google.gms.google-services" version "4.5.0" apply false' not in final_settings:
+              raise SystemExit("Groovy Google Services plugin declaration is missing or invalid.")
 
-          if (
-              'com.google.gms.google-services" version "4.5.0" apply false'
-              not in final_settings
-          ):
-              raise SystemExit("Google Services 4.5.0 plugin was not added to project Gradle.")
-
-          if 'id "com.google.gms.google-services"' not in final_app:
-              raise SystemExit("Google Services plugin was not applied to the Android app module.")
+          if app_gradle.suffix == ".kts":
+              if 'id("com.google.gms.google-services")' not in final_app:
+                  raise SystemExit("Kotlin DSL Google Services app plugin declaration is missing or invalid.")
+          elif 'id "com.google.gms.google-services"' not in final_app:
+              raise SystemExit("Groovy Google Services app plugin declaration is missing or invalid.")
 
           print("Firebase Android configuration: OK")
           print(f"Firebase project: {project_id}")
