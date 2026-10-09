@@ -1288,14 +1288,11 @@ class _OmaBottomNavigation extends StatelessWidget {
       top: false,
       child: Material(
         color: scheme.surface,
-        elevation: 14,
+        elevation: 0,
         child: Container(
           height: 82,
-          decoration: BoxDecoration(
-            border: Border(
-              top: BorderSide(color: scheme.outline.withOpacity(.55)),
-            ),
-          ),
+          // Keep the home button floating visually without a hard divider
+          // across the entire navigation bar.
           child: Row(
             children: List.generate(_items.length, (index) {
               final item = _items[index];
