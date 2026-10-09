@@ -725,7 +725,7 @@ def product_image(product_id):
     if not product.image_data or not product.image_mimetype:
         return jsonify({"error": "This product has no photo."}), 404
     response = current_app.response_class(product.image_data, mimetype=product.image_mimetype)
-    response.headers["Cache-Control"] = "private, max-age=300"
+    response.headers["Cache-Control"] = "private, no-store, no-cache, must-revalidate"
     return response
 
 
