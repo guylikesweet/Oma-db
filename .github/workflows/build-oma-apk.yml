@@ -932,6 +932,90 @@ jobs:
           PY
 
       # ------------------------------------------------------------
+      # 7c. ENABLE CORE LIBRARY DESUGARING
+      # flutter_local_notifications requires desugaring for release builds.
+      # Handle both Kotlin DSL (.gradle.kts) and Groovy (.gradle).
+      # ------------------------------------------------------------
+      - name: Enable Android core library desugaring
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          path = next(
+              (p for p in (
+                  Path("android/app/build.gradle.kts"),
+                  Path("android/app/build.gradle"),
+              ) if p.exists()),
+              None,
+          )
+          if path is None:
+              raise SystemExit("Could not find Android app Gradle file.")
+
+          kts = path.suffix == ".kts"
+          s = path.read_text(encoding="utf-8")
+
+          # Enable desugaring inside android.compileOptions.
+          compile_options = re.search(
+              r"(?ms)^([ 	]*)compileOptionss*{(.*?)^\1}",
+              s,
+          )
+          enable_line = (
+              "isCoreLibraryDesugaringEnabled = true"
+              if kts else "coreLibraryDesugaringEnabled true"
+          )
+          if compile_options:
+              body = compile_options.group(2)
+              if not re.search(
+                  r"(?m)^[ 	]*(?:isCoreLibraryDesugaringEnableds*=s*true|coreLibraryDesugaringEnableds+true)s*$",
+                  body,
+              ):
+                  insert_at = compile_options.start(2)
+                  indent = compile_options.group(1) + "    "
+                  s = s[:insert_at] + "\n" + indent + enable_line + s[insert_at:]
+          else:
+              android_block = re.search(r"(?m)^([ 	]*)androids*{s*$", s)
+              if not android_block:
+                  raise SystemExit("Could not find android { block.")
+              indent = android_block.group(1) + "    "
+              inner = indent + "    "
+              block = (
+                  "\n" + indent + "compileOptions {"
+                  + "\n" + inner + enable_line
+                  + "\n" + indent + "}"
+              )
+              s = s[:android_block.end()] + block + s[android_block.end():]
+
+          # Add desugar_jdk_libs to the top-level dependencies block.
+          dep_line = (
+              'coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")'
+              if kts else
+              "coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.1.4'"
+          )
+          dep_block = re.search(r"(?ms)^dependenciess*{(.*?)^}", s)
+          if dep_block:
+              if "desugar_jdk_libs" not in dep_block.group(1):
+                  insert_at = dep_block.start(1)
+                  s = s[:insert_at] + "\n    " + dep_line + s[insert_at:]
+          else:
+              s += "\n\ndependencies {\n    " + dep_line + "\n}\n"
+
+          path.write_text(s, encoding="utf-8")
+          final = path.read_text(encoding="utf-8")
+          if "desugar_jdk_libs:2.1.4" not in final:
+              raise SystemExit("Desugaring dependency was not configured.")
+          if not re.search(
+              r"(?m)^[ 	]*(?:isCoreLibraryDesugaringEnabled\s*=\s*true|coreLibraryDesugaringEnabled\s+true)\s*$",
+              final,
+          ):
+              raise SystemExit("Core library desugaring was not enabled.")
+          print(f"Core library desugaring enabled in {path}.")
+          PY
+
+      # ------------------------------------------------------------
       # 8. INSTALL JAVA
       # ------------------------------------------------------------
       - name: Install Java 17
