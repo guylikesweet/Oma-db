@@ -38,6 +38,13 @@ dev_dependencies:
   flutter_lints: ^4.0.0
   flutter_launcher_icons: ^0.14.3
 
+# record 5.2.1 allows a newer record_platform_interface to resolve than
+# record_linux 0.7.2 supports. Pin the Linux implementation to a compatible
+# release so clean builds on current Flutter/Dart do not fail while compiling
+# transitive platform packages for Android.
+dependency_overrides:
+  record_linux: ^1.3.1
+
 flutter:
   uses-material-design: true
   assets:
