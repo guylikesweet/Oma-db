@@ -960,7 +960,7 @@ jobs:
 
           # Enable desugaring inside android.compileOptions.
           compile_options = re.search(
-              r"(?ms)^([ 	]*)compileOptionss*{(.*?)^\1}",
+              r"(?ms)^([ \t]*)compileOptions\s*\{(.*?)^\1\}",
               s,
           )
           enable_line = (
@@ -970,14 +970,14 @@ jobs:
           if compile_options:
               body = compile_options.group(2)
               if not re.search(
-                  r"(?m)^[ 	]*(?:isCoreLibraryDesugaringEnableds*=s*true|coreLibraryDesugaringEnableds+true)s*$",
+                  r"(?m)^[ \t]*(?:isCoreLibraryDesugaringEnabled\s*=\s*true|coreLibraryDesugaringEnabled\s+true)\s*$",
                   body,
               ):
                   insert_at = compile_options.start(2)
                   indent = compile_options.group(1) + "    "
                   s = s[:insert_at] + "\n" + indent + enable_line + s[insert_at:]
           else:
-              android_block = re.search(r"(?m)^([ 	]*)androids*{s*$", s)
+              android_block = re.search(r"(?m)^([ \t]*)android\s*\{\s*$", s)
               if not android_block:
                   raise SystemExit("Could not find android { block.")
               indent = android_block.group(1) + "    "
@@ -995,7 +995,7 @@ jobs:
               if kts else
               "coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.1.4'"
           )
-          dep_block = re.search(r"(?ms)^dependenciess*{(.*?)^}", s)
+          dep_block = re.search(r"(?ms)^dependencies\s*\{(.*?)^\}", s)
           if dep_block:
               if "desugar_jdk_libs" not in dep_block.group(1):
                   insert_at = dep_block.start(1)
@@ -1008,7 +1008,7 @@ jobs:
           if "desugar_jdk_libs:2.1.4" not in final:
               raise SystemExit("Desugaring dependency was not configured.")
           if not re.search(
-              r"(?m)^[ 	]*(?:isCoreLibraryDesugaringEnabled\s*=\s*true|coreLibraryDesugaringEnabled\s+true)\s*$",
+              r"(?m)^[ \t]*(?:isCoreLibraryDesugaringEnabled\s*=\s*true|coreLibraryDesugaringEnabled\s+true)\s*$",
               final,
           ):
               raise SystemExit("Core library desugaring was not enabled.")
