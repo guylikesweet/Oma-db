@@ -911,7 +911,7 @@ class ProductDetailsPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final hasImage = product['has_image'] == true;
+    final hasImage = product['has_image'] == true || product['has_image'] == 1;
     final imageId = product['id'] as int?;
     return Scaffold(
       appBar: AppBar(
@@ -1019,7 +1019,7 @@ class _ProductThumb extends StatelessWidget {
   final Map<String, dynamic> product;
   @override
   Widget build(BuildContext context) {
-    if (product['has_image'] != true) return const CircleAvatar(child: Icon(Icons.inventory_2_outlined));
+    if (product['has_image'] != true && product['has_image'] != 1) return const CircleAvatar(child: Icon(Icons.inventory_2_outlined));
     return FutureBuilder<Uint8List>(future: api.productImage(product['id'] as int), builder: (context, snapshot) {
       if (!snapshot.hasData) return const CircleAvatar(child: Icon(Icons.image_outlined));
       return ClipRRect(borderRadius: BorderRadius.circular(10), child: Image.memory(snapshot.data!, width: 52, height: 52, fit: BoxFit.cover));
