@@ -1360,7 +1360,7 @@ class ApiClient {
     final base = Uri.parse(AppConfig.apiBaseUrl);
     final basePath = base.path.replaceFirst(RegExp(r'/$'), '');
     final uri = base.replace(path: '$basePath/v1/products/$id/image');
-    final headers = <String, String>{'Accept': 'image/*'};
+    final headers = <String, String>{'Accept': 'image/*', 'Cache-Control': 'no-cache', 'Pragma': 'no-cache'};
     if (savedToken != null && savedToken.isNotEmpty) headers['Authorization'] = 'Bearer $savedToken';
     final response = await _client.get(uri, headers: headers).timeout(const Duration(seconds: 30));
     if (response.statusCode < 200 || response.statusCode >= 300) throw ApiException(response.statusCode, 'Could not load product photo.');
