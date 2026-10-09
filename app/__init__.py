@@ -100,6 +100,18 @@ def create_app(config_object="config.Config"):
     with app.app_context():
         from app import models  # noqa: F401  (register models for migrations)
 
+        # The legacy auth blueprint is intentionally not registered because the
+        # classic staff website was retired. Register Flask-Login's loader here
+        # nonetheless: public invoice/tracking pages can touch lazy ORM relations,
+        # and Flask-Login raises if a session contains a user id but has no loader.
+        @login_manager.user_loader
+        def load_session_user(user_id):
+            from app.models import User
+            try:
+                return db.session.get(User, int(user_id))
+            except (TypeError, ValueError):
+                return None
+
         # The Flutter Web/Android clients are now the only supported staff UI.
         # The former Flask/Jinja "classic" website and Flask-Admin surface are
         # intentionally no longer registered. Their modules remain in the
