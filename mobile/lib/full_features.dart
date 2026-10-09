@@ -913,7 +913,6 @@ class ProductDetailsPage extends StatelessWidget {
   Widget build(BuildContext context) {
     // Always ask the authenticated server for the photo. The local has_image flag
     // can be stale on devices that synced before an image was added or replaced.
-    final hasImage = true;
     final imageId = product['id'] as int?;
     return Scaffold(
       appBar: AppBar(
