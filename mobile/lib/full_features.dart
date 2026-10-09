@@ -427,7 +427,7 @@ class _WebProductsPageState extends State<WebProductsPage> {
                   child: SingleChildScrollView(
                     child: Column(
                       children: [
-                        if (old != null && old['has_image'] == true && pickedImageBytes == null && !removeImage)
+                        if (old != null && (old['has_image'] == true || old['has_image'] == 1) && pickedImageBytes == null && !removeImage)
                           FutureBuilder<Uint8List>(future: widget.api.productImage(old['id'] as int), builder: (context, snapshot) {
                             if (!snapshot.hasData) return const SizedBox(height: 100, child: Center(child: Icon(Icons.image_outlined, size: 42)));
                             return ClipRRect(borderRadius: BorderRadius.circular(14), child: Image.memory(snapshot.data!, height: 150, width: double.infinity, fit: BoxFit.cover));
@@ -448,7 +448,7 @@ class _WebProductsPageState extends State<WebProductsPage> {
                             },
                             icon: const Icon(Icons.photo_library_outlined), label: Text(pickedImage == null ? 'Add photo' : 'Change photo'),
                           )),
-                          if ((old?['has_image'] == true || pickedImageBytes != null) && !removeImage)
+                          if ((old?['has_image'] == true || old?['has_image'] == 1 || pickedImageBytes != null) && !removeImage)
                             IconButton(tooltip: 'Remove photo', onPressed: calculating ? null : () => setDialogState(() { pickedImage = null; pickedImageBytes = null; removeImage = true; }), icon: const Icon(Icons.delete_outline)),
                         ]),
                         const SizedBox(height: 12),
@@ -911,7 +911,9 @@ class ProductDetailsPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final hasImage = product['has_image'] == true || product['has_image'] == 1;
+    // Always ask the authenticated server for the photo. The local has_image flag
+    // can be stale on devices that synced before an image was added or replaced.
+    final hasImage = true;
     final imageId = product['id'] as int?;
     return Scaffold(
       appBar: AppBar(
@@ -922,7 +924,7 @@ class ProductDetailsPage extends StatelessWidget {
         children: [
           Card(
             clipBehavior: Clip.antiAlias,
-            child: hasImage && imageId != null
+            child: imageId != null
                 ? FutureBuilder<Uint8List>(
                     future: api.productImage(imageId),
                     builder: (context, snapshot) {
@@ -1019,8 +1021,10 @@ class _ProductThumb extends StatelessWidget {
   final Map<String, dynamic> product;
   @override
   Widget build(BuildContext context) {
-    if (product['has_image'] != true && product['has_image'] != 1) return const CircleAvatar(child: Icon(Icons.inventory_2_outlined));
+    // Do not gate the request on SQLite's has_image flag: it is only metadata and
+    // can be stale. A 404 from the image endpoint is handled as the placeholder.
     return FutureBuilder<Uint8List>(future: api.productImage(product['id'] as int), builder: (context, snapshot) {
+      if (snapshot.hasError || (snapshot.connectionState == ConnectionState.done && !snapshot.hasData)) return const CircleAvatar(child: Icon(Icons.inventory_2_outlined));
       if (!snapshot.hasData) return const CircleAvatar(child: Icon(Icons.image_outlined));
       return ClipRRect(borderRadius: BorderRadius.circular(10), child: Image.memory(snapshot.data!, width: 52, height: 52, fit: BoxFit.cover));
     });
