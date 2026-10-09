@@ -209,7 +209,7 @@ ThemeData brandTheme(Brightness brightness) {
     useMaterial3: true,
     colorScheme: scheme,
     scaffoldBackgroundColor: scheme.surface,
-    cardTheme: CardThemeData(
+    cardTheme: CardTheme(
       elevation: 0,
       margin: const EdgeInsets.symmetric(vertical: 8),
       surfaceTintColor: Colors.transparent,
