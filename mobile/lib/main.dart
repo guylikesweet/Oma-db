@@ -209,15 +209,6 @@ ThemeData brandTheme(Brightness brightness) {
     useMaterial3: true,
     colorScheme: scheme,
     scaffoldBackgroundColor: scheme.surface,
-    cardTheme: CardThemeData(
-      elevation: 0,
-      margin: const EdgeInsets.symmetric(vertical: 8),
-      surfaceTintColor: Colors.transparent,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(14),
-        side: BorderSide(color: scheme.outline.withOpacity(.65)),
-      ),
-    ),
     appBarTheme: AppBarTheme(
       backgroundColor: scheme.surface,
       foregroundColor: scheme.onSurface,
