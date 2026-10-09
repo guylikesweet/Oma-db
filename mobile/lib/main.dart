@@ -1312,26 +1312,31 @@ class _OmaBottomNavigation extends StatelessWidget {
                           height: 68,
                           decoration: BoxDecoration(
                             shape: BoxShape.circle,
-                            gradient: LinearGradient(
+                            gradient: const LinearGradient(
                               begin: Alignment.topLeft,
                               end: Alignment.bottomRight,
                               colors: [
-                                scheme.primary.withOpacity(.98),
-                                brandGreen,
-                                scheme.primary.withOpacity(.72),
+                                Color(0xFF12B985),
+                                Color(0xFF039664),
+                                Color(0xFF006B49),
                               ],
-                              stops: const [0.0, 0.48, 1.0],
+                              stops: [0.0, 0.48, 1.0],
                             ),
                             border: Border.all(
-                              color: Colors.white.withOpacity(.9),
-                              width: 2.5,
+                              color: Colors.white.withOpacity(.42),
+                              width: 1.5,
                             ),
                             boxShadow: [
                               BoxShadow(
-                                color: brandGreen.withOpacity(.38),
-                                blurRadius: 18,
-                                spreadRadius: 2,
+                                color: brandGreen.withOpacity(.28),
+                                blurRadius: 20,
+                                spreadRadius: 1,
                                 offset: const Offset(0, 7),
+                              ),
+                              const BoxShadow(
+                                color: Color(0x26000000),
+                                blurRadius: 4,
+                                offset: Offset(0, 2),
                               ),
                             ],
                           ),
@@ -1339,12 +1344,12 @@ class _OmaBottomNavigation extends StatelessWidget {
                             child: Stack(
                               alignment: Alignment.center,
                               children: [
-                                // Glossy highlight across the upper half of the button.
+                                // Layered specular highlight for a glassy, polished finish.
                                 Positioned(
                                   top: 3,
-                                  left: 7,
-                                  right: 7,
-                                  height: 23,
+                                  left: 8,
+                                  right: 8,
+                                  height: 28,
                                   child: DecoratedBox(
                                     decoration: BoxDecoration(
                                       borderRadius: BorderRadius.circular(30),
@@ -1352,19 +1357,33 @@ class _OmaBottomNavigation extends StatelessWidget {
                                         begin: Alignment.topCenter,
                                         end: Alignment.bottomCenter,
                                         colors: [
-                                          Colors.white.withOpacity(.34),
-                                          Colors.white.withOpacity(.06),
+                                          Colors.white.withOpacity(.58),
+                                          Colors.white.withOpacity(.22),
+                                          Colors.white.withOpacity(.015),
                                           Colors.transparent,
                                         ],
+                                        stops: const [0, .24, .72, 1],
                                       ),
                                     ),
                                   ),
                                 ),
-                                // Keep the logo comfortably inside the circle.
+                                Positioned(
+                                  top: 5,
+                                  left: 12,
+                                  right: 12,
+                                  height: 2,
+                                  child: DecoratedBox(
+                                    decoration: BoxDecoration(
+                                      color: Colors.white.withOpacity(.62),
+                                      borderRadius: BorderRadius.circular(99),
+                                    ),
+                                  ),
+                                ),
+                                // Larger logo, still clearly inset from the circular housing.
                                 Image.asset(
                                   'assets/images/app_icon.png',
-                                  width: 30,
-                                  height: 30,
+                                  width: 38,
+                                  height: 38,
                                   fit: BoxFit.contain,
                                 ),
                               ],
