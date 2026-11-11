@@ -13,7 +13,7 @@ import hashlib
 import hmac
 import io
 import os
-from datetime import datetime
+from datetime import date, datetime, timedelta, timezone
 from xml.sax.saxutils import escape
 
 from flask import current_app, request
@@ -23,8 +23,60 @@ from app.services.labels import get_logo_bytes
 
 NA = "N/A"
 
-# Shown on every invoice. Edit here to change the wording/timeframe.
-SHIPPING_WINDOW_TEXT = "30-45 days"
+# Nigeria is on West Africa Time all year (UTC+1, no daylight saving), so a
+# fixed offset is exact and needs no timezone database on the server.
+WAT = timezone(timedelta(hours=1), "WAT")
+
+# Preorder schedule. A preorder window opens on the first Monday of every
+# month and closes PREORDER_WINDOW_DAYS later. Goods are expected to arrive
+# between ARRIVAL_MIN_DAYS and ARRIVAL_MAX_DAYS after the window CLOSES (not
+# after the individual sale). Edit these three numbers to change the schedule.
+PREORDER_WINDOW_DAYS = 14
+ARRIVAL_MIN_DAYS = 50
+ARRIVAL_MAX_DAYS = 75
+
+
+def _to_wat(dt):
+    """Converts a datetime to Nigerian time. Naive values are treated as UTC,
+    which is how the database stores them (datetime.utcnow)."""
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(WAT)
+
+
+def _first_monday(year, month):
+    first = date(year, month, 1)
+    return first + timedelta(days=(7 - first.weekday()) % 7)
+
+
+def _preorder_window_end(on_date):
+    """The closing date of the preorder window a sale belongs to. A sale made
+    on or before a month's closing date belongs to that month's window; one
+    made after it belongs to the next month's window."""
+    end = _first_monday(on_date.year, on_date.month) + timedelta(days=PREORDER_WINDOW_DAYS)
+    if on_date <= end:
+        return end
+    year, month = (on_date.year + 1, 1) if on_date.month == 12 else (on_date.year, on_date.month + 1)
+    return _first_monday(year, month) + timedelta(days=PREORDER_WINDOW_DAYS)
+
+
+def estimated_arrival_range(sale):
+    """(earliest, latest) estimated arrival dates for a preorder sale."""
+    if sale.sale_date:
+        basis = sale.sale_date
+    elif sale.created_at:
+        basis = _to_wat(sale.created_at).date()
+    else:
+        basis = datetime.now(WAT).date()
+    window_end = _preorder_window_end(basis)
+    return (
+        window_end + timedelta(days=ARRIVAL_MIN_DAYS),
+        window_end + timedelta(days=ARRIVAL_MAX_DAYS),
+    )
+
+
+def _fmt_date(d):
+    return f"{d.day} {d.strftime('%b %Y')}"
 
 
 def _canonical(sale):
@@ -110,6 +162,8 @@ def get_invoice_context(sale):
     actual_shipping = sale.actual_shipping_cost
     estimated_shipping = sale.estimated_shipping_cost
 
+    arrival_from, arrival_to = estimated_arrival_range(sale)
+
     return {
         "settings": settings,
         "sale": sale,
@@ -119,7 +173,16 @@ def get_invoice_context(sale):
         "business_address": settings.business_address or NA,
         "order_id": sale.order_id or f"#{sale.id}",
         "sale_date": sale.sale_date.strftime("%Y-%m-%d") if sale.sale_date else NA,
-        "generated_at": datetime.utcnow().strftime("%Y-%m-%d %H:%M UTC"),
+        # The moment the sale was made in Nigerian time (sale.created_at is stamped
+        # when the sale is saved), NOT the moment this PDF is rendered. sale_date is
+        # a plain Date with no time of day, so it is only the fallback for rows
+        # without created_at.
+        "issued_on": (
+            _to_wat(sale.created_at).strftime("%Y-%m-%d %H:%M WAT") if sale.created_at
+            else (sale.sale_date.strftime("%Y-%m-%d") if sale.sale_date else NA)
+        ),
+        "arrival_from": _fmt_date(arrival_from),
+        "arrival_to": _fmt_date(arrival_to),
         "customer_name": sale.customer_name or NA,
         "customer_phone": sale.customer_phone or NA,
         "customer_address": sale.customer_address or NA,
@@ -398,10 +461,14 @@ def generate_invoice_pdf(sale):
         )
     if ship_lines:
         if not ctx["is_stock_sale"]:
-            ship_lines.append(
-                f"Please prepare your shipping payment - expect to settle it within "
-                f"<b>{SHIPPING_WINDOW_TEXT}</b>."
-            )
+            if ctx["actual_shipping"] is None:
+                ship_lines.append(
+                    f"Your goods are expected to arrive between <b>{ctx['arrival_from']}</b> "
+                    f"and <b>{ctx['arrival_to']}</b>. Please prepare your shipping payment "
+                    f"for when they arrive."
+                )
+            else:
+                ship_lines.append("Please prepare your shipping payment.")
         ship_box = Table(
             [[[Paragraph(l, normal_style) for l in ship_lines]]],
             colWidths=[167 * mm],
@@ -461,7 +528,7 @@ def generate_invoice_pdf(sale):
 
     story.append(Spacer(1, 6 * mm))
     story.append(Paragraph(
-        f"Generated {ctx['generated_at']} - thank you for your order.",
+        f"Issued on {ctx['issued_on']} - thank you for your order.",
         small_muted,
     ))
 
