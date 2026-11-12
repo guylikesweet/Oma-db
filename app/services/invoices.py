@@ -1,27 +1,36 @@
 """
-Invoice / receipt generation — one PDF per Sale, so a customer can be sent
-something that verifies exactly what they ordered and what they paid for it.
+Invoice / receipt generation for one Sale.
 
-Deliberately separate from app/services/labels.py (the shipping label):
-a label is for the courier and is sized to the configured label paper; an
-invoice is for the customer and is always a normal A4 document, laid out
-with reportlab's platypus (tables/paragraphs) rather than hand-drawn
-coordinates, since it's a simple top-to-bottom document with no fixed
-physical page size to fit.
+The receipt is a tall phone-sized picture (1080 px wide, 9:16 or a little
+taller when there is a lot of text), drawn by app/services/receipt_image.py,
+because it is almost always sent on WhatsApp. It can be handed out as a
+PNG, a JPG (smaller; light-grey corners instead of transparent ones, which is
+the safer choice for WhatsApp photos) or a small PDF (80 mm wide) that simply
+carries the same picture, so all three always match exactly.
+
+Rules for what a customer may be sent:
+  * Only PAID orders get a receipt. Pending / refunded / cancelled orders are
+    refused (a refund gets its own separate note, never this document).
+  * No "N/A" placeholders and no "Generated ..." timestamp: a missing business
+    address or Instagram handle is simply left out.
+  * Internal order notes are never printed.
+
+Deliberately separate from app/services/labels.py (the courier shipping label).
 """
 import hashlib
 import hmac
 import io
-import os
 from datetime import date, datetime, timedelta, timezone
-from xml.sax.saxutils import escape
 
 from flask import current_app, request
 
 from app.services.settings import get_settings
 from app.services.labels import get_logo_bytes
 
-NA = "N/A"
+NA = "N/A"  # still used by other modules' vocabulary; never printed on receipts
+
+DEFAULT_BUSINESS_NAME = "OmaBuy Nigeria Limited"
+DEFAULT_TRACK_DISPLAY = "omabuy.ng/track"
 
 # Nigeria is on West Africa Time all year (UTC+1, no daylight saving), so a
 # fixed offset is exact and needs no timezone database on the server.
@@ -34,6 +43,18 @@ WAT = timezone(timedelta(hours=1), "WAT")
 PREORDER_WINDOW_DAYS = 14
 ARRIVAL_MIN_DAYS = 50
 ARRIVAL_MAX_DAYS = 75
+
+# The app's order statuses -> the wording a customer sees.
+_ORDER_STATUS_LABELS = {
+    "New": "Processing",
+    "Packed": "Processing",
+    "Shipped": "Shipped",
+    "Delivered": "Delivered",
+}
+
+
+class ReceiptNotAllowed(ValueError):
+    """Raised when a receipt is requested for a sale that must not get one."""
 
 
 def _to_wat(dt):
@@ -130,408 +151,194 @@ def _money(value):
     return f"{value:,.2f}"
 
 
-def _safe(value):
-    """Escapes user-entered text before it goes into a reportlab Paragraph —
-    Paragraph parses its input as a small XML/HTML subset, so an unescaped
-    '&' or '<' in a customer name/address/note would raise at render time
-    instead of just printing literally."""
-    if value is None:
-        return NA
-    return escape(str(value)) or NA
+def _clean(value):
+    value = (str(value).strip() if value is not None else "")
+    return value or None
+
+
+def _instagram_handle(settings):
+    """The business Instagram handle from Settings, shown as '@name'. Returns
+    None when it has not been filled in, so nothing is ever invented."""
+    raw = _clean(getattr(settings, "instagram_handle", None))
+    if not raw:
+        return None
+    raw = raw.replace("https://", "").replace("http://", "")
+    for prefix in ("www.instagram.com/", "instagram.com/", "instagr.am/"):
+        if raw.lower().startswith(prefix):
+            raw = raw[len(prefix):]
+    raw = raw.split("?")[0].strip("/ @")
+    return "@" + raw if raw else None
+
+
+def receipt_block_reason(sale):
+    """Why this sale must NOT be sent a receipt, or None if it may."""
+    if (sale.order_status or "") == "Cancelled":
+        return "A cancelled order does not get a receipt."
+    if (sale.payment_status or "") != "Paid":
+        return ("Receipts are only issued for paid orders. Mark the order as "
+                "Paid first. A refund gets a separate refund note, not a receipt.")
+    return None
+
+
+def _receipt_date(sale):
+    if sale.sale_date:
+        d = sale.sale_date
+    elif sale.created_at:
+        d = _to_wat(sale.created_at).date()
+    else:
+        d = datetime.now(WAT).date()
+    return d.strftime("%d %b %Y")
+
+
+def _address_text(sale):
+    parts, seen = [], set()
+    for raw in (sale.customer_address, getattr(sale, "customer_city", None), sale.customer_state):
+        part = _clean(raw)
+        if part and part.lower() not in seen:
+            seen.add(part.lower())
+            parts.append(part)
+    return ", ".join(parts)
+
+
+def _notice_paragraphs(sale):
+    """The shipping notice, as paragraphs of (text, bold) runs. Same wording
+    the old A4 invoice used; nothing is added or removed."""
+    if sale.is_stock_sale:
+        return []
+    actual = sale.actual_shipping_cost
+    estimated = sale.estimated_shipping_cost
+    sale_month = sale.sale_date.strftime("%B %Y") if sale.sale_date else "the month of your order"
+    paras = []
+    if actual is not None:
+        paras.append([
+            ("Shipping for this order has been calculated at ", False),
+            (f"NGN {_money(actual)}", True),
+            (". It is based on the size and weight of your goods and the shipping rate "
+             "for the month they arrived. It is payable separately and is not included "
+             "in the total above.", False),
+        ])
+        paras.append([("Please prepare your shipping payment.", False)])
+        return paras
+    if estimated is not None:
+        paras.append([
+            ("Estimated shipping: ", False),
+            (f"NGN {_money(estimated)}", True),
+            (". This is only an estimate, calculated from the size and weight of your "
+             f"goods and this month's shipping rate ({sale_month}). It is not charged "
+             "now and is not included in the total above.", False),
+        ])
+    paras.append([(
+        "The actual shipping cost will be calculated using the shipping rate of the "
+        "month your goods arrive, so the final amount may differ from this estimate.",
+        False,
+    )])
+    arrival_from, arrival_to = estimated_arrival_range(sale)
+    paras.append([
+        ("Your goods are expected to arrive between ", False),
+        (_fmt_date(arrival_from), True),
+        (" and ", False),
+        (_fmt_date(arrival_to), True),
+        (". Please prepare your shipping payment for when they arrive.", False),
+    ])
+    return paras
 
 
 def get_invoice_context(sale):
-    """Data needed to render an invoice/receipt for one sale."""
+    """Everything the receipt picture needs, as plain values (no N/A)."""
     settings = get_settings()
+    business_name = _clean(settings.business_name) or DEFAULT_BUSINESS_NAME
 
     line_items = []
     for item in sale.items:
         unit_price = item.unit_price or 0
         qty = item.qty or 0
         line_items.append({
-            "product_name": item.product.name if item.product else f"Product #{item.product_id}",
-            "variant_note": item.variant_note or "",
+            "name": item.product.name if item.product else f"Product #{item.product_id}",
+            "variant": _clean(item.variant_note),
             "qty": qty,
-            "unit_price": unit_price,
-            "line_total": unit_price * qty,
+            "unit_text": _money(unit_price),
+            "line_text": _money(unit_price * qty),
         })
 
-    # Shipping is NOT part of what the customer paid. Show the order-time
-    # estimate (if any) as information only, or the actual figure once the
-    # batch has arrived and it has been calculated.
-    actual_shipping = sale.actual_shipping_cost
-    estimated_shipping = sale.estimated_shipping_cost
-
-    arrival_from, arrival_to = estimated_arrival_range(sale)
-
+    signature = invoice_signature(sale)
     return {
-        "settings": settings,
-        "sale": sale,
-        "has_logo": get_logo_bytes()[0] is not None,
-        "business_name": settings.business_name or NA,
-        "business_phone": settings.business_phone or NA,
-        "business_address": settings.business_address or NA,
+        "business_name": business_name,
+        "business_phone": _clean(settings.business_phone),
+        "business_address": _clean(settings.business_address),
+        "instagram": _instagram_handle(settings),
         "order_id": sale.order_id or f"#{sale.id}",
-        "sale_date": sale.sale_date.strftime("%Y-%m-%d") if sale.sale_date else NA,
-        # The moment the sale was made in Nigerian time (sale.created_at is stamped
-        # when the sale is saved), NOT the moment this PDF is rendered. sale_date is
-        # a plain Date with no time of day, so it is only the fallback for rows
-        # without created_at.
-        "issued_on": (
-            _to_wat(sale.created_at).strftime("%Y-%m-%d %H:%M WAT") if sale.created_at
-            else (sale.sale_date.strftime("%Y-%m-%d") if sale.sale_date else NA)
-        ),
-        "arrival_from": _fmt_date(arrival_from),
-        "arrival_to": _fmt_date(arrival_to),
-        "customer_name": sale.customer_name or NA,
-        "customer_phone": sale.customer_phone or NA,
-        "customer_address": sale.customer_address or NA,
-        "customer_state": sale.customer_state or NA,
-        "payment_status": sale.payment_status or NA,
-        "order_status": sale.order_status or NA,
+        "date_text": _receipt_date(sale),
+        "order_status_label": _ORDER_STATUS_LABELS.get(sale.order_status or "", "Processing"),
+        "customer_name": _clean(sale.customer_name) or "Customer",
+        "customer_phone": _clean(sale.customer_phone),
+        "address_text": _address_text(sale),
         "line_items": line_items,
-        "subtotal": sale.subtotal_amount or 0,
-        "estimated_shipping": estimated_shipping,
-        "actual_shipping": actual_shipping,
         # Products only. sale.total_amount gains the actual shipping once a batch
-        # arrives, but shipping is billed separately and must never be in this figure.
-        "total": sale.subtotal_amount or 0,
-        "is_stock_sale": sale.is_stock_sale,
-        "sale_month": sale.sale_date.strftime("%B %Y") if sale.sale_date else "the month of your order",
-        "signature": invoice_signature(sale),
+        # arrives, but shipping is billed separately and never part of this figure.
+        "total_text": _money(sale.subtotal_amount or 0),
+        "total_note": None if sale.is_stock_sale else "(products only)",
+        "notice_paragraphs": _notice_paragraphs(sale),
         "verify_url": verify_url(sale),
-        "notes": sale.notes or "",
+        "signature": signature,
+        "code_text": "-".join(signature[i:i + 5] for i in range(0, len(signature), 5)),
+        "track_display": current_app.config.get("OMA_TRACK_DISPLAY") or DEFAULT_TRACK_DISPLAY,
+        "footer_text": f"Thank you for your order - {business_name}",
     }
 
 
-_SMALL_LOGO_CACHE = {}
+def _render(sale):
+    """Draws the receipt and returns the Pillow image (RGBA, rounded corners)."""
+    reason = receipt_block_reason(sale)
+    if reason:
+        raise ReceiptNotAllowed(reason)
+    from app.services import receipt_image
+
+    logo_bytes, _ = get_logo_bytes()
+    if not logo_bytes:
+        # Fall back to a logo uploaded in Settings, if there is one.
+        logo_bytes = getattr(get_settings(), "logo_data", None)
+    return receipt_image.render_receipt(get_invoice_context(sale), logo_bytes)
 
 
-def _small_logo_bytes():
-    """
-    The invoice logo is printed about 40mm wide, but static/logo.png is
-    2172px wide (~500KB). Embedding it as-is made every invoice ~640KB, which
-    is slow to download on a phone. Shrink it once (still sharp when printed)
-    and reuse it.
-    """
-    if "logo" in _SMALL_LOGO_CACHE:
-        return _SMALL_LOGO_CACHE["logo"]
+def generate_invoice_image(sale, fmt="png"):
+    """Returns (BytesIO, mimetype, extension) for a PNG or JPG receipt."""
+    from app.services import receipt_image
 
-    original, _ = get_logo_bytes()
-    result = original
-
-    if original:
-        try:
-            from PIL import Image as PILImage
-
-            img = PILImage.open(io.BytesIO(original))
-            img.thumbnail((700, 350))
-            buf = io.BytesIO()
-            img.save(buf, format="PNG", optimize=True)
-            result = buf.getvalue()
-        except Exception:
-            result = original  # fall back to the full-size logo
-
-    _SMALL_LOGO_CACHE["logo"] = result
-    return result
-
-
-def _small_product_image(product):
-    """Return a compact PNG for an invoice, or None when the product has no photo."""
-    raw = getattr(product, "image_data", None)
-    if not raw:
-        return None
-    try:
-        from PIL import Image as PILImage
-
-        img = PILImage.open(io.BytesIO(raw))
-        img.thumbnail((320, 320))
-        if img.mode not in ("RGB", "RGBA"):
-            img = img.convert("RGBA")
-        buf = io.BytesIO()
-        img.save(buf, format="PNG", optimize=True)
-        return buf.getvalue()
-    except Exception:
-        return None
+    fmt = (fmt or "png").lower().lstrip(".")
+    img = _render(sale)
+    if fmt in ("jpg", "jpeg"):
+        return io.BytesIO(receipt_image.to_jpeg_bytes(img)), "image/jpeg", "jpg"
+    return io.BytesIO(receipt_image.to_png_bytes(img)), "image/png", "png"
 
 
 def generate_invoice_pdf(sale):
-    """Returns a BytesIO buffer containing a one-page (or more, if there are
-    many line items) A4 PDF invoice/receipt for this sale."""
-    from reportlab.lib.pagesizes import A4
+    """Returns a BytesIO PDF: one 80 mm wide page carrying the same picture
+    (never A4). The QR code is a tappable link to the order page."""
     from reportlab.lib.units import mm
-    from reportlab.lib import colors
-    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-    from reportlab.platypus import (
-        SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, Image,
-    )
     from reportlab.lib.utils import ImageReader
+    from reportlab.pdfgen import canvas
+    from app.services import receipt_image
 
-    ctx = get_invoice_context(sale)
-    styles = getSampleStyleSheet()
+    img = _render(sale)
+    jpeg = receipt_image.to_jpeg_bytes(img, background=(255, 255, 255), quality=92)
 
-    title_style = ParagraphStyle(
-        "InvoiceTitle", parent=styles["Heading1"], fontSize=18, spaceAfter=2,
-    )
-    label_style = ParagraphStyle(
-        "SectionLabel", parent=styles["Normal"], fontSize=8,
-        textColor=colors.HexColor("#888888"), spaceAfter=1,
-    )
-    normal_style = ParagraphStyle("InvoiceNormal", parent=styles["Normal"], fontSize=10)
-    small_muted = ParagraphStyle(
-        "SmallMuted", parent=styles["Normal"], fontSize=8, textColor=colors.HexColor("#888888"),
-    )
-
+    page_w = 80 * mm
+    page_h = page_w * img.height / img.width
     buf = io.BytesIO()
-    def draw_watermark(canvas, doc):
-        logo_bytes, _ = get_logo_bytes()
-        if not logo_bytes:
-            return
-        try:
-            reader = ImageReader(io.BytesIO(logo_bytes))
-            iw, ih = reader.getSize()
-            max_w, max_h = 145 * mm, 145 * mm
-            scale = min(max_w / iw, max_h / ih)
-            w, h = iw * scale, ih * scale
-            canvas.saveState()
-            try:
-                canvas.setFillAlpha(0.25)
-            except Exception:
-                pass
-            canvas.drawImage(
-                reader,
-                (A4[0] - w) / 2,
-                (A4[1] - h) / 2,
-                width=w,
-                height=h,
-                preserveAspectRatio=True,
-                mask="auto",
-            )
-            canvas.restoreState()
-        except Exception:
-            pass
+    c = canvas.Canvas(buf, pagesize=(page_w, page_h))
+    c.setTitle(f"Receipt {sale.order_id or sale.id}")
+    c.drawImage(ImageReader(io.BytesIO(jpeg)), 0, 0, width=page_w, height=page_h)
 
-    doc = SimpleDocTemplate(
-        buf, pagesize=A4,
-        topMargin=18 * mm, bottomMargin=18 * mm,
-        leftMargin=18 * mm, rightMargin=18 * mm,
-        title=f"Invoice {ctx['order_id']}",
-    )
-
-    story = []
-
-    # ---- Header: logo + business info on the left, invoice meta on the right ----
-    logo_bytes = _small_logo_bytes()
-    logo_cell = ""
-    if logo_bytes:
-        try:
-            reader = ImageReader(io.BytesIO(logo_bytes))
-            iw, ih = reader.getSize()
-            max_w, max_h = 40 * mm, 20 * mm
-            scale = min(max_w / iw, max_h / ih)
-            logo_cell = Image(io.BytesIO(logo_bytes), width=iw * scale, height=ih * scale)
-        except Exception:
-            logo_cell = ""
-
-    business_block = [
-        Paragraph(f"<b>{_safe(ctx['business_name'])}</b>", normal_style),
-        Paragraph(_safe(ctx["business_phone"]), normal_style),
-        Paragraph(_safe(ctx["business_address"]), normal_style),
-    ]
-
-    invoice_meta = [
-        Paragraph("<b>INVOICE / RECEIPT</b>", label_style),
-        # The order ID is a link: tapping it opens the same page as the QR code
-        # (order tracking + invoice check).
-        Paragraph(
-            f"Order ID: <b><a href=\"{_safe(ctx['verify_url'])}\" color=\"#FC4300\">{_safe(ctx['order_id'])}</a></b>",
-            normal_style,
-        ),
-        Paragraph(f"Date: {_safe(ctx['sale_date'])}", normal_style),
-        Paragraph(f"Payment status: {_safe(ctx['payment_status'])}", normal_style),
-        Paragraph(f"Order status: {_safe(ctx['order_status'])}", normal_style),
-    ]
-
-    header_table = Table(
-        [[logo_cell, business_block, invoice_meta]],
-        colWidths=[42 * mm, 65 * mm, None],
-    )
-    header_table.setStyle(TableStyle([
-        ("VALIGN", (0, 0), (-1, -1), "TOP"),
-        ("ALIGN", (2, 0), (2, 0), "RIGHT"),
-    ]))
-    story.append(header_table)
-    story.append(Spacer(1, 10 * mm))
-
-    # ---- Bill-to ----
-    story.append(Paragraph("BILL TO", label_style))
-    story.append(Paragraph(f"<b>{_safe(ctx['customer_name'])}</b>", normal_style))
-    story.append(Paragraph(_safe(ctx["customer_phone"]), normal_style))
-    story.append(Paragraph(_safe(ctx["customer_address"]), normal_style))
-    story.append(Paragraph(_safe(ctx["customer_state"]), normal_style))
-    story.append(Spacer(1, 8 * mm))
-
-    # ---- Line items ----
-    item_rows = [[
-        "Photo", "Product", "Variant", "Qty", "Unit Price", "Line Total",
-    ]]
-    for item, li in zip(sale.items, ctx["line_items"]):
-        photo_cell = ""
-        photo_bytes = _small_product_image(item.product) if item.product else None
-        if photo_bytes:
-            try:
-                reader = ImageReader(io.BytesIO(photo_bytes))
-                iw, ih = reader.getSize()
-                max_w, max_h = 14 * mm, 14 * mm
-                scale = min(max_w / iw, max_h / ih)
-                photo_cell = Image(
-                    io.BytesIO(photo_bytes),
-                    width=iw * scale,
-                    height=ih * scale,
-                )
-            except Exception:
-                photo_cell = ""
-        item_rows.append([
-            photo_cell,
-            Paragraph(_safe(li["product_name"]), normal_style),
-            Paragraph(_safe(li["variant_note"]) if li["variant_note"] else "—", normal_style),
-            str(li["qty"]),
-            _money(li["unit_price"]),
-            _money(li["line_total"]),
-        ])
-
-    items_table = Table(
-        item_rows,
-        colWidths=[18 * mm, 47 * mm, 30 * mm, 14 * mm, 25 * mm, 33 * mm],
-        repeatRows=1,
-    )
-    items_table.setStyle(TableStyle([
-        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#FFF1EB")),
-        ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
-        ("FONTSIZE", (0, 0), (-1, -1), 9),
-        ("ALIGN", (3, 0), (-1, -1), "RIGHT"),
-        ("ALIGN", (3, 0), (3, 0), "CENTER"),
-        ("ALIGN", (0, 0), (0, -1), "CENTER"),
-        ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#cccccc")),
-        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-        ("TOPPADDING", (0, 0), (-1, -1), 4),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
-    ]))
-    story.append(items_table)
-    story.append(Spacer(1, 6 * mm))
-
-    # ---- Total: goods only ----
-    totals_table = Table(
-        [["TOTAL PAID" if ctx["is_stock_sale"] else "TOTAL PAID (products only)", _money(ctx["total"])]],
-        colWidths=[140 * mm, 27 * mm], hAlign="RIGHT",
-    )
-    totals_table.setStyle(TableStyle([
-        ("FONTSIZE", (0, 0), (-1, -1), 10),
-        ("ALIGN", (1, 0), (1, -1), "RIGHT"),
-        ("LINEABOVE", (0, 0), (-1, 0), 0.75, colors.black),
-        ("FONTNAME", (0, 0), (-1, -1), "Helvetica-Bold"),
-        ("TOPPADDING", (0, 0), (-1, -1), 4),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
-    ]))
-    story.append(totals_table)
-    story.append(Spacer(1, 6 * mm))
-
-    # ---- Shipping notice ----
-    ship_lines = ["<b>SHIPPING NOTICE</b>"]
-    if ctx["is_stock_sale"]:
-        ship_lines = []
-    elif ctx["actual_shipping"] is not None:
-        ship_lines.append(
-            f"Shipping for this order has been calculated at "
-            f"<b>NGN {_money(ctx['actual_shipping'])}</b> based on the size and weight of "
-            f"your goods and the shipping rate for the month they arrived. It is payable "
-            f"separately and is not included in the total above."
+    box = img.info.get("qr_box")
+    if box:
+        scale = page_w / img.width
+        x0, y0, x1, y1 = box
+        c.linkURL(
+            verify_url(sale),
+            (x0 * scale, page_h - y1 * scale, x1 * scale, page_h - y0 * scale),
+            relative=0,
         )
-    else:
-        if ctx["estimated_shipping"] is not None:
-            ship_lines.append(
-                f"Estimated shipping: <b>NGN {_money(ctx['estimated_shipping'])}</b>. "
-                f"This is only an estimate, calculated from the size and weight of your goods "
-                f"and this month's shipping rate "
-                f"({ctx['sale_month']}). It is not charged now and is not included in the total above."
-            )
-        ship_lines.append(
-            "The actual shipping cost will be calculated using the shipping rate of the "
-            "month your goods arrive, so the final amount may differ from this estimate."
-        )
-    if ship_lines:
-        if not ctx["is_stock_sale"]:
-            if ctx["actual_shipping"] is None:
-                ship_lines.append(
-                    f"Your goods are expected to arrive between <b>{ctx['arrival_from']}</b> "
-                    f"and <b>{ctx['arrival_to']}</b>. Please prepare your shipping payment "
-                    f"for when they arrive."
-                )
-            else:
-                ship_lines.append("Please prepare your shipping payment.")
-        ship_box = Table(
-            [[[Paragraph(l, normal_style) for l in ship_lines]]],
-            colWidths=[167 * mm],
-        )
-        ship_box.setStyle(TableStyle([
-            ("BOX", (0, 0), (-1, -1), 0.75, colors.HexColor("#999999")),
-            ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#faf6e8")),
-            ("LEFTPADDING", (0, 0), (-1, -1), 8),
-            ("RIGHTPADDING", (0, 0), (-1, -1), 8),
-            ("TOPPADDING", (0, 0), (-1, -1), 6),
-            ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
-        ]))
-        story.append(ship_box)
-
-    if ctx["notes"]:
-        story.append(Spacer(1, 8 * mm))
-        story.append(Paragraph("NOTES", label_style))
-        story.append(Paragraph(_safe(ctx["notes"]), normal_style))
-
-    story.append(Spacer(1, 8 * mm))
-
-    # ---- Authenticity: signed code + QR to the live record ----
-    from reportlab.graphics.barcode.qr import QrCodeWidget
-    from reportlab.graphics.shapes import Drawing
-
-    widget = QrCodeWidget(ctx["verify_url"])
-    x0, y0, x1, y1 = widget.getBounds()
-    size = 28 * mm
-    qr_drawing = Drawing(
-        size, size,
-        transform=[size / (x1 - x0), 0, 0, size / (y1 - y0), 0, 0],
-    )
-    qr_drawing.add(widget)
-
-    sig = ctx["signature"]
-    sig_grouped = "-".join(sig[i:i + 5] for i in range(0, len(sig), 5))
-    verify_text = [
-        Paragraph("<b>TRACK YOUR ORDER &amp; VERIFY THIS INVOICE</b>", normal_style),
-        Paragraph(f"Verification code: <b>{sig_grouped}</b>", normal_style),
-        Paragraph(
-            "Scan the QR code or open/click the link below to both verify this "
-            "invoice against our records and view the live tracking journey for "
-            "your products, including their current progress toward delivery. "
-            "The page shows the recorded items and amount paid. If the details "
-            "do not match this document or verification fails, do not trust it.",
-            small_muted,
-        ),
-        Paragraph(_safe(ctx["verify_url"]), small_muted),
-    ]
-    verify_table = Table([[qr_drawing, verify_text]], colWidths=[32 * mm, 135 * mm])
-    verify_table.setStyle(TableStyle([
-        ("BOX", (0, 0), (-1, -1), 1, colors.HexColor("#039664")),
-        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-        ("LEFTPADDING", (0, 0), (-1, -1), 6),
-    ]))
-    story.append(verify_table)
-
-    story.append(Spacer(1, 6 * mm))
-    story.append(Paragraph(
-        f"Issued on {ctx['issued_on']} - thank you for your order.",
-        small_muted,
-    ))
-
-    doc.build(story, onFirstPage=draw_watermark, onLaterPages=draw_watermark)
+    c.showPage()
+    c.save()
     buf.seek(0)
     return buf
