@@ -4178,6 +4178,7 @@ class _SettingsPageState
     extends State<SettingsPage> {
   final name = TextEditingController();
   final phone = TextEditingController();
+  final instagram = TextEditingController();
   final address = TextEditingController();
   final width = TextEditingController();
   final height = TextEditingController();
@@ -4206,6 +4207,9 @@ class _SettingsPageState
 
       phone.text =
           '${settings['business_phone'] ?? ''}';
+
+      instagram.text =
+          '${settings['instagram_handle'] ?? ''}';
 
       address.text =
           '${settings['business_address'] ?? ''}';
@@ -4262,6 +4266,7 @@ class _SettingsPageState
         'shipping_rate_per_kg': kg,
         'business_name': name.text.trim(),
         'business_phone': phone.text.trim(),
+        'instagram_handle': instagram.text.trim(),
         'business_address': address.text.trim(),
         'label_width_mm':
             int.tryParse(width.text.trim()),
@@ -4459,6 +4464,14 @@ class _SettingsPageState
                   controller: phone,
                   decoration: const InputDecoration(
                     labelText: 'Business phone',
+                  ),
+                ),
+                const SizedBox(height: 14),
+                TextField(
+                  controller: instagram,
+                  decoration: const InputDecoration(
+                    labelText: 'Instagram handle (shown on receipts)',
+                    hintText: '@yourbusiness',
                   ),
                 ),
                 const SizedBox(height: 14),

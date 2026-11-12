@@ -120,6 +120,9 @@ def create_app(config_object="config.Config"):
         from app.api import api_bp
         app.register_blueprint(api_bp)
 
+        from app.receipts import receipts_bp
+        app.register_blueprint(receipts_bp)
+
         from app.webapp import webapp_bp
         app.register_blueprint(webapp_bp)
 

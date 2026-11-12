@@ -33,6 +33,9 @@ REQUIRED_COLUMNS = {
         "profile_photo_mimetype": "VARCHAR(50)",
         "profile_photo_updated_at": "TIMESTAMP",
     },
+    "app_settings": {
+        "instagram_handle": "VARCHAR(100)",
+    },
     "chat_messages": {
         "audio_data": "BYTEA",
         "audio_mimetype": "VARCHAR(50)",

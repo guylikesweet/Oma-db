@@ -1943,6 +1943,7 @@ def _settings_json(s):
     return {
         'id': s.id, 'label_width_mm': s.label_width_mm, 'label_height_mm': s.label_height_mm,
         'business_name': s.business_name, 'business_phone': s.business_phone,
+        'instagram_handle': s.instagram_handle,
         'business_address': s.business_address,
         'bank_name': s.bank_name, 'bank_account_number': s.bank_account_number,
         'bank_account_name': s.bank_account_name,
@@ -1967,7 +1968,7 @@ def mobile_settings_update():
         op,existing=_mobile_operation(data)
         if existing:return _mobile_replay(existing)
         s=get_settings()
-        for f in ('business_name','business_phone','business_address','bank_name','bank_account_number','bank_account_name'):
+        for f in ('business_name','business_phone','instagram_handle','business_address','bank_name','bank_account_number','bank_account_name'):
             if f in data:setattr(s,f,str(data[f] or '').strip() or None)
         for f in ('label_width_mm','label_height_mm'):
             if f in data:setattr(s,f,int(data[f]))

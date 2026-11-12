@@ -646,6 +646,7 @@ class AppSettings(db.Model):
     label_height_mm = db.Column(db.Integer, default=150)
     business_name = db.Column(db.String(255))
     business_phone = db.Column(db.String(50))
+    instagram_handle = db.Column(db.String(100))
     business_address = db.Column(db.Text)
     logo_data = db.Column(db.LargeBinary)
     logo_mimetype = db.Column(db.String(50))
