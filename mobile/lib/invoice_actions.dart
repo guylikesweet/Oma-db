@@ -2,21 +2,101 @@ import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 import 'package:printing/printing.dart';
 import 'package:share_plus/share_plus.dart';
 
-import 'data/api_client.dart';
+import 'core/config.dart';
 import 'core/network_errors.dart';
+import 'data/api_client.dart';
 
-/// Opens an "Invoice ready" popup for one sale with Share and Print buttons.
+/// The three ways a receipt can be handed to a customer. The server draws one
+/// receipt picture; JPG/PNG send it as a photo (best for WhatsApp) and PDF is a
+/// small 80 mm page carrying the same picture.
+enum _ReceiptFormat { jpg, png, pdf }
+
+extension _ReceiptFormatInfo on _ReceiptFormat {
+  String get ext {
+    if (this == _ReceiptFormat.png) return 'png';
+    if (this == _ReceiptFormat.pdf) return 'pdf';
+    return 'jpg';
+  }
+
+  String get mime {
+    if (this == _ReceiptFormat.png) return 'image/png';
+    if (this == _ReceiptFormat.pdf) return 'application/pdf';
+    return 'image/jpeg';
+  }
+
+  String get label {
+    if (this == _ReceiptFormat.png) return 'Photo (PNG)';
+    if (this == _ReceiptFormat.pdf) return 'PDF';
+    return 'Photo (JPG)';
+  }
+
+  bool get isImage => this != _ReceiptFormat.pdf;
+}
+
+/// Downloads one receipt from the server. Same authenticated binary fetch as
+/// [ApiClient.invoicePdf], but for the receipt endpoints that can return a
+/// photo as well as a PDF.
+Future<Uint8List> _fetchReceipt(
+  ApiClient api,
+  int saleId,
+  _ReceiptFormat format,
+) async {
+  final savedToken = await api.token();
+
+  final base = Uri.parse(AppConfig.apiBaseUrl);
+  final basePath = base.path.replaceFirst(RegExp(r'/$'), '');
+  final uri = base.replace(
+    path: '$basePath/v1/sales/$saleId/receipt.${format.ext}',
+  );
+
+  final headers = <String, String>{'Accept': format.mime};
+  if (savedToken != null && savedToken.isNotEmpty) {
+    headers['Authorization'] = 'Bearer $savedToken';
+  }
+
+  late http.Response response;
+  try {
+    response = await http
+        .get(uri, headers: headers)
+        .timeout(const Duration(seconds: 90));
+  } on TimeoutException catch (e) {
+    throw ApiException(0, 'Network request timed out.', cause: e);
+  } on http.ClientException catch (e) {
+    throw ApiException(0, 'Network connection failed.', cause: e);
+  }
+
+  if (response.statusCode < 200 || response.statusCode >= 300) {
+    // The server explains refusals in plain words, e.g. "Receipts are only
+    // issued for paid orders."
+    var message = 'Could not generate the receipt.';
+    try {
+      final text = response.body;
+      final match = RegExp(r'"error"\s*:\s*"([^"]+)"').firstMatch(text);
+      if (match != null) message = match.group(1) ?? message;
+    } catch (_) {}
+    throw ApiException(response.statusCode, message);
+  }
+
+  return response.bodyBytes;
+}
+
+/// Opens a "Receipt ready" popup for one sale with Share and Print buttons.
 ///
 /// Why a popup instead of acting straight away: browsers only allow the
-/// share sheet (and print dialog) from a fresh tap. The invoice has to be
+/// share sheet (and print dialog) from a fresh tap. The receipt has to be
 /// fetched from the server first, which can take a moment — by the time it
 /// arrives the original tap has "expired" and the browser falls back to
 /// just downloading the file. Fetching first and then asking for a tap on
 /// Share fixes that: the share sheet opens straight away, to WhatsApp
 /// Business or any other app, and nothing is saved to the phone.
+///
+/// The format chips choose what is shared: a JPG or PNG photo (opens straight
+/// in WhatsApp, no zoom needed) or a small PDF. JPG is the default because a
+/// WhatsApp photo cannot show transparent corners.
 Future<void> showInvoiceDialog(
   BuildContext context,
   ApiClient api,
@@ -49,7 +129,9 @@ class _InvoiceDialog extends StatefulWidget {
 }
 
 class _InvoiceDialogState extends State<_InvoiceDialog> {
-  Uint8List? bytes;
+  _ReceiptFormat format = _ReceiptFormat.jpg;
+  final Map<_ReceiptFormat, Uint8List> cache = {};
+  bool loading = false;
   String? error;
   // After a few seconds of waiting we explain why (free servers go to sleep
   // when idle and take up to a minute to wake up).
@@ -59,7 +141,9 @@ class _InvoiceDialogState extends State<_InvoiceDialog> {
   // say why instead of silently downloading the file.
   String? shareError;
 
-  String get fileName => 'invoice-${widget.label}.pdf';
+  Uint8List? get bytes => cache[format];
+
+  String get fileName => 'receipt-${widget.label}.${format.ext}';
 
   @override
   void initState() {
@@ -74,37 +158,57 @@ class _InvoiceDialogState extends State<_InvoiceDialog> {
   }
 
   Future<void> load() async {
+    final wanted = format;
+
+    if (cache.containsKey(wanted)) {
+      setState(() {
+        error = null;
+        shareError = null;
+      });
+      return;
+    }
+
     setState(() {
-      bytes = null;
+      loading = true;
       error = null;
       slow = false;
+      shareError = null;
     });
 
     slowTimer?.cancel();
     slowTimer = Timer(const Duration(seconds: 8), () {
-      if (mounted && bytes == null && error == null) {
-        setState(() => slow = true);
-      }
+      if (mounted && loading) setState(() => slow = true);
     });
 
     try {
       Uint8List data;
 
       try {
-        data = await widget.api.invoicePdf(widget.saleId);
+        data = await _fetchReceipt(widget.api, widget.saleId, wanted);
       } on TimeoutException {
         // A sleeping server often answers on the second try.
-        data = await widget.api.invoicePdf(widget.saleId);
+        data = await _fetchReceipt(widget.api, widget.saleId, wanted);
       }
 
-      if (mounted) setState(() => bytes = data);
+      cache[wanted] = data;
     } catch (e) {
       if (mounted) {
         setState(() => error = userFacingError(e));
       }
     } finally {
       slowTimer?.cancel();
+      if (mounted) setState(() => loading = false);
     }
+  }
+
+  void choose(_ReceiptFormat next) {
+    if (loading || next == format) return;
+    setState(() {
+      format = next;
+      error = null;
+      shareError = null;
+    });
+    load();
   }
 
   void say(String message) {
@@ -124,10 +228,12 @@ class _InvoiceDialogState extends State<_InvoiceDialog> {
     // larger buffer, and the web share code hands the whole buffer to the
     // browser.
     final fresh = Uint8List.fromList(data);
+    final chosen = format;
+    final name = fileName;
 
     // Never fall back to quietly downloading the file — the whole point of
     // this button is sharing without saving. If sharing is refused we show
-    // the reason instead (and offer an explicit Save button).
+    // the reason instead.
     Share.downloadFallbackEnabled = false;
 
     Future<void> attempt({required bool withText}) {
@@ -135,12 +241,12 @@ class _InvoiceDialogState extends State<_InvoiceDialog> {
         [
           XFile.fromData(
             fresh,
-            mimeType: 'application/pdf',
-            name: fileName,
+            mimeType: chosen.mime,
+            name: name,
           ),
         ],
-        fileNameOverrides: [fileName],
-        text: withText ? 'Invoice / receipt ${widget.label}' : null,
+        fileNameOverrides: [name],
+        text: withText ? 'Receipt ${widget.label}' : null,
       );
     }
 
@@ -150,14 +256,14 @@ class _InvoiceDialogState extends State<_InvoiceDialog> {
     }
 
     try {
-      await attempt(withText: true);
+      await attempt(withText: false);
     } catch (first) {
       if (cancelled(first)) return;
 
-      // Some browsers/apps refuse a file shared together with text; the
-      // file on its own is what matters, so try that before giving up.
+      // Some browsers/apps refuse a file shared on its own; adding a short
+      // caption is the other thing worth trying before giving up.
       try {
-        await attempt(withText: false);
+        await attempt(withText: true);
       } catch (second) {
         if (cancelled(second)) return;
         if (mounted) {
@@ -167,90 +273,144 @@ class _InvoiceDialogState extends State<_InvoiceDialog> {
     }
   }
 
-  /// Explicit "save a copy" — only offered after sharing has failed.
-  Future<void> save() async {
-    final data = bytes;
+  /// Explicit "save a copy" of the PDF — only offered after sharing failed.
+  Future<void> savePdf() async {
+    final data = cache[_ReceiptFormat.pdf];
     if (data == null) return;
 
     try {
-      await Printing.sharePdf(bytes: data, filename: fileName);
+      await Printing.sharePdf(
+        bytes: data,
+        filename: 'receipt-${widget.label}.pdf',
+      );
     } catch (e) {
       say('Could not save: ${userFacingError(e)}');
     }
   }
 
+  /// Printing always uses the PDF, whichever format is selected.
   Future<void> printIt() async {
-    final data = bytes;
-    if (data == null) return;
-
     try {
+      var pdf = cache[_ReceiptFormat.pdf];
+      pdf ??= await _fetchReceipt(
+        widget.api,
+        widget.saleId,
+        _ReceiptFormat.pdf,
+      );
+      cache[_ReceiptFormat.pdf] = pdf;
+      final data = pdf;
+
       await Printing.layoutPdf(
-        name: fileName,
+        name: 'receipt-${widget.label}.pdf',
         onLayout: (_) async => data,
       );
     } catch (e) {
-      say('Could not print: $e');
+      say('Could not print: ${userFacingError(e)}');
     }
+  }
+
+  Widget buildPreview() {
+    final data = bytes;
+    if (data == null) return const SizedBox.shrink();
+
+    if (!format.isImage) {
+      return const Text(
+        'PDF is ready: one small 80 mm wide page with the same receipt.',
+      );
+    }
+
+    return ConstrainedBox(
+      constraints: const BoxConstraints(maxHeight: 340),
+      child: SingleChildScrollView(
+        child: Image.memory(data, fit: BoxFit.fitWidth),
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
-    final ready = bytes != null;
+    final ready = bytes != null && !loading;
+
+    Widget body;
+    if (error != null) {
+      body = Text(error!);
+    } else if (loading || bytes == null) {
+      body = Row(
+        children: [
+          const SizedBox(
+            width: 22,
+            height: 22,
+            child: CircularProgressIndicator(strokeWidth: 2.5),
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Text(
+              slow
+                  ? 'Still working — the server may be waking up. '
+                      'This can take up to a minute.'
+                  : 'Preparing receipt…',
+            ),
+          ),
+        ],
+      );
+    } else {
+      body = Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          buildPreview(),
+          const SizedBox(height: 12),
+          const Text(
+            'Share it straight to WhatsApp or any other app — nothing is '
+            'saved to your phone.',
+          ),
+          if (shareError != null) ...[
+            const SizedBox(height: 12),
+            Text(
+              'Sharing didn\'t open: $shareError',
+              style: TextStyle(
+                color: Theme.of(context).colorScheme.error,
+              ),
+            ),
+          ],
+        ],
+      );
+    }
 
     return AlertDialog(
-      title: Text('Invoice ${widget.label}'),
-      content: error != null
-          ? Text(error!)
-          : ready
-              ? Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'Invoice is ready. Share it straight to WhatsApp or '
-                      'any other app — nothing is saved to your phone — or '
-                      'print it.',
-                    ),
-                    if (shareError != null) ...[
-                      const SizedBox(height: 12),
-                      Text(
-                        'Sharing didn\'t open: $shareError',
-                        style: TextStyle(
-                          color: Theme.of(context).colorScheme.error,
-                        ),
-                      ),
-                    ],
-                  ],
-                )
-              : Row(
-                  children: [
-                    const SizedBox(
-                      width: 22,
-                      height: 22,
-                      child: CircularProgressIndicator(strokeWidth: 2.5),
-                    ),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: Text(
-                        slow
-                            ? 'Still working — the server may be waking up. '
-                                'This can take up to a minute.'
-                            : 'Preparing invoice…',
-                      ),
-                    ),
-                  ],
-                ),
+      title: Text('Receipt ${widget.label}'),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Wrap(
+              spacing: 8,
+              children: [
+                for (final f in _ReceiptFormat.values)
+                  ChoiceChip(
+                    label: Text(f.label),
+                    selected: format == f,
+                    onSelected: loading ? null : (_) => choose(f),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            body,
+          ],
+        ),
+      ),
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(context),
           child: const Text('Close'),
         ),
-        if (error != null)
+        if (error != null && !loading)
           FilledButton(onPressed: load, child: const Text('Try again')),
         if (ready) ...[
-          if (shareError != null)
+          if (shareError != null && format == _ReceiptFormat.pdf)
             TextButton(
-              onPressed: save,
+              onPressed: savePdf,
               child: const Text('Save PDF'),
             ),
           OutlinedButton.icon(
