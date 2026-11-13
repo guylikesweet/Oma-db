@@ -348,7 +348,16 @@ jobs:
       # 4. FLUTTER DEPENDENCIES
       # ------------------------------------------------------------
       - name: Get Flutter dependencies
-        run: flutter pub get
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -f pubspec.lock ]; then
+            echo "Using committed Flutter dependency lockfile."
+            flutter pub get --enforce-lockfile
+          else
+            echo "::warning::mobile/pubspec.lock is not committed yet; this build cannot guarantee repeatable transitive dependency versions."
+            flutter pub get
+          fi
 
       # ------------------------------------------------------------
       # 5. FORMAT + ANALYZE FLUTTER CODE
@@ -1352,6 +1361,59 @@ jobs:
           echo ""
           echo "AAB:"
           echo "build/app/outputs/bundle/release/app-release.aab"
+
+      # ------------------------------------------------------------
+      # ANDROID 16 EMULATOR STARTUP SMOKE TEST
+      # Compilation alone does not prove that Activity.onStart succeeds.
+      # Install and launch the exact release APK on an API 36 emulator.
+      # ------------------------------------------------------------
+      - name: Install and launch release APK on Android 16
+        uses: reactivecircus/android-emulator-runner@v2
+        timeout-minutes: 15
+        with:
+          api-level: 36
+          target: google_apis
+          arch: x86_64
+          profile: pixel_2
+          disable-animations: true
+          script: |
+            set -euo pipefail
+            PACKAGE="com.omagroup.salesapp"
+            APK="mobile/build/app/outputs/flutter-apk/app-release.apk"
+
+            test -s "$APK"
+            adb install -r "$APK"
+            adb logcat -c
+            adb shell am force-stop "$PACKAGE" || true
+            adb shell monkey -p "$PACKAGE" -c android.intent.category.LAUNCHER 1
+
+            # Allow first-run initialization and Android permission UI to settle.
+            sleep 20
+
+            if ! adb shell pidof "$PACKAGE" >/dev/null 2>&1; then
+              echo "OmaSales process exited after launch."
+              adb logcat -d -t 4000
+              exit 1
+            fi
+
+            if adb logcat -d -t 4000 | grep -E "FATAL EXCEPTION|Fatal signal|Process: com\\.omagroup\\.salesapp"; then
+              echo "OmaSales crashed during Android 16 startup."
+              exit 1
+            fi
+
+            echo "Android 16 startup smoke test passed; OmaSales process is alive."
+
+      # ------------------------------------------------------------
+      # UPLOAD R8 MAPPING WHEN RELEASE SHRINKING PRODUCES ONE
+      # This allows an obfuscated Java crash stack to be de-obfuscated.
+      # ------------------------------------------------------------
+      - name: Upload Android R8 mapping (if generated)
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: OmaSales-R8-Mapping-${{ github.run_number }}
+          path: mobile/build/app/outputs/mapping/release/mapping.txt
+          if-no-files-found: warn
 
       # ------------------------------------------------------------
       # 11a. RENAME BUILD OUTPUTS
