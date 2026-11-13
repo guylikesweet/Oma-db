@@ -10,7 +10,7 @@ on:
         type: string
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: oma-mobile-apk
@@ -20,7 +20,7 @@ jobs:
   build:
     name: Build signed Android APK
     runs-on: ubuntu-24.04
-    timeout-minutes: 45
+    timeout-minutes: 60
     defaults:
       run:
         working-directory: mobile
@@ -43,7 +43,33 @@ jobs:
           cache: true
 
       - name: Install Flutter dependencies
-        run: flutter pub get
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -f pubspec.lock ]; then
+            flutter pub get --enforce-lockfile
+          else
+            flutter pub get
+          fi
+
+      # First successful manual build pins the complete transitive dependency
+      # graph. Later builds use --enforce-lockfile and cannot silently drift.
+      - name: Commit initial Flutter dependency lock
+        if: github.ref == 'refs/heads/main'
+        working-directory: .
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git ls-files --error-unmatch mobile/pubspec.lock >/dev/null 2>&1; then
+            echo "Flutter dependency lock is already tracked."
+            exit 0
+          fi
+          test -s mobile/pubspec.lock
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -f mobile/pubspec.lock
+          git commit -m "build: pin OmaSales Flutter dependencies [skip ci]"
+          git push origin "HEAD:main"
 
       - name: Generate Android project
         shell: bash
@@ -405,7 +431,83 @@ jobs:
           cp build/app/outputs/flutter-apk/app-release.apk build/named/OmaSales-Mobile.apk
           echo "Release APK built successfully."
 
+      # Launch the exact release APK on an Android 16 emulator. This catches
+      # native Activity/plugin startup crashes that a successful Gradle build
+      # cannot detect. The step is deliberately bounded and saves logcat on
+      # both success and failure.
+      - name: Android 16 release startup smoke test
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 36
+          target: google_apis
+          arch: x86_64
+          profile: pixel_6
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -camera-front none
+          script: |
+            set -euo pipefail
+            APK="$GITHUB_WORKSPACE/mobile/build/named/OmaSales-Mobile.apk"
+            LOG="$GITHUB_WORKSPACE/mobile/build/android-startup-logcat.txt"
+            mkdir -p "$(dirname "$LOG")"
+            adb wait-for-device
+            adb shell settings put global window_animation_scale 0
+            adb shell settings put global transition_animation_scale 0
+            adb shell settings put global animator_duration_scale 0
+            adb logcat -c
+            adb install -r "$APK"
+            adb shell monkey -p com.omagroup.salesapp 1
+            for attempt in $(seq 1 45); do
+              sleep 2
+              adb logcat -d -v time > "$LOG"
+              if grep -q "FATAL EXCEPTION" "$LOG"; then
+                echo "Fatal Android exception during cold start:"
+                grep -A 45 -B 8 "FATAL EXCEPTION" "$LOG" || true
+                exit 1
+              fi
+              if ! adb shell pidof com.omagroup.salesapp >/dev/null 2>&1; then
+                echo "OmaSales process exited during startup."
+                tail -n 180 "$LOG"
+                exit 1
+              fi
+              if grep -q "Displayed com.omagroup.salesapp/" "$LOG"; then
+                echo "Android reported OmaSales activity displayed."
+                exit 0
+              fi
+            done
+            echo "OmaSales stayed alive but Android did not report the first activity display."
+            tail -n 180 "$LOG"
+            exit 1
+
+      - name: Collect Android build diagnostics
+        if: always()
+        working-directory: .
+        shell: bash
+        run: |
+          set -euo pipefail
+          OUT="mobile/build/android-diagnostics"
+          mkdir -p "$OUT"
+          cp mobile/pubspec.lock "$OUT/" 2>/dev/null || true
+          cp mobile/android/app/src/main/AndroidManifest.xml "$OUT/" 2>/dev/null || true
+          cp mobile/android/app/src/main/kotlin/com/omagroup/salesapp/MainActivity.kt "$OUT/" 2>/dev/null || true
+          cp mobile/android/app/build.gradle.kts "$OUT/" 2>/dev/null || true
+          cp mobile/android/app/build.gradle "$OUT/" 2>/dev/null || true
+          cp mobile/build/android-startup-logcat.txt "$OUT/" 2>/dev/null || true
+          if [ -f mobile/android/app/build/outputs/mapping/release/mapping.txt ]; then
+            cp mobile/android/app/build/outputs/mapping/release/mapping.txt "$OUT/"
+          fi
+          find mobile/android/app/build/outputs -maxdepth 4 -type f \( -name "*.apk" -o -name "*.aab" \) -print 2>/dev/null > "$OUT/native-output-files.txt" || true
+
+      - name: Upload Android diagnostics
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: OmaSales-Android-Diagnostics-${{ github.run_number }}
+          path: mobile/build/android-diagnostics
+          if-no-files-found: warn
+          retention-days: 14
+
       - name: Upload APK artifact
+        if: success()
         uses: actions/upload-artifact@v6
         with:
           name: OmaSales-APK-${{ github.run_number }}
