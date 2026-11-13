@@ -1,0 +1,399 @@
+name: Build Oma Mobile APK
+
+on:
+  workflow_dispatch:
+    inputs:
+      api_url:
+        description: Backend API base URL
+        required: true
+        default: https://oma-db.onrender.com/api
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: oma-mobile-apk
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build signed Android APK
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    defaults:
+      run:
+        working-directory: mobile
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: '3.35.7'
+          cache: true
+
+      - name: Install Flutter dependencies
+        run: flutter pub get
+
+      - name: Generate Android project
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ ! -f android/app/build.gradle ] && [ ! -f android/app/build.gradle.kts ]; then
+            rm -rf android
+            flutter create --platforms=android --org com.example .
+          fi
+
+      - name: Configure Android app, Firebase, desugaring and release signing
+        env:
+          FIREBASE_GOOGLE_SERVICES_JSON: ${{ secrets.FIREBASE_GOOGLE_SERVICES_JSON }}
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          import os
+          import re
+          from pathlib import Path
+
+          package = "com.omagroup.salesapp"
+          firebase_raw = os.environ.get("FIREBASE_GOOGLE_SERVICES_JSON", "").strip()
+          if not firebase_raw:
+              raise SystemExit("Missing GitHub secret FIREBASE_GOOGLE_SERVICES_JSON.")
+          try:
+              firebase = json.loads(firebase_raw)
+          except json.JSONDecodeError as exc:
+              raise SystemExit(f"FIREBASE_GOOGLE_SERVICES_JSON is invalid: {exc}")
+          clients = firebase.get("client", [])
+          if not any(
+              c.get("client_info", {}).get("android_client_info", {}).get("package_name") == package
+              for c in clients
+          ):
+              raise SystemExit(f"Firebase config has no Android client for {package}.")
+          if firebase.get("project_info", {}).get("project_id") != "omasales-5208e":
+              raise SystemExit("Firebase config is not for the OmaSales Firebase project.")
+          Path("android/app/google-services.json").write_text(firebase_raw + "\n", encoding="utf-8")
+
+          gradle = next((p for p in (
+              Path("android/app/build.gradle.kts"),
+              Path("android/app/build.gradle"),
+          ) if p.is_file()), None)
+          settings = next((p for p in (
+              Path("android/settings.gradle.kts"),
+              Path("android/settings.gradle"),
+          ) if p.is_file()), None)
+          if not gradle or not settings:
+              raise SystemExit("Flutter did not generate the Android Gradle project.")
+          kts = gradle.suffix == ".kts"
+          settings_kts = settings.suffix == ".kts"
+          app_text = gradle.read_text(encoding="utf-8")
+          settings_text = settings.read_text(encoding="utf-8")
+
+          # Keep the installed app identity stable so this APK updates the existing app.
+          for key in ("namespace", "applicationId"):
+              pattern = re.compile(r'(?m)^([ \t]*)' + key + r'(?:[ \t]*=[ \t]*|[ \t]+)["\'][^"\']*["\']')
+              replacement = (lambda m, k=key: f'{m.group(1)}{k} = "{package}"') if kts else (lambda m, k=key: f'{m.group(1)}{k} "{package}"')
+              app_text, count = pattern.subn(replacement, app_text, count=1)
+              if not count:
+                  raise SystemExit(f"Could not set Android {key} in {gradle}.")
+
+          # Google Services Gradle plugin: use the syntax required by the file's DSL.
+          settings_plugin = 'id("com.google.gms.google-services") version "4.4.2" apply false' if settings_kts else 'id "com.google.gms.google-services" version "4.4.2" apply false'
+          app_plugin = 'id("com.google.gms.google-services")' if kts else 'id "com.google.gms.google-services"'
+          if "com.google.gms.google-services" not in settings_text:
+              m = re.search(r'(?m)^plugins\s*\{', settings_text)
+              if not m:
+                  raise SystemExit("No plugins block found in Android settings.")
+              settings_text = settings_text[:m.end()] + "\n    " + settings_plugin + settings_text[m.end():]
+          if "com.google.gms.google-services" not in app_text:
+              m = re.search(r'(?m)^plugins\s*\{', app_text)
+              if not m:
+                  raise SystemExit("No plugins block found in Android app Gradle file.")
+              app_text = app_text[:m.end()] + "\n    " + app_plugin + app_text[m.end():]
+
+          # Firebase Messaging requires minSdk 23.
+          min_line = "minSdk = 23" if kts else "minSdkVersion 23"
+          min_pattern = re.compile(r'(?m)^([ \t]*)minSdk(?:Version)?(?:[ \t]*=[ \t]*|[ \t]+)\S.*$')
+          if min_pattern.search(app_text):
+              app_text = min_pattern.sub(lambda m: m.group(1) + min_line, app_text, count=1)
+          else:
+              m = re.search(r'(?m)^([ \t]*)defaultConfig\s*\{', app_text)
+              if not m:
+                  raise SystemExit("No defaultConfig block found in Android app Gradle file.")
+              app_text = app_text[:m.end()] + "\n        " + min_line + app_text[m.end():]
+
+          # flutter_local_notifications requires core library desugaring.
+          compile_block = re.search(r'(?ms)^([ \t]*)compileOptions\s*\{(.*?)^\1\}', app_text)
+          desugar_line = "isCoreLibraryDesugaringEnabled = true" if kts else "coreLibraryDesugaringEnabled true"
+          if compile_block:
+              if "isCoreLibraryDesugaringEnabled" not in compile_block.group(2) and "coreLibraryDesugaringEnabled" not in compile_block.group(2):
+                  pos = compile_block.start(2)
+                  app_text = app_text[:pos] + "\n            " + desugar_line + app_text[pos:]
+          else:
+              m = re.search(r'(?m)^([ \t]*)android\s*\{', app_text)
+              if not m:
+                  raise SystemExit("No android block found in app Gradle file.")
+              app_text = app_text[:m.end()] + "\n    compileOptions {\n        " + desugar_line + "\n    }" + app_text[m.end():]
+          dep_line = 'coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")' if kts else "coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.1.4'"
+          dep = re.search(r'(?ms)^dependencies\s*\{(.*?)^\}', app_text)
+          if dep:
+              if "desugar_jdk_libs" not in dep.group(1):
+                  app_text = app_text[:dep.start(1)] + "\n    " + dep_line + app_text[dep.start(1):]
+          else:
+              app_text += "\n\ndependencies {\n    " + dep_line + "\n}\n"
+
+          # Configure signing from the existing repository secrets.
+          required = ("ANDROID_KEYSTORE_BASE64", "ANDROID_KEYSTORE_PASSWORD", "ANDROID_KEY_ALIAS", "ANDROID_KEY_PASSWORD")
+          missing = [key for key in required if not os.environ.get(key)]
+          if missing:
+              raise SystemExit("Missing Android signing secrets: " + ", ".join(missing))
+          import base64
+          keystore = base64.b64decode(os.environ["ANDROID_KEYSTORE_BASE64"], validate=True)
+          if not keystore:
+              raise SystemExit("ANDROID_KEYSTORE_BASE64 decoded to an empty keystore.")
+          Path("android/app/oma-release.jks").write_bytes(keystore)
+          Path("android/key.properties").write_text(
+              "storePassword=" + os.environ["ANDROID_KEYSTORE_PASSWORD"] + "\n" +
+              "keyPassword=" + os.environ["ANDROID_KEY_PASSWORD"] + "\n" +
+              "keyAlias=" + os.environ["ANDROID_KEY_ALIAS"] + "\n" +
+              "storeFile=oma-release.jks\n",
+              encoding="utf-8",
+          )
+
+          if kts:
+              loader = """import java.util.Properties
+          import java.io.FileInputStream
+
+          val keystoreProperties = Properties()
+          val keystorePropertiesFile = rootProject.file("key.properties")
+          if (keystorePropertiesFile.exists()) {
+              keystoreProperties.load(FileInputStream(keystorePropertiesFile))
+          }
+
+          """
+              if "keystorePropertiesFile" not in app_text:
+                  m = re.search(r'(?m)^android\s*\{', app_text)
+                  app_text = app_text[:m.start()] + loader + app_text[m.start():]
+              if "create(\"release\")" not in app_text and "getByName(\"release\")" not in app_text:
+                  m = re.search(r'(?m)^([ \t]*)buildTypes\s*\{', app_text)
+                  if not m:
+                      raise SystemExit("No buildTypes block found for release signing.")
+                  indent = m.group(1)
+                  signing = (
+                      indent + 'signingConfigs {\n' +
+                      indent + '    create("release") {\n' +
+                      indent + '        keyAlias = keystoreProperties["keyAlias"] as String\n' +
+                      indent + '        keyPassword = keystoreProperties["keyPassword"] as String\n' +
+                      indent + '        storeFile = keystoreProperties["storeFile"]?.let { file(it as String) }\n' +
+                      indent + '        storePassword = keystoreProperties["storePassword"] as String\n' +
+                      indent + '    }\n' + indent + '}\n'
+                  )
+                  app_text = app_text[:m.start()] + signing + app_text[m.start():]
+              release = re.search(r'(?m)^([ \t]*)(?:getByName\("release"\)|release)\s*\{', app_text)
+              if not release:
+                  raise SystemExit("No release build type found.")
+              insert = release.end()
+              if "signingConfig" not in app_text[insert:app_text.find("\n" + release.group(1) + "}", insert)]:
+                  app_text = app_text[:insert] + '\n' + release.group(1) + '    signingConfig = signingConfigs.getByName("release")' + app_text[insert:]
+          else:
+              if "keystorePropertiesFile" not in app_text:
+                  m = re.search(r'(?m)^android\s*\{', app_text)
+                  loader = (
+                      "def keystoreProperties = new Properties()\n"
+                      "def keystorePropertiesFile = rootProject.file('key.properties')\n"
+                      "if (keystorePropertiesFile.exists()) {\n"
+                      "    keystoreProperties.load(new FileInputStream(keystorePropertiesFile))\n"
+                      "}\n\n"
+                  )
+                  app_text = app_text[:m.start()] + loader + app_text[m.start():]
+              if "signingConfigs {" not in app_text:
+                  m = re.search(r'(?m)^([ \t]*)buildTypes\s*\{', app_text)
+                  if not m:
+                      raise SystemExit("No buildTypes block found for release signing.")
+                  indent = m.group(1)
+                  signing = (
+                      indent + "signingConfigs {\n" +
+                      indent + "    release {\n" +
+                      indent + "        keyAlias keystoreProperties['keyAlias']\n" +
+                      indent + "        keyPassword keystoreProperties['keyPassword']\n" +
+                      indent + "        storeFile keystoreProperties['storeFile'] ? file(keystoreProperties['storeFile']) : null\n" +
+                      indent + "        storePassword keystoreProperties['storePassword']\n" +
+                      indent + "    }\n" + indent + "}\n"
+                  )
+                  app_text = app_text[:m.start()] + signing + app_text[m.start():]
+              release = re.search(r'(?m)^([ \t]*)release\s*\{', app_text)
+              if not release:
+                  raise SystemExit("No release build type found.")
+              insert = release.end()
+              if "signingConfig" not in app_text[insert:app_text.find("\n" + release.group(1) + "}", insert)]:
+                  app_text = app_text[:insert] + "\n" + release.group(1) + "    signingConfig signingConfigs.release" + app_text[insert:]
+
+          gradle.write_text(app_text, encoding="utf-8")
+          settings.write_text(settings_text, encoding="utf-8")
+
+          # Verify the signing key and alias before starting Gradle.
+          import subprocess
+          subprocess.run([
+              "keytool", "-list", "-keystore", "android/app/oma-release.jks",
+              "-storepass", os.environ["ANDROID_KEYSTORE_PASSWORD"],
+              "-alias", os.environ["ANDROID_KEY_ALIAS"]
+          ], check=True, stdout=subprocess.DEVNULL)
+
+          # Generate the same FlutterFragmentActivity entry point used by the app.
+          kotlin_dir = Path("android/app/src/main/kotlin/com/omagroup/salesapp")
+          kotlin_dir.mkdir(parents=True, exist_ok=True)
+          for old in Path("android/app/src/main/kotlin").glob("**/MainActivity.kt"):
+              if old != kotlin_dir / "MainActivity.kt":
+                  old.unlink()
+          for old in Path("android/app/src/main/java").glob("**/MainActivity.java") if Path("android/app/src/main/java").exists() else []:
+              old.unlink()
+          (kotlin_dir / "MainActivity.kt").write_text("""package com.omagroup.salesapp
+
+          import android.app.NotificationChannel
+          import android.app.NotificationManager
+          import android.media.AudioAttributes
+          import android.os.Build
+          import io.flutter.embedding.android.FlutterFragmentActivity
+
+          class MainActivity : FlutterFragmentActivity() {
+              override fun onCreate(savedInstanceState: android.os.Bundle?) {
+                  super.onCreate(savedInstanceState)
+                  if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                      val audio = AudioAttributes.Builder()
+                          .setUsage(AudioAttributes.USAGE_NOTIFICATION)
+                          .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                          .build()
+                      val channels = listOf(
+                          Triple("oma_scanner_v3", "Oma scanner", "scanner_beep"),
+                          Triple("oma_arrival_sea_v3", "Sea shipment arrivals", "ship_horn"),
+                          Triple("oma_arrival_air_v3", "Air shipment arrivals", "airport_arrival"),
+                          Triple("oma_chat_v3", "Oma team chat", "chat_message")
+                      )
+                      val manager = getSystemService(NotificationManager::class.java)
+                      for ((id, name, soundName) in channels) {
+                          val sound = resources.getIdentifier(soundName, "raw", packageName)
+                          val channel = NotificationChannel(id, name, NotificationManager.IMPORTANCE_HIGH)
+                          channel.enableVibration(true)
+                          if (sound != 0) {
+                              val uri = android.net.Uri.parse("android.resource://" + packageName + "/" + sound)
+                              channel.setSound(uri, audio)
+                          }
+                          manager.createNotificationChannel(channel)
+                      }
+                  }
+              }
+          }
+          """, encoding="utf-8")
+
+          # Keep the Android permissions required by networking, location, biometrics and chat audio.
+          manifest = Path("android/app/src/main/AndroidManifest.xml")
+          xml = manifest.read_text(encoding="utf-8")
+          permissions = (
+              "INTERNET", "ACCESS_NETWORK_STATE", "ACCESS_COARSE_LOCATION",
+              "ACCESS_FINE_LOCATION", "USE_BIOMETRIC", "RECORD_AUDIO",
+              "POST_NOTIFICATIONS", "RECEIVE_BOOT_COMPLETED"
+          )
+          for permission in permissions:
+              marker = f'android:name="android.permission.{permission}"'
+              if marker not in xml:
+                  xml = xml.replace("<application", f'    <uses-permission android:name="android.permission.{permission}" />\n    <application', 1)
+          xml = xml.replace('android:label="mobile"', 'android:label="OmaSales Mobile"')
+          xml = xml.replace('android:label="oma_mobile"', 'android:label="OmaSales Mobile"')
+          manifest.write_text(xml, encoding="utf-8")
+
+          # Use the app's custom notification sounds where present; generate short
+          # valid fallback tones only when a source sound is absent.
+          import math, shutil, struct, wave
+          raw_dir = Path("android/app/src/main/res/raw")
+          raw_dir.mkdir(parents=True, exist_ok=True)
+          sound_files = {
+              "scanner_beep.wav": (0.18, (1850, 2400)),
+              "ship_horn.wav": (0.72, (330, 392)),
+              "airport_arrival.wav": (0.62, (523, 659, 784)),
+              "chat_message.wav": (0.24, (880, 1175)),
+          }
+          for filename, (duration, frequencies) in sound_files.items():
+              target = raw_dir / filename
+              source = Path("assets/notifications") / filename
+              if source.is_file() and source.stat().st_size:
+                  shutil.copy2(source, target)
+              else:
+                  rate = 44100
+                  with wave.open(str(target), "wb") as wav:
+                      wav.setnchannels(1)
+                      wav.setsampwidth(2)
+                      wav.setframerate(rate)
+                      frames = int(duration * rate)
+                      samples = bytearray()
+                      for i in range(frames):
+                          t = i / rate
+                          envelope = min(1.0, i / (rate * .012)) * min(1.0, (frames-i)/(rate*.035))
+                          value = sum(math.sin(2*math.pi*f*t) for f in frequencies) / len(frequencies)
+                          samples.extend(struct.pack("<h", int(32767 * .38 * envelope * value)))
+                      wav.writeframes(samples)
+
+          # Generate launcher assets from the existing pubspec configuration.
+          print("Android identity, Firebase, signing, permissions and sound resources configured.")
+          PY
+
+      - name: Generate launcher icons
+        run: dart run flutter_launcher_icons
+
+      - name: Build signed release APK
+        env:
+          API_URL: ${{ inputs.api_url }}
+          FCM_API_KEY: ${{ secrets.FCM_API_KEY }}
+          FCM_APP_ID: ${{ secrets.FCM_APP_ID }}
+          FCM_MESSAGING_SENDER_ID: ${{ secrets.FCM_MESSAGING_SENDER_ID }}
+          FCM_PROJECT_ID: ${{ secrets.FCM_PROJECT_ID }}
+          FCM_AUTH_DOMAIN: ${{ secrets.FCM_AUTH_DOMAIN }}
+          FCM_STORAGE_BUCKET: ${{ secrets.FCM_STORAGE_BUCKET }}
+          FCM_WEB_VAPID_KEY: ${{ secrets.FCM_WEB_VAPID_KEY }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          case "$API_URL" in
+            https://*) ;;
+            *) echo "API_URL must use HTTPS."; exit 1 ;;
+          esac
+          for key in FCM_API_KEY FCM_APP_ID FCM_MESSAGING_SENDER_ID FCM_PROJECT_ID; do
+            if [ -z "${!key:-}" ]; then
+              echo "Missing GitHub Actions secret: $key"
+              exit 1
+            fi
+          done
+          flutter build apk --release --build-number="$GITHUB_RUN_NUMBER" \
+            --dart-define=API_BASE_URL="$API_URL" \
+            --dart-define=FCM_API_KEY="$FCM_API_KEY" \
+            --dart-define=FCM_APP_ID="$FCM_APP_ID" \
+            --dart-define=FCM_MESSAGING_SENDER_ID="$FCM_MESSAGING_SENDER_ID" \
+            --dart-define=FCM_PROJECT_ID="$FCM_PROJECT_ID" \
+            --dart-define=FCM_AUTH_DOMAIN="$FCM_AUTH_DOMAIN" \
+            --dart-define=FCM_STORAGE_BUCKET="$FCM_STORAGE_BUCKET" \
+            --dart-define=FCM_WEB_VAPID_KEY="$FCM_WEB_VAPID_KEY"
+          test -s build/app/outputs/flutter-apk/app-release.apk
+          mkdir -p build/named
+          cp build/app/outputs/flutter-apk/app-release.apk build/named/OmaSales-Mobile.apk
+          echo "Release APK built successfully."
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: OmaSales-APK-${{ github.run_number }}
+          path: mobile/build/named/OmaSales-Mobile.apk
+          if-no-files-found: error
+          retention-days: 14
