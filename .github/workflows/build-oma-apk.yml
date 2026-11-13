@@ -1390,7 +1390,9 @@ jobs:
           profile: pixel_2
           disable-animations: true
           script: |
-            set -euo pipefail
+            # android-emulator-runner executes this script with /usr/bin/sh,
+            # not necessarily Bash. Use POSIX-compatible strict mode.
+            set -eu
             PACKAGE="com.omagroup.salesapp"
             APK="mobile/build/app/outputs/flutter-apk/app-release.apk"
 
