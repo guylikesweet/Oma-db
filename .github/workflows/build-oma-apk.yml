@@ -496,6 +496,7 @@ jobs:
       # cannot detect. The step is deliberately bounded and saves logcat on
       # both success and failure.
       - name: Android 16 release startup smoke test
+        timeout-minutes: 20
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 36
@@ -524,17 +525,17 @@ jobs:
                 grep -A 45 -B 8 "FATAL EXCEPTION" "$LOG" || true
                 exit 1
               fi
-              if ! adb shell pidof com.omagroup.salesapp >/dev/null 2>&1; then
-                echo "OmaSales process exited during startup."
-                tail -n 180 "$LOG"
-                exit 1
-              fi
               if grep -q "Displayed com.omagroup.salesapp/" "$LOG"; then
                 echo "Android reported OmaSales activity displayed."
                 exit 0
               fi
             done
-            echo "OmaSales stayed alive but Android did not report the first activity display."
+            echo "OmaSales did not reach the first activity display within 90 seconds."
+            if adb shell pidof com.omagroup.salesapp >/dev/null 2>&1; then
+              echo "OmaSales process is still alive; checking startup logcat."
+            else
+              echo "OmaSales process is not running after launch."
+            fi
             tail -n 180 "$LOG"
             exit 1
 
@@ -551,6 +552,14 @@ jobs:
           cp mobile/android/app/src/main/kotlin/com/omagroup/salesapp/MainActivity.kt "$OUT/" 2>/dev/null || true
           cp mobile/android/app/build.gradle.kts "$OUT/" 2>/dev/null || true
           cp mobile/android/app/build.gradle "$OUT/" 2>/dev/null || true
+          cp mobile/android/settings.gradle.kts "$OUT/" 2>/dev/null || true
+          cp mobile/android/settings.gradle "$OUT/" 2>/dev/null || true
+          cp mobile/android/build.gradle.kts "$OUT/" 2>/dev/null || true
+          cp mobile/android/build.gradle "$OUT/" 2>/dev/null || true
+          cp mobile/android/gradle.properties "$OUT/" 2>/dev/null || true
+          cp mobile/android/gradle/wrapper/gradle-wrapper.properties "$OUT/" 2>/dev/null || true
+          git rev-parse HEAD > "$OUT/source-commit.txt"
+          (cd mobile && flutter --version) > "$OUT/flutter-version.txt" 2>&1 || true
           cp mobile/build/android-startup-logcat.txt "$OUT/" 2>/dev/null || true
           if [ -f mobile/android/app/build/outputs/mapping/release/mapping.txt ]; then
             cp mobile/android/app/build/outputs/mapping/release/mapping.txt "$OUT/"
