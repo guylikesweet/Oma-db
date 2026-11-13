@@ -497,47 +497,7 @@ jobs:
           disable-animations: true
           emulator-options: -no-window -no-snapshot -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -camera-front none
           script: |
-            set -eu
-            # Resolve the artifact path from GitHub's workflow context rather
-            # than relying on environment variables inside the emulator action.
-            APK="${{ github.workspace }}/mobile/build/named/OmaSales-Mobile.apk"
-            LOG="${{ github.workspace }}/mobile/build/android-startup-logcat.txt"
-            echo "Smoke-test APK path: $APK"
-            if [ ! -s "$APK" ]; then
-              echo "ERROR: expected release APK is missing or empty."
-              echo "Current directory: $(pwd)"
-              ls -la "${{ github.workspace }}/mobile/build" || true
-              ls -la "${{ github.workspace }}/mobile/build/named" || true
-              exit 1
-            fi
-            adb wait-for-device
-            adb shell settings put global window_animation_scale 0
-            adb shell settings put global transition_animation_scale 0
-            adb shell settings put global animator_duration_scale 0
-            adb logcat -c
-            adb install -r "$APK"
-            adb shell monkey -p com.omagroup.salesapp 1
-            for attempt in $(seq 1 45); do
-              sleep 2
-              adb logcat -d -v time > "$LOG"
-              if grep -q "FATAL EXCEPTION" "$LOG"; then
-                echo "Fatal Android exception during cold start:"
-                grep -A 45 -B 8 "FATAL EXCEPTION" "$LOG" || true
-                exit 1
-              fi
-              if grep -q "Displayed com.omagroup.salesapp/" "$LOG"; then
-                echo "Android reported OmaSales activity displayed."
-                exit 0
-              fi
-            done
-            echo "OmaSales did not reach the first activity display within 90 seconds."
-            if adb shell pidof com.omagroup.salesapp >/dev/null 2>&1; then
-              echo "OmaSales process is still alive; checking startup logcat."
-            else
-              echo "OmaSales process is not running after launch."
-            fi
-            tail -n 180 "$LOG"
-            exit 1
+            set -eu; APK="${{ github.workspace }}/mobile/build/named/OmaSales-Mobile.apk"; LOG="${{ github.workspace }}/mobile/build/android-startup-logcat.txt"; echo "Smoke-test APK path: $APK"; if [ ! -s "$APK" ]; then echo "ERROR: expected release APK is missing or empty."; echo "Current directory: $(pwd)"; ls -la "${{ github.workspace }}/mobile/build" || true; ls -la "${{ github.workspace }}/mobile/build/named" || true; exit 1; fi; adb wait-for-device; adb shell settings put global window_animation_scale 0; adb shell settings put global transition_animation_scale 0; adb shell settings put global animator_duration_scale 0; adb logcat -c; adb install -r "$APK"; adb shell monkey -p com.omagroup.salesapp 1; for attempt in $(seq 1 45); do sleep 2; adb logcat -d -v time > "$LOG"; if grep -q "FATAL EXCEPTION" "$LOG"; then echo "Fatal Android exception during cold start:"; grep -A 45 -B 8 "FATAL EXCEPTION" "$LOG" || true; exit 1; fi; if grep -q "Displayed com.omagroup.salesapp/" "$LOG"; then echo "Android reported OmaSales activity displayed."; exit 0; fi; done; echo "OmaSales did not reach the first activity display within 90 seconds."; if adb shell pidof com.omagroup.salesapp >/dev/null 2>&1; then echo "OmaSales process is still alive; checking startup logcat."; else echo "OmaSales process is not running after launch."; fi; tail -n 180 "$LOG"; exit 1
 
       - name: Collect Android build diagnostics
         if: always()
