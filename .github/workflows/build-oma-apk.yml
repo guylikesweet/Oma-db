@@ -509,7 +509,9 @@ jobs:
         shell: bash
         run: |
           set -Eeuo pipefail
-          SDK="\${ANDROID_SDK_ROOT:-\${ANDROID_HOME:-/usr/local/lib/android/sdk}}"
+          SDK="$(printenv ANDROID_SDK_ROOT || true)"
+          if [ -z "$SDK" ]; then SDK="$(printenv ANDROID_HOME || true)"; fi
+          if [ -z "$SDK" ]; then SDK="/usr/local/lib/android/sdk"; fi
           export ANDROID_SDK_ROOT="$SDK"
           export ANDROID_HOME="$SDK"
           export PATH="$SDK/platform-tools:$SDK/emulator:$PATH"
