@@ -164,7 +164,21 @@ def _wrap_runs(paragraph, size, max_w):
             # two runs, e.g. "<b>NGN 1.00</b>.") sticks to the previous word.
             glued = (i == 0 and bool(words) and not text[:1].isspace()
                      and not prev[-1:].isspace())
-            words.append((w, bold, glued))
+
+            # Never let a long URL, reference, or other unbroken token exceed
+            # the available line width. Split it into measured character runs.
+            font = _font(size, bold)
+            pieces = []
+            remaining = w
+            while _tw(font, remaining) > max_w and len(remaining) > 1:
+                cut = len(remaining) - 1
+                while cut > 1 and _tw(font, remaining[:cut]) > max_w:
+                    cut -= 1
+                pieces.append(remaining[:cut])
+                remaining = remaining[cut:]
+            pieces.append(remaining)
+            for piece_index, piece in enumerate(pieces):
+                words.append((piece, bold, glued if piece_index == 0 else True))
         prev = text
     lines, cur, cur_w = [], [], 0.0
     space = _tw(_font(size), " ")
@@ -519,7 +533,11 @@ def _draw_content(img, ctx, logo, qr_img, gap):
     if paras:
         body = 25
         lh = 34
-        text_w = inner_w - 40 - 40
+        # Text begins to the right of the info icon. Measure from that
+        # actual x-position to the inner right edge, preserving equal padding
+        # on both sides of the notice instead of assuming a centered text box.
+        tx = MARGIN + 28 + 54 + 20
+        text_w = W - MARGIN - 28 - tx
         wrapped = [_wrap_runs(p, body, text_w) for p in paras]
         n_lines = sum(len(w) for w in wrapped)
         nh = 26 + 50 + n_lines * lh + 8 * (len(paras) - 1) + 22
@@ -529,7 +547,6 @@ def _draw_content(img, ctx, logo, qr_img, gap):
         d.ellipse([ix, iy, ix + 54, iy + 54], outline=(196, 112, 12), width=4)
         d.text((ix + 27 - _tw(_font(32, True), "i") / 2, iy + 7), "i",
                font=_font(32, True), fill=(196, 112, 12))
-        tx = MARGIN + 28 + 54 + 20
         d.text((tx, y + 20), "Shipping Notice", font=_font(36, True), fill=(176, 92, 8))
         ty = y + 26 + 46
         for w in wrapped:
