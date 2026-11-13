@@ -1407,7 +1407,8 @@ jobs:
             adb shell monkey -p "$PACKAGE" -c android.intent.category.LAUNCHER 1
             sleep 30
             adb shell pidof "$PACKAGE" >/dev/null 2>&1 || { echo "OmaSales process exited after launch."; adb logcat -d -t 4000; exit 1; }
-            adb logcat -d -t 4000 | grep -E "FATAL EXCEPTION|Fatal signal|Process: com\\.omagroup\\.salesapp" && { echo "OmaSales crashed during Android 16 startup."; exit 1; } || true
+            adb logcat -d -t 4000 > /tmp/oma-startup-log.txt
+            ! grep -qE "FATAL EXCEPTION|Fatal signal|Process: com\\.omagroup\\.salesapp" /tmp/oma-startup-log.txt || { echo "OmaSales crashed during Android 16 startup."; cat /tmp/oma-startup-log.txt; exit 1; }
             echo "Android 16 startup smoke test passed; OmaSales process is alive."
 
       # ------------------------------------------------------------
@@ -1523,5 +1524,6 @@ jobs:
             adb shell monkey -p "$PACKAGE" -c android.intent.category.LAUNCHER 1
             sleep 30
             adb shell pidof "$PACKAGE" >/dev/null 2>&1 || { echo "OmaSales process exited on Android API ${{ matrix.api-level }}."; adb logcat -d -t 4000; exit 1; }
-            adb logcat -d -t 4000 | grep -E "FATAL EXCEPTION|Fatal signal|Process: com\\.omagroup\\.salesapp" && { echo "OmaSales crashed on Android API ${{ matrix.api-level }}."; exit 1; } || true
+            adb logcat -d -t 4000 > /tmp/oma-startup-log.txt
+            ! grep -qE "FATAL EXCEPTION|Fatal signal|Process: com\\.omagroup\\.salesapp" /tmp/oma-startup-log.txt || { echo "OmaSales crashed on Android API ${{ matrix.api-level }}."; cat /tmp/oma-startup-log.txt; exit 1; }
             echo "OmaSales startup passed on Android API ${{ matrix.api-level }}."
