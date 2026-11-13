@@ -69,6 +69,8 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -f mobile/pubspec.lock
           git commit -m "build: pin OmaSales Flutter dependencies [skip ci]"
+          git fetch origin main
+          git rebase origin/main
           git push origin "HEAD:main"
 
       - name: Generate Android project
@@ -308,12 +310,29 @@ jobs:
           import android.app.NotificationManager
           import android.media.AudioAttributes
           import android.os.Build
+          import android.util.Log
           import io.flutter.embedding.android.FlutterFragmentActivity
 
           class MainActivity : FlutterFragmentActivity() {
               override fun onCreate(savedInstanceState: android.os.Bundle?) {
                   super.onCreate(savedInstanceState)
-                  if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                  createOmaNotificationChannels()
+              }
+
+              override fun onStart() {
+                  Log.i("OmaStartup", "MainActivity.onStart entering")
+                  super.onStart()
+                  Log.i("OmaStartup", "MainActivity.onStart completed")
+              }
+
+              private fun createOmaNotificationChannels() {
+                  if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
+                  try {
+                      val manager = getSystemService(NotificationManager::class.java)
+                      if (manager == null) {
+                          Log.w("OmaStartup", "NotificationManager unavailable; continuing without custom channels")
+                          return
+                      }
                       val audio = AudioAttributes.Builder()
                           .setUsage(AudioAttributes.USAGE_NOTIFICATION)
                           .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
@@ -324,17 +343,22 @@ jobs:
                           Triple("oma_arrival_air_v3", "Air shipment arrivals", "airport_arrival"),
                           Triple("oma_chat_v3", "Oma team chat", "chat_message")
                       )
-                      val manager = getSystemService(NotificationManager::class.java)
                       for ((id, name, soundName) in channels) {
-                          val sound = resources.getIdentifier(soundName, "raw", packageName)
-                          val channel = NotificationChannel(id, name, NotificationManager.IMPORTANCE_HIGH)
-                          channel.enableVibration(true)
-                          if (sound != 0) {
-                              val uri = android.net.Uri.parse("android.resource://" + packageName + "/" + sound)
-                              channel.setSound(uri, audio)
+                          try {
+                              val sound = resources.getIdentifier(soundName, "raw", packageName)
+                              val channel = NotificationChannel(id, name, NotificationManager.IMPORTANCE_HIGH)
+                              channel.enableVibration(true)
+                              if (sound != 0) {
+                                  val uri = android.net.Uri.parse("android.resource://" + packageName + "/" + sound)
+                                  channel.setSound(uri, audio)
+                              }
+                              manager.createNotificationChannel(channel)
+                          } catch (error: Exception) {
+                              Log.w("OmaStartup", "Unable to create notification channel $id; continuing", error)
                           }
-                          manager.createNotificationChannel(channel)
                       }
+                  } catch (error: Exception) {
+                      Log.w("OmaStartup", "Notification channel setup failed; continuing app startup", error)
                   }
               }
           }
@@ -390,6 +414,11 @@ jobs:
           # Generate launcher assets from the existing pubspec configuration.
           print("Android identity, Firebase, signing, permissions and sound resources configured.")
           PY
+
+      - name: Analyze Flutter source and run tests
+        run: |
+          flutter analyze --no-pub
+          flutter test --no-pub
 
       - name: Generate launcher icons
         run: dart run flutter_launcher_icons
