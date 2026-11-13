@@ -498,9 +498,18 @@ jobs:
           emulator-options: -no-window -no-snapshot -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -camera-front none
           script: |
             set -eu
-            APK="$GITHUB_WORKSPACE/mobile/build/named/OmaSales-Mobile.apk"
-            LOG="$GITHUB_WORKSPACE/mobile/build/android-startup-logcat.txt"
-            mkdir -p "$(dirname "$LOG")"
+            # Resolve the artifact path from GitHub's workflow context rather
+            # than relying on environment variables inside the emulator action.
+            APK="${{ github.workspace }}/mobile/build/named/OmaSales-Mobile.apk"
+            LOG="${{ github.workspace }}/mobile/build/android-startup-logcat.txt"
+            echo "Smoke-test APK path: $APK"
+            if [ ! -s "$APK" ]; then
+              echo "ERROR: expected release APK is missing or empty."
+              echo "Current directory: $(pwd)"
+              ls -la "${{ github.workspace }}/mobile/build" || true
+              ls -la "${{ github.workspace }}/mobile/build/named" || true
+              exit 1
+            fi
             adb wait-for-device
             adb shell settings put global window_animation_scale 0
             adb shell settings put global transition_animation_scale 0
