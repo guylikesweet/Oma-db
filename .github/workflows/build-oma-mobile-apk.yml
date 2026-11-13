@@ -1,6 +1,6 @@
 name: Build Oma Mobile APK
 
-on:
+"on":
   # Automatic push/PR builds are intentionally disabled.
   # Builds must be started manually from the Actions tab.
   workflow_dispatch:
