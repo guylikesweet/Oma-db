@@ -38,8 +38,11 @@ mobile/.flutter_tool_state
 mobile/build/
 mobile/.pub-cache/
 
-# Generated native projects used by CI
-mobile/android/
+# Local Android signing material is injected by CI and must never be committed.
+mobile/android/key.properties
+mobile/android/app/oma-release.jks
+
+# iOS native project is not currently built from this repository.
 mobile/ios/
 
 # Generated web output is rebuilt by CI and committed separately when deployed.
