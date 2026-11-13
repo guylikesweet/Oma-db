@@ -459,7 +459,10 @@ jobs:
             echo "Removing incompatible Flutter scaffold test (MyApp is not part of OmaSales)."
             rm test/widget_test.dart
           fi
-          flutter analyze --no-pub
+          # Flutter 3.35 treats info-level lints as fatal by default. Keep
+          # errors and warnings fatal, but don't block APK builds on style/info
+          # notices such as deprecations while they are addressed separately.
+          flutter analyze --no-pub --no-fatal-infos
           flutter test --no-pub
 
       - name: Generate launcher icons
