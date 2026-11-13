@@ -1436,7 +1436,7 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: OmaSales-Android-Manifest-${{ github.run_number }}
-          path: mobile/android/app/build/outputs/logs/manifest-merger-release-report.txt
+          path: mobile/build/app/outputs/logs/manifest-merger-release-report.txt
           if-no-files-found: warn
 
       # ------------------------------------------------------------
