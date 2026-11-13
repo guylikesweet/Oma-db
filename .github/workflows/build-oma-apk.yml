@@ -1400,9 +1400,20 @@ jobs:
             # not necessarily Bash. Use POSIX-compatible strict mode.
             set -eu
             PACKAGE="com.omagroup.salesapp"
-            APK="mobile/build/app/outputs/flutter-apk/app-release.apk"
-
-            test -s "$APK"
+            # The emulator action may execute its script from the repository root
+            # or inherit the mobile working directory. Resolve both layouts.
+            APK="build/app/outputs/flutter-apk/app-release.apk"
+            if [ ! -s "$APK" ]; then
+              APK="mobile/build/app/outputs/flutter-apk/app-release.apk"
+            fi
+            if [ ! -s "$APK" ]; then
+              echo "Release APK not found. Checked:"
+              echo "  build/app/outputs/flutter-apk/app-release.apk"
+              echo "  mobile/build/app/outputs/flutter-apk/app-release.apk"
+              echo "Current directory: $(pwd)"
+              ls -la
+              exit 1
+            fi
             adb install -r "$APK"
             adb logcat -c
             adb shell am force-stop "$PACKAGE" || true
