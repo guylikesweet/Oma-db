@@ -66,12 +66,27 @@ void main() {
   );
 }
 
-class OmaMobileAppRoot extends StatelessWidget {
+class OmaMobileAppRoot extends StatefulWidget {
   const OmaMobileAppRoot({super.key});
 
   @override
+  State<OmaMobileAppRoot> createState() => _OmaMobileAppRootState();
+}
+
+class _OmaMobileAppRootState extends State<OmaMobileAppRoot> {
+  late final Future<void> _initialization;
+
+  @override
+  void initState() {
+    super.initState();
+    // A Future created in build can be restarted on every rebuild. Keep the
+    // database, notification and background-worker initialization single-shot.
+    _initialization = _initializeOma();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return OmaMobileApp(initialization: _initializeOma());
+    return OmaMobileApp(initialization: _initialization);
   }
 }
 
