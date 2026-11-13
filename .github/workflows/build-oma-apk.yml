@@ -465,6 +465,7 @@ jobs:
         run: dart run flutter_launcher_icons
 
       - name: Build signed release APK
+        id: build_apk
         env:
           API_URL: ${{ inputs.api_url }}
           FCM_API_KEY: ${{ secrets.FCM_API_KEY }}
@@ -514,7 +515,7 @@ jobs:
           if [ -z "$SDK" ]; then SDK="/usr/local/lib/android/sdk"; fi
           export ANDROID_SDK_ROOT="$SDK"
           export ANDROID_HOME="$SDK"
-          export PATH="$SDK/platform-tools:$SDK/emulator:$PATH"
+          export PATH="$SDK/platform-tools:$SDK/emulator:$SDK/cmdline-tools/latest/bin:$PATH"
           APK="$GITHUB_WORKSPACE/mobile/build/named/OmaSales-Mobile.apk"
           OUT="$GITHUB_WORKSPACE/mobile/build/android-smoke"
           SERIAL="emulator-5554"
@@ -678,7 +679,7 @@ jobs:
           retention-days: 14
 
       - name: Upload APK artifact
-        if: success()
+        if: steps.build_apk.outcome == 'success'
         uses: actions/upload-artifact@v6
         with:
           name: OmaSales-APK-${{ github.run_number }}
