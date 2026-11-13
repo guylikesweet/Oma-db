@@ -7,7 +7,6 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
 import '../data/api_client.dart';
 import '../data/local_database.dart';
-import 'package:location/location.dart';
 
 import 'web_push_foreground.dart';
 
@@ -42,12 +41,9 @@ class OmaPushNotifications {
       final ios = _local.resolvePlatformSpecificImplementation<IOSFlutterLocalNotificationsPlugin>();
       await ios?.requestPermissions(alert: true, badge: true, sound: true);
 
-      final location = Location();
-      var permission = await location.hasPermission();
-      if (permission == PermissionStatus.denied ||
-          permission == PermissionStatus.deniedForever) {
-        await location.requestPermission();
-      }
+      // Location is optional and is only relevant to the sunset-to-sunrise
+      // theme. Never request GPS permission as part of push-notification
+      // setup or first-launch initialization.
     } catch (_) {
       // Permission prompts must never prevent the app from opening.
     } finally {
