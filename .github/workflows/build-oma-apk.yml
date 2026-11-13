@@ -520,7 +520,9 @@ jobs:
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -camera-front none
           script: |
-            set -euo pipefail
+            # The emulator action executes this script through /bin/sh.
+            # POSIX sh has no pipefail option.
+            set -eu
             APK="$GITHUB_WORKSPACE/mobile/build/named/OmaSales-Mobile.apk"
             LOG="$GITHUB_WORKSPACE/mobile/build/android-startup-logcat.txt"
             mkdir -p "$(dirname "$LOG")"
