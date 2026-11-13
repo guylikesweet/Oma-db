@@ -624,27 +624,28 @@ jobs:
 
           s = manifest.read_text(encoding="utf-8")
 
-          if "android.permission.INTERNET" not in s:
-              s = s.replace(
-                  "<application",
-                  (
-                      '<uses-permission '
-                      'android:name="android.permission.INTERNET" />\n'
-                      '    <uses-permission '
-                      'android:name='
-                      '"android.permission.ACCESS_NETWORK_STATE" />\n'
-                      '    <uses-permission '
-                      'android:name='
-                      '"android.permission.ACCESS_COARSE_LOCATION" />\n'
-                      '    <uses-permission '
-                      'android:name='
-                      '"android.permission.ACCESS_FINE_LOCATION" />\n'
-                      '    <uses-permission android:name="android.permission.USE_BIOMETRIC" />\n'
-                      '    <uses-permission android:name="android.permission.RECORD_AUDIO" />\n'
-                      "    <application"
-                  ),
-                  1,
-              )
+          # Check each permission independently. A manifest that already
+          # contains INTERNET must not accidentally suppress the other
+          # permissions needed by offline networking, biometrics and chat audio.
+          required_permissions = (
+              "android.permission.INTERNET",
+              "android.permission.ACCESS_NETWORK_STATE",
+              "android.permission.ACCESS_COARSE_LOCATION",
+              "android.permission.ACCESS_FINE_LOCATION",
+              "android.permission.USE_BIOMETRIC",
+              "android.permission.RECORD_AUDIO",
+          )
+          for permission in required_permissions:
+              marker = f'android:name="{permission}"'
+              if marker not in s:
+                  application_tag = s.find("<application")
+                  if application_tag < 0:
+                      raise SystemExit("Could not locate <application> in AndroidManifest.xml.")
+                  s = (
+                      s[:application_tag]
+                      + f'    <uses-permission android:name="{permission}" />\\n'
+                      + s[application_tag:]
+                  )
 
           # Android 13+ requires runtime notification permission.
           # Firebase requests it at runtime; declare it explicitly so the
