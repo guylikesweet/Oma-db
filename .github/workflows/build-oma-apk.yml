@@ -1429,6 +1429,17 @@ jobs:
           if-no-files-found: warn
 
       # ------------------------------------------------------------
+      # UPLOAD MERGED ANDROID MANIFEST FOR PERMISSION/PROVIDER AUDITS
+      # ------------------------------------------------------------
+      - name: Upload Android manifest merge report (if generated)
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: OmaSales-Android-Manifest-${{ github.run_number }}
+          path: mobile/android/app/build/outputs/logs/manifest-merger-release-report.txt
+          if-no-files-found: warn
+
+      # ------------------------------------------------------------
       # 11a. RENAME BUILD OUTPUTS
       #
       # Flutter always names its output app-release.apk/.aab, which is
