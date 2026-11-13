@@ -1396,43 +1396,18 @@ jobs:
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -no-snapshot
           disable-animations: true
           script: |
-            # android-emulator-runner executes this script with /usr/bin/sh,
-            # not necessarily Bash. Use POSIX-compatible strict mode.
             set -eu
             PACKAGE="com.omagroup.salesapp"
-            # The emulator action may execute its script from the repository root
-            # or inherit the mobile working directory. Resolve both layouts.
             APK="build/app/outputs/flutter-apk/app-release.apk"
-            if [ ! -s "$APK" ]; then
-              APK="mobile/build/app/outputs/flutter-apk/app-release.apk"
-            fi
-            if [ ! -s "$APK" ]; then
-              echo "Release APK not found. Checked:"
-              echo "  build/app/outputs/flutter-apk/app-release.apk"
-              echo "  mobile/build/app/outputs/flutter-apk/app-release.apk"
-              echo "Current directory: $(pwd)"
-              ls -la
-              exit 1
-            fi
+            echo "Emulator script working directory: $(pwd)"
+            test -s "$APK" || { echo "Release APK missing or empty: $APK"; ls -la; exit 1; }
             adb install -r "$APK"
             adb logcat -c
             adb shell am force-stop "$PACKAGE" || true
             adb shell monkey -p "$PACKAGE" -c android.intent.category.LAUNCHER 1
-
-            # Allow first-run initialization and Android permission UI to settle.
-            sleep 20
-
-            if ! adb shell pidof "$PACKAGE" >/dev/null 2>&1; then
-              echo "OmaSales process exited after launch."
-              adb logcat -d -t 4000
-              exit 1
-            fi
-
-            if adb logcat -d -t 4000 | grep -E "FATAL EXCEPTION|Fatal signal|Process: com\\.omagroup\\.salesapp"; then
-              echo "OmaSales crashed during Android 16 startup."
-              exit 1
-            fi
-
+            sleep 30
+            adb shell pidof "$PACKAGE" >/dev/null 2>&1 || { echo "OmaSales process exited after launch."; adb logcat -d -t 4000; exit 1; }
+            adb logcat -d -t 4000 | grep -E "FATAL EXCEPTION|Fatal signal|Process: com\\.omagroup\\.salesapp" && { echo "OmaSales crashed during Android 16 startup."; exit 1; } || true
             echo "Android 16 startup smoke test passed; OmaSales process is alive."
 
       # ------------------------------------------------------------
@@ -1541,23 +1516,12 @@ jobs:
             set -eu
             PACKAGE="com.omagroup.salesapp"
             APK="artifacts/OmaSales-Mobile.apk"
-
-            test -s "$APK"
+            test -s "$APK" || { echo "Compatibility APK missing or empty: $APK"; pwd; ls -la; exit 1; }
             adb install -r "$APK"
             adb logcat -c
             adb shell am force-stop "$PACKAGE" || true
             adb shell monkey -p "$PACKAGE" -c android.intent.category.LAUNCHER 1
-            sleep 20
-
-            if ! adb shell pidof "$PACKAGE" >/dev/null 2>&1; then
-              echo "OmaSales process exited on Android API ${{ matrix.api-level }}."
-              adb logcat -d -t 4000
-              exit 1
-            fi
-
-            if adb logcat -d -t 4000 | grep -E "FATAL EXCEPTION|Fatal signal|Process: com\\.omagroup\\.salesapp"; then
-              echo "OmaSales crashed on Android API ${{ matrix.api-level }}."
-              exit 1
-            fi
-
+            sleep 30
+            adb shell pidof "$PACKAGE" >/dev/null 2>&1 || { echo "OmaSales process exited on Android API ${{ matrix.api-level }}."; adb logcat -d -t 4000; exit 1; }
+            adb logcat -d -t 4000 | grep -E "FATAL EXCEPTION|Fatal signal|Process: com\\.omagroup\\.salesapp" && { echo "OmaSales crashed on Android API ${{ matrix.api-level }}."; exit 1; } || true
             echo "OmaSales startup passed on Android API ${{ matrix.api-level }}."
