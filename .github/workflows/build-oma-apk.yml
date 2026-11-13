@@ -187,11 +187,13 @@ jobs:
           """
               if "keystorePropertiesFile" not in app_text:
                   m = re.search(r'(?m)^android\s*\{', app_text)
+                  if not m:
+                      raise SystemExit("No android block found for signing properties.")
                   app_text = app_text[:m.start()] + loader + app_text[m.start():]
-              if "create(\"release\")" not in app_text and "getByName(\"release\")" not in app_text:
+              if 'create("release")' not in app_text:
                   m = re.search(r'(?m)^([ \t]*)buildTypes\s*\{', app_text)
                   if not m:
-                      raise SystemExit("No buildTypes block found for release signing.")
+                      raise SystemExit("No buildTypes block found for signing config.")
                   indent = m.group(1)
                   signing = (
                       indent + 'signingConfigs {\n' +
@@ -203,23 +205,11 @@ jobs:
                       indent + '    }\n' + indent + '}\n'
                   )
                   app_text = app_text[:m.start()] + signing + app_text[m.start():]
-              build_types = re.search(r'(?m)^([ \t]*)buildTypes\s*\{', app_text)
-              if not build_types:
-                  raise SystemExit("No buildTypes block found.")
-              release = re.search(r'(?m)^([ \t]*)(?:getByName\("release"\)|release)\s*\{', app_text[build_types.end():])
-              if not release:
-                  raise SystemExit("No release build type found.")
-              insert = build_types.end() + release.end()
-              release_indent = release.group(1)
-              close = app_text.find("\n" + release_indent + "}", insert)
-              if close < 0:
-                  raise SystemExit("Could not find the end of the release build type.")
-              if "signingConfig" not in app_text[insert:close]:
-                  app_text = app_text[:insert] + '\n' + release_indent + '    signingConfig = signingConfigs.getByName("release")' + app_text[insert:]
-                  app_text = app_text[:insert] + '\n' + release.group(1) + '    signingConfig = signingConfigs.getByName("release")' + app_text[insert:]
           else:
               if "keystorePropertiesFile" not in app_text:
                   m = re.search(r'(?m)^android\s*\{', app_text)
+                  if not m:
+                      raise SystemExit("No android block found for signing properties.")
                   loader = (
                       "def keystoreProperties = new Properties()\n"
                       "def keystorePropertiesFile = rootProject.file('key.properties')\n"
@@ -231,7 +221,7 @@ jobs:
               if "signingConfigs {" not in app_text:
                   m = re.search(r'(?m)^([ \t]*)buildTypes\s*\{', app_text)
                   if not m:
-                      raise SystemExit("No buildTypes block found for release signing.")
+                      raise SystemExit("No buildTypes block found for signing config.")
                   indent = m.group(1)
                   signing = (
                       indent + "signingConfigs {\n" +
@@ -243,20 +233,27 @@ jobs:
                       indent + "    }\n" + indent + "}\n"
                   )
                   app_text = app_text[:m.start()] + signing + app_text[m.start():]
-              build_types = re.search(r'(?m)^([ \t]*)buildTypes\s*\{', app_text)
-              if not build_types:
-                  raise SystemExit("No buildTypes block found.")
-              release = re.search(r'(?m)^([ \t]*)release\s*\{', app_text[build_types.end():])
-              if not release:
-                  raise SystemExit("No release build type found.")
-              insert = build_types.end() + release.end()
-              release_indent = release.group(1)
-              close = app_text.find("\n" + release_indent + "}", insert)
-              if close < 0:
-                  raise SystemExit("Could not find the end of the release build type.")
-              if "signingConfig" not in app_text[insert:close]:
-                  app_text = app_text[:insert] + "\n" + release_indent + "    signingConfig signingConfigs.release" + app_text[insert:]
-                  app_text = app_text[:insert] + "\n" + release.group(1) + "    signingConfig signingConfigs.release" + app_text[insert:]
+
+          # Attach the release signing config to the release build type only.
+          build_types = re.search(r'(?m)^([ \t]*)buildTypes\s*\{', app_text)
+          if not build_types:
+              raise SystemExit("No buildTypes block found.")
+          release_pattern = r'(?m)^([ \t]*)(?:getByName\("release"\)|release)\s*\{' if kts else r'(?m)^([ \t]*)release\s*\{'
+          release = re.search(release_pattern, app_text[build_types.end():])
+          if not release:
+              raise SystemExit("No release build type found inside buildTypes.")
+          insert = build_types.end() + release.end()
+          release_indent = release.group(1)
+          close = app_text.find("\n" + release_indent + "}", insert)
+          if close < 0:
+              raise SystemExit("Could not find the end of the release build type.")
+          if "signingConfig" not in app_text[insert:close]:
+              signing_line = (
+                  release_indent + '    signingConfig = signingConfigs.getByName("release")'
+                  if kts else
+                  release_indent + "    signingConfig signingConfigs.release"
+              )
+              app_text = app_text[:insert] + "\n" + signing_line + app_text[insert:]
 
           gradle.write_text(app_text, encoding="utf-8")
           settings.write_text(settings_text, encoding="utf-8")
