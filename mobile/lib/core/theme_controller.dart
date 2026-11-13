@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:location/location.dart';
 import 'package:solar_calculator/solar_calculator.dart';
 
@@ -64,6 +65,22 @@ class OmaThemeController {
   }
 
   static Future<void> setPreference(OmaThemePreference value) async {
+    // Request location only after the user explicitly selects the
+    // sunset-to-sunrise theme. Permission prompts must not block app startup.
+    if (value == OmaThemePreference.sunsetToSunrise && !kIsWeb) {
+      try {
+        final location = Location();
+        if (await location.serviceEnabled()) {
+          final permission = await location.hasPermission();
+          if (permission == PermissionStatus.denied) {
+            await location.requestPermission();
+          }
+        }
+      } catch (_) {
+        // The theme still works with its deterministic time-based fallback.
+      }
+    }
+
     preference.value = value;
     await _local?.setMeta(_metaKey, _encode(value));
     await refresh();
