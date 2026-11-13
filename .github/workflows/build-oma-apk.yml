@@ -643,7 +643,7 @@ jobs:
                       raise SystemExit("Could not locate <application> in AndroidManifest.xml.")
                   s = (
                       s[:application_tag]
-                      + f'    <uses-permission android:name="{permission}" />\\n'
+                      + f'    <uses-permission android:name="{permission}" />\n'
                       + s[application_tag:]
                   )
 
