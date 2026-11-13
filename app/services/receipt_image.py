@@ -537,7 +537,11 @@ def _draw_content(img, ctx, logo, qr_img, gap):
         # actual x-position to the inner right edge, preserving equal padding
         # on both sides of the notice instead of assuming a centered text box.
         tx = MARGIN + 28 + 54 + 20
-        text_w = W - MARGIN - 28 - tx
+        # Keep a deliberate right-side inset inside the rounded notice.
+        # The line image below also clips as a final safeguard, so a wrapping
+        # regression or an unusually long token can never paint outside it.
+        text_right = W - MARGIN - 44
+        text_w = max(1, text_right - tx)
         wrapped = [_wrap_runs(p, body, text_w) for p in paras]
         n_lines = sum(len(w) for w in wrapped)
         nh = 26 + 50 + n_lines * lh + 8 * (len(paras) - 1) + 22
@@ -551,7 +555,13 @@ def _draw_content(img, ctx, logo, qr_img, gap):
         ty = y + 26 + 46
         for w in wrapped:
             for line in w:
-                _draw_runs_line(d, tx, ty, line, body, NOTICE_INK)
+                # Render each line into a bounded transparent strip. Even if
+                # future rich-text changes mis-measure a line, Pillow cannot
+                # draw any of its pixels beyond the notice's inner right edge.
+                line_layer = Image.new("RGBA", (int(text_w), lh + 8), (0, 0, 0, 0))
+                line_draw = ImageDraw.Draw(line_layer)
+                _draw_runs_line(line_draw, 0, 0, line, body, NOTICE_INK)
+                img.paste(line_layer, (tx, ty), line_layer)
                 ty += lh
             ty += 8
         y += nh + 26 + gap
