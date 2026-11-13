@@ -2,7 +2,7 @@ import 'dart:async';
 import 'dart:typed_data';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart' show debugPrint, kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
@@ -47,9 +47,29 @@ Future<void> _initializeOma() async {
 
   await LocalDatabase.instance.db;
   await OmaThemeController.initialize(LocalDatabase.instance);
-  await OmaPushNotifications.requestInitialPermissions(LocalDatabase.instance);
-  await OmaBackgroundSync.initialize();
-  await OmaBackgroundSync.requestStartupSync();
+}
+
+// Optional platform services must not hold the first usable screen hostage.
+// Start them after the local database/theme are ready and the first frame has
+// been rendered. Offline sales remain available if notification or WorkManager
+// setup fails on a particular Android build/device.
+Future<void> _initializeOptionalServices() async {
+  try {
+    debugPrint('OmaStartup: initializing local notification permissions');
+    await OmaPushNotifications.requestInitialPermissions(LocalDatabase.instance);
+  } catch (error, stackTrace) {
+    debugPrint('OmaStartup: notification permission setup failed: $error');
+    debugPrint('$stackTrace');
+  }
+
+  try {
+    debugPrint('OmaStartup: initializing background sync');
+    await OmaBackgroundSync.initialize();
+    await OmaBackgroundSync.requestStartupSync();
+  } catch (error, stackTrace) {
+    debugPrint('OmaStartup: background sync setup failed: $error');
+    debugPrint('$stackTrace');
+  }
 }
 
 void main() {
@@ -112,6 +132,15 @@ class _OmaMobileAppState extends State<OmaMobileApp> with WidgetsBindingObserver
             WidgetsBinding.instance.platformDispatcher.platformBrightness,
       ),
     );
+
+    widget.initialization.then((_) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) unawaited(_initializeOptionalServices());
+      });
+    }).catchError((Object error, StackTrace stackTrace) {
+      debugPrint('OmaStartup: core initialization failed: $error');
+      debugPrint('$stackTrace');
+    });
   }
 
   @override
