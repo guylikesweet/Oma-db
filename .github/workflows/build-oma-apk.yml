@@ -277,678 +277,18 @@ jobs:
           release_body = app_text[insert:close]
           if kts:
               release_body, signing_count = re.subn(
-                  r'(?m)^[ \\t]*signingConfig\\s*=.*
-          gradle.write_text(app_text, encoding="utf-8")
-          settings.write_text(settings_text, encoding="utf-8")
-
-          import subprocess
-          subprocess.run([
-              "keytool", "-list", "-keystore", "android/app/oma-release.jks",
-              "-storepass", os.environ["ANDROID_KEYSTORE_PASSWORD"],
-              "-alias", os.environ["ANDROID_KEY_ALIAS"]
-          ], check=True, stdout=subprocess.DEVNULL)
-
-          kotlin_dir = Path("android/app/src/main/kotlin/com/omagroup/salesapp")
-          kotlin_dir.mkdir(parents=True, exist_ok=True)
-          for old in Path("android/app/src/main/kotlin").glob("**/MainActivity.kt"):
-              if old != kotlin_dir / "MainActivity.kt":
-                  old.unlink()
-          java_dir = Path("android/app/src/main/java")
-          if java_dir.exists():
-              for old in java_dir.glob("**/MainActivity.java"):
-                  old.unlink()
-          (kotlin_dir / "MainActivity.kt").write_text("""package com.omagroup.salesapp
-
-          import android.app.NotificationChannel
-          import android.app.NotificationManager
-          import android.media.AudioAttributes
-          import android.os.Build
-          import android.util.Log
-          import io.flutter.embedding.android.FlutterFragmentActivity
-
-          class MainActivity : FlutterFragmentActivity() {
-              override fun onCreate(savedInstanceState: android.os.Bundle?) {
-                  super.onCreate(savedInstanceState)
-                  createOmaNotificationChannels()
-              }
-
-              override fun onStart() {
-                  Log.i("OmaStartup", "MainActivity.onStart entering")
-                  super.onStart()
-                  Log.i("OmaStartup", "MainActivity.onStart completed")
-              }
-
-              private fun createOmaNotificationChannels() {
-                  if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
-                  try {
-                      val manager = getSystemService(NotificationManager::class.java)
-                      if (manager == null) {
-                          Log.w("OmaStartup", "NotificationManager unavailable; continuing without custom channels")
-                          return
-                      }
-                      val audio = AudioAttributes.Builder()
-                          .setUsage(AudioAttributes.USAGE_NOTIFICATION)
-                          .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
-                          .build()
-                      val channels = listOf(
-                          Triple("oma_scanner_v3", "Oma scanner", "scanner_beep"),
-                          Triple("oma_arrival_sea_v3", "Sea shipment arrivals", "ship_horn"),
-                          Triple("oma_arrival_air_v3", "Air shipment arrivals", "airport_arrival"),
-                          Triple("oma_chat_v3", "Oma team chat", "chat_message")
-                      )
-                      for ((id, name, soundName) in channels) {
-                          try {
-                              val sound = resources.getIdentifier(soundName, "raw", packageName)
-                              val channel = NotificationChannel(id, name, NotificationManager.IMPORTANCE_HIGH)
-                              channel.enableVibration(true)
-                              if (sound != 0) {
-                                  val uri = android.net.Uri.parse("android.resource://" + packageName + "/" + sound)
-                                  channel.setSound(uri, audio)
-                              }
-                              manager.createNotificationChannel(channel)
-                          } catch (error: Exception) {
-                              Log.w("OmaStartup", "Unable to create notification channel $id; continuing", error)
-                          }
-                      }
-                  } catch (error: Exception) {
-                      Log.w("OmaStartup", "Notification channel setup failed; continuing app startup", error)
-                  }
-              }
-          }
-          """, encoding="utf-8")
-
-          manifest = Path("android/app/src/main/AndroidManifest.xml")
-          xml = manifest.read_text(encoding="utf-8")
-          permissions = (
-              "INTERNET", "ACCESS_NETWORK_STATE", "ACCESS_COARSE_LOCATION",
-              "ACCESS_FINE_LOCATION", "USE_BIOMETRIC", "RECORD_AUDIO",
-              "POST_NOTIFICATIONS", "RECEIVE_BOOT_COMPLETED"
-          )
-          for permission in permissions:
-              marker = f'android:name="android.permission.{permission}"'
-              if marker not in xml:
-                  xml = xml.replace("<application", f'    <uses-permission android:name="android.permission.{permission}" />\n    <application', 1)
-          xml = xml.replace('android:label="mobile"', 'android:label="OmaSales Mobile"')
-          xml = xml.replace('android:label="oma_mobile"', 'android:label="OmaSales Mobile"')
-          manifest.write_text(xml, encoding="utf-8")
-
-          import math, shutil, struct, wave
-          raw_dir = Path("android/app/src/main/res/raw")
-          raw_dir.mkdir(parents=True, exist_ok=True)
-          sound_files = {
-              "scanner_beep.wav": (0.18, (1850, 2400)),
-              "ship_horn.wav": (0.72, (330, 392)),
-              "airport_arrival.wav": (0.62, (523, 659, 784)),
-              "chat_message.wav": (0.24, (880, 1175)),
-          }
-          for filename, (duration, frequencies) in sound_files.items():
-              target = raw_dir / filename
-              source = Path("assets/notifications") / filename
-              if source.is_file() and source.stat().st_size:
-                  shutil.copy2(source, target)
-              else:
-                  rate = 44100
-                  with wave.open(str(target), "wb") as wav:
-                      wav.setnchannels(1)
-                      wav.setsampwidth(2)
-                      wav.setframerate(rate)
-                      frames = int(duration * rate)
-                      samples = bytearray()
-                      for i in range(frames):
-                          t = i / rate
-                          envelope = min(1.0, i / (rate * .012)) * min(1.0, (frames-i)/(rate*.035))
-                          value = sum(math.sin(2*math.pi*f*t) for f in frequencies) / len(frequencies)
-                          samples.extend(struct.pack("<h", int(32767 * .38 * envelope * value)))
-                      wav.writeframes(samples)
-
-          print("Android identity, Firebase, signing, permissions and sound resources configured.")
-          PY
-
-      - name: Persist Android platform configuration
-        if: github.ref == 'refs/heads/main'
-        working-directory: .
-        shell: bash
-        run: |
-          set -euo pipefail
-          test -s mobile/android/gradle/wrapper/gradle-wrapper.properties
-          test -s mobile/android/app/src/main/AndroidManifest.xml
-          test -s mobile/android/app/src/main/kotlin/com/omagroup/salesapp/MainActivity.kt
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -A mobile/android
-          if ! git diff --cached --quiet; then
-            while IFS= read -r path; do
-              case "$path" in
-                */google-services.json|*/key.properties|*.jks)
-                  echo "Refusing to commit Firebase or Android signing material: $path"
-                  exit 1
-                  ;;
-              esac
-            done < <(git diff --cached --name-only)
-            git commit -m "build: persist OmaSales Android platform configuration [skip ci]"
-            git fetch origin main
-            git rebase origin/main
-            git push origin "HEAD:main"
-          else
-            echo "Android platform configuration is already current."
-          fi
-
-      - name: Analyze Flutter source and run tests
-        shell: bash
-        run: |
-          set -euo pipefail
-          if [ -f test/widget_test.dart ] &&
-             grep -q 'MyApp' test/widget_test.dart &&
-             ! grep -R --include='*.dart' -q 'class MyApp' lib; then
-            echo "Removing incompatible Flutter scaffold test (MyApp is not part of OmaSales)."
-            rm test/widget_test.dart
-          fi
-          flutter analyze --no-pub --no-fatal-infos
-          flutter test --no-pub
-
-      - name: Generate launcher icons
-        run: dart run flutter_launcher_icons
-
-      - name: Build signed release APK
-        env:
-          API_URL: ${{ inputs.api_url }}
-          FCM_API_KEY: ${{ secrets.FCM_API_KEY }}
-          FCM_APP_ID: ${{ secrets.FCM_APP_ID }}
-          FCM_MESSAGING_SENDER_ID: ${{ secrets.FCM_MESSAGING_SENDER_ID }}
-          FCM_PROJECT_ID: ${{ secrets.FCM_PROJECT_ID }}
-          FCM_AUTH_DOMAIN: ${{ secrets.FCM_AUTH_DOMAIN }}
-          FCM_STORAGE_BUCKET: ${{ secrets.FCM_STORAGE_BUCKET }}
-          FCM_WEB_VAPID_KEY: ${{ secrets.FCM_WEB_VAPID_KEY }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          case "$API_URL" in
-            https://*) ;;
-            *) echo "API_URL must use HTTPS."; exit 1 ;;
-          esac
-          for key in FCM_API_KEY FCM_APP_ID FCM_MESSAGING_SENDER_ID FCM_PROJECT_ID; do
-            if [ -z "${!key:-}" ]; then
-              echo "Missing GitHub Actions secret: $key"
-              exit 1
-            fi
-          done
-          flutter build apk --release --build-number="$GITHUB_RUN_NUMBER" \
-            --dart-define=API_BASE_URL="$API_URL" \
-            --dart-define=FCM_API_KEY="$FCM_API_KEY" \
-            --dart-define=FCM_APP_ID="$FCM_APP_ID" \
-            --dart-define=FCM_MESSAGING_SENDER_ID="$FCM_MESSAGING_SENDER_ID" \
-            --dart-define=FCM_PROJECT_ID="$FCM_PROJECT_ID" \
-            --dart-define=FCM_AUTH_DOMAIN="$FCM_AUTH_DOMAIN" \
-            --dart-define=FCM_STORAGE_BUCKET="$FCM_STORAGE_BUCKET" \
-            --dart-define=FCM_WEB_VAPID_KEY="$FCM_WEB_VAPID_KEY"
-          test -s build/app/outputs/flutter-apk/app-release.apk
-          mkdir -p build/named
-          cp build/app/outputs/flutter-apk/app-release.apk build/named/OmaSales-Mobile.apk
-          echo "Release APK built successfully."
-
-      - name: Android 16 release startup smoke test
-        # Start the emulator directly rather than using android-emulator-runner.
-        # The action's post-boot keyevent was failing with a broken ADB pipe on
-        # this runner before its supplied test script could start.
-        timeout-minutes: 40
-        working-directory: .
-        shell: bash
-        run: |
-          set -Eeuo pipefail
-          SDK="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-/usr/local/lib/android/sdk}}"
-          export ANDROID_SDK_ROOT="$SDK"
-          export ANDROID_HOME="$SDK"
-          export PATH="$SDK/platform-tools:$SDK/emulator:$SDK/cmdline-tools/latest/bin:$PATH"
-          APK="$GITHUB_WORKSPACE/mobile/build/named/OmaSales-Mobile.apk"
-          OUT="$GITHUB_WORKSPACE/mobile/build/android-smoke"
-          SERIAL="emulator-5554"
-          mkdir -p "$OUT"
-          EMULATOR_PID=""
-
-          collect_diagnostics() {
-            set +e
-            adb devices -l > "$OUT/adb-devices.txt" 2>&1
-            timeout 20s adb -s "$SERIAL" shell getprop > "$OUT/android-properties.txt" 2>&1
-            timeout 30s adb -s "$SERIAL" logcat -d -v time > "$OUT/logcat.txt" 2>&1
-            if [ -f "$OUT/emulator.log" ]; then
-              tail -n 300 "$OUT/emulator.log" > "$OUT/emulator-tail.txt"
-            fi
-            set -e
-          }
-
-          cleanup() {
-            status=$?
-            if [ "$status" -ne 0 ]; then
-              echo "Smoke test failed (exit $status); collecting emulator diagnostics."
-              collect_diagnostics
-            else
-              timeout 30s adb -s "$SERIAL" logcat -d -v time > "$OUT/logcat.txt" 2>&1 || true
-            fi
-            if [ -n "$EMULATOR_PID" ] && kill -0 "$EMULATOR_PID" 2>/dev/null; then
-              kill -TERM "$EMULATOR_PID" 2>/dev/null || true
-              for _ in $(seq 1 15); do
-                kill -0 "$EMULATOR_PID" 2>/dev/null || break
-                sleep 1
-              done
-              kill -KILL "$EMULATOR_PID" 2>/dev/null || true
-              wait "$EMULATOR_PID" 2>/dev/null || true
-            fi
-            exit "$status"
-          }
-          trap cleanup EXIT
-
-          echo "Smoke-test APK path: $APK"
-          test -s "$APK" || { echo "ERROR: release APK is missing or empty."; exit 1; }
-          yes | sdkmanager --licenses >/dev/null 2>&1 || true
-          sdkmanager --install emulator platform-tools 'platforms;android-36' 'system-images;android-36;google_apis;x86_64'
-          echo no | avdmanager create avd --force -n oma-smoke -k 'system-images;android-36;google_apis;x86_64' -d pixel_6
-          adb start-server
-
-          echo "Starting Android 16 emulator without hardware acceleration."
-          emulator -avd oma-smoke -port 5554 -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -no-snapshot-save -camera-back none -camera-front none -accel off > "$OUT/emulator.log" 2>&1 &
-          EMULATOR_PID=$!
-
-          BOOT_DEADLINE=$((SECONDS + 1800))
-          echo "Waiting up to 30 minutes for the emulator's ADB device."
-          until adb devices | grep -Eq "^$SERIAL[[:space:]]+device$"; do
-            if ! kill -0 "$EMULATOR_PID" 2>/dev/null; then
-              echo "ERROR: emulator process exited before ADB became ready."
-              tail -n 160 "$OUT/emulator.log" || true
-              exit 1
-            fi
-            if [ "$SECONDS" -ge "$BOOT_DEADLINE" ]; then
-              echo "ERROR: emulator did not connect to ADB within 30 minutes."
-              exit 1
-            fi
-            sleep 5
-          done
-
-          echo "ADB connected; waiting for Android system boot to complete."
-          until [ "$(timeout 25s adb -s "$SERIAL" shell getprop sys.boot_completed 2>/dev/null | tr -d '\\r')" = "1" ]; do
-            if ! kill -0 "$EMULATOR_PID" 2>/dev/null; then
-              echo "ERROR: emulator process exited during Android boot."
-              exit 1
-            fi
-            if [ "$SECONDS" -ge "$BOOT_DEADLINE" ]; then
-              echo "ERROR: Android did not finish booting within 30 minutes."
-              exit 1
-            fi
-            sleep 5
-          done
-
-          echo "Android 16 boot completed."
-          timeout 30s adb -s "$SERIAL" shell settings put global window_animation_scale 0
-          timeout 30s adb -s "$SERIAL" shell settings put global transition_animation_scale 0
-          timeout 30s adb -s "$SERIAL" shell settings put global animator_duration_scale 0
-          timeout 30s adb -s "$SERIAL" logcat -c
-
-          echo "Installing the freshly built OmaSales APK."
-          if INSTALL_RESULT="$(timeout 300s adb -s "$SERIAL" install -r "$APK" 2>&1)"; then
-            echo "$INSTALL_RESULT"
-          else
-            INSTALL_STATUS=$?
-            echo "$INSTALL_RESULT"
-            echo "APK installation failed or timed out (exit $INSTALL_STATUS)."
-            exit "$INSTALL_STATUS"
-          fi
-
-          echo "Launching OmaSales directly through Android Activity Manager."
-          if START_RESULT="$(timeout 45s adb -s "$SERIAL" shell am start -W -n com.omagroup.salesapp/.MainActivity 2>&1)"; then
-            echo "$START_RESULT"
-          else
-            START_STATUS=$?
-            echo "$START_RESULT"
-            echo "OmaSales activity launch failed (exit $START_STATUS)."
-            exit "$START_STATUS"
-          fi
-          echo "$START_RESULT" | grep -q "Status: ok" || { echo "Android did not confirm successful activity launch."; exit 1; }
-
-          echo "Monitoring Android logs for fatal exceptions for 30 seconds."
-          for attempt in $(seq 1 15); do
-            sleep 2
-            timeout 25s adb -s "$SERIAL" logcat -d -v time > "$OUT/logcat.txt"
-            if grep -q "FATAL EXCEPTION" "$OUT/logcat.txt"; then
-              echo "Fatal Android exception during cold start:"
-              grep -A 45 -B 8 "FATAL EXCEPTION" "$OUT/logcat.txt" || true
-              exit 1
-            fi
-          done
-
-          if timeout 30s adb -s "$SERIAL" shell pidof com.omagroup.salesapp >/dev/null 2>&1; then
-            echo "PASS: OmaSales remained running for 30 seconds after launch."
-          else
-            echo "FAIL: OmaSales process exited after launch."
-            tail -n 180 "$OUT/logcat.txt" || true
-            exit 1
-          fi
-
-      - name: Collect Android build diagnostics
-        if: always()
-        working-directory: .
-        shell: bash
-        run: |
-          set -euo pipefail
-          OUT="mobile/build/android-diagnostics"
-          mkdir -p "$OUT"
-          for file in \
-            mobile/pubspec.lock \
-            mobile/android/app/src/main/AndroidManifest.xml \
-            mobile/android/app/src/main/kotlin/com/omagroup/salesapp/MainActivity.kt \
-            mobile/android/app/build.gradle.kts \
-            mobile/android/app/build.gradle \
-            mobile/android/settings.gradle.kts \
-            mobile/android/settings.gradle \
-            mobile/android/build.gradle.kts \
-            mobile/android/build.gradle \
-            mobile/android/gradle.properties \
-            mobile/android/gradle/wrapper/gradle-wrapper.properties \
-            mobile/build/android-startup-logcat.txt; do
-            if [ -f "$file" ]; then
-              cp "$file" "$OUT/"
-            fi
-          done
-          git rev-parse HEAD > "$OUT/source-commit.txt"
-          (cd mobile && flutter --version) > "$OUT/flutter-version.txt" 2>&1 || true
-
-      - name: Upload Android diagnostics
-        if: always()
-        uses: actions/upload-artifact@v6
-        with:
-          name: OmaSales-Android-Diagnostics-${{ github.run_number }}
-          path: mobile/build/android-diagnostics
-          if-no-files-found: warn
-          retention-days: 14
-
-      - name: Upload APK artifact
-        if: success()
-        uses: actions/upload-artifact@v6
-        with:
-          name: OmaSales-APK-${{ github.run_number }}
-          path: mobile/build/named/OmaSales-Mobile.apk
-          if-no-files-found: error
-          retention-days: 14
-,
+                  r'(?m)^[ \t]*signingConfig\s*=.*$',
                   lambda _: signing_line,
                   release_body,
               )
           else:
               release_body, signing_count = re.subn(
-                  r'(?m)^[ \\t]*signingConfig\\s+.*
-          gradle.write_text(app_text, encoding="utf-8")
-          settings.write_text(settings_text, encoding="utf-8")
-
-          import subprocess
-          subprocess.run([
-              "keytool", "-list", "-keystore", "android/app/oma-release.jks",
-              "-storepass", os.environ["ANDROID_KEYSTORE_PASSWORD"],
-              "-alias", os.environ["ANDROID_KEY_ALIAS"]
-          ], check=True, stdout=subprocess.DEVNULL)
-
-          kotlin_dir = Path("android/app/src/main/kotlin/com/omagroup/salesapp")
-          kotlin_dir.mkdir(parents=True, exist_ok=True)
-          for old in Path("android/app/src/main/kotlin").glob("**/MainActivity.kt"):
-              if old != kotlin_dir / "MainActivity.kt":
-                  old.unlink()
-          java_dir = Path("android/app/src/main/java")
-          if java_dir.exists():
-              for old in java_dir.glob("**/MainActivity.java"):
-                  old.unlink()
-          (kotlin_dir / "MainActivity.kt").write_text("""package com.omagroup.salesapp
-
-          import android.app.NotificationChannel
-          import android.app.NotificationManager
-          import android.media.AudioAttributes
-          import android.os.Build
-          import android.util.Log
-          import io.flutter.embedding.android.FlutterFragmentActivity
-
-          class MainActivity : FlutterFragmentActivity() {
-              override fun onCreate(savedInstanceState: android.os.Bundle?) {
-                  super.onCreate(savedInstanceState)
-                  createOmaNotificationChannels()
-              }
-
-              override fun onStart() {
-                  Log.i("OmaStartup", "MainActivity.onStart entering")
-                  super.onStart()
-                  Log.i("OmaStartup", "MainActivity.onStart completed")
-              }
-
-              private fun createOmaNotificationChannels() {
-                  if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
-                  try {
-                      val manager = getSystemService(NotificationManager::class.java)
-                      if (manager == null) {
-                          Log.w("OmaStartup", "NotificationManager unavailable; continuing without custom channels")
-                          return
-                      }
-                      val audio = AudioAttributes.Builder()
-                          .setUsage(AudioAttributes.USAGE_NOTIFICATION)
-                          .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
-                          .build()
-                      val channels = listOf(
-                          Triple("oma_scanner_v3", "Oma scanner", "scanner_beep"),
-                          Triple("oma_arrival_sea_v3", "Sea shipment arrivals", "ship_horn"),
-                          Triple("oma_arrival_air_v3", "Air shipment arrivals", "airport_arrival"),
-                          Triple("oma_chat_v3", "Oma team chat", "chat_message")
-                      )
-                      for ((id, name, soundName) in channels) {
-                          try {
-                              val sound = resources.getIdentifier(soundName, "raw", packageName)
-                              val channel = NotificationChannel(id, name, NotificationManager.IMPORTANCE_HIGH)
-                              channel.enableVibration(true)
-                              if (sound != 0) {
-                                  val uri = android.net.Uri.parse("android.resource://" + packageName + "/" + sound)
-                                  channel.setSound(uri, audio)
-                              }
-                              manager.createNotificationChannel(channel)
-                          } catch (error: Exception) {
-                              Log.w("OmaStartup", "Unable to create notification channel $id; continuing", error)
-                          }
-                      }
-                  } catch (error: Exception) {
-                      Log.w("OmaStartup", "Notification channel setup failed; continuing app startup", error)
-                  }
-              }
-          }
-          """, encoding="utf-8")
-
-          manifest = Path("android/app/src/main/AndroidManifest.xml")
-          xml = manifest.read_text(encoding="utf-8")
-          permissions = (
-              "INTERNET", "ACCESS_NETWORK_STATE", "ACCESS_COARSE_LOCATION",
-              "ACCESS_FINE_LOCATION", "USE_BIOMETRIC", "RECORD_AUDIO",
-              "POST_NOTIFICATIONS", "RECEIVE_BOOT_COMPLETED"
-          )
-          for permission in permissions:
-              marker = f'android:name="android.permission.{permission}"'
-              if marker not in xml:
-                  xml = xml.replace("<application", f'    <uses-permission android:name="android.permission.{permission}" />\n    <application', 1)
-          xml = xml.replace('android:label="mobile"', 'android:label="OmaSales Mobile"')
-          xml = xml.replace('android:label="oma_mobile"', 'android:label="OmaSales Mobile"')
-          manifest.write_text(xml, encoding="utf-8")
-
-          import math, shutil, struct, wave
-          raw_dir = Path("android/app/src/main/res/raw")
-          raw_dir.mkdir(parents=True, exist_ok=True)
-          sound_files = {
-              "scanner_beep.wav": (0.18, (1850, 2400)),
-              "ship_horn.wav": (0.72, (330, 392)),
-              "airport_arrival.wav": (0.62, (523, 659, 784)),
-              "chat_message.wav": (0.24, (880, 1175)),
-          }
-          for filename, (duration, frequencies) in sound_files.items():
-              target = raw_dir / filename
-              source = Path("assets/notifications") / filename
-              if source.is_file() and source.stat().st_size:
-                  shutil.copy2(source, target)
-              else:
-                  rate = 44100
-                  with wave.open(str(target), "wb") as wav:
-                      wav.setnchannels(1)
-                      wav.setsampwidth(2)
-                      wav.setframerate(rate)
-                      frames = int(duration * rate)
-                      samples = bytearray()
-                      for i in range(frames):
-                          t = i / rate
-                          envelope = min(1.0, i / (rate * .012)) * min(1.0, (frames-i)/(rate*.035))
-                          value = sum(math.sin(2*math.pi*f*t) for f in frequencies) / len(frequencies)
-                          samples.extend(struct.pack("<h", int(32767 * .38 * envelope * value)))
-                      wav.writeframes(samples)
-
-          print("Android identity, Firebase, signing, permissions and sound resources configured.")
-          PY
-
-      - name: Persist Android platform configuration
-        if: github.ref == 'refs/heads/main'
-        working-directory: .
-        shell: bash
-        run: |
-          set -euo pipefail
-          test -s mobile/android/gradle/wrapper/gradle-wrapper.properties
-          test -s mobile/android/app/src/main/AndroidManifest.xml
-          test -s mobile/android/app/src/main/kotlin/com/omagroup/salesapp/MainActivity.kt
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -A mobile/android
-          if ! git diff --cached --quiet; then
-            while IFS= read -r path; do
-              case "$path" in
-                */google-services.json|*/key.properties|*.jks)
-                  echo "Refusing to commit Firebase or Android signing material: $path"
-                  exit 1
-                  ;;
-              esac
-            done < <(git diff --cached --name-only)
-            git commit -m "build: persist OmaSales Android platform configuration [skip ci]"
-            git fetch origin main
-            git rebase origin/main
-            git push origin "HEAD:main"
-          else
-            echo "Android platform configuration is already current."
-          fi
-
-      - name: Analyze Flutter source and run tests
-        shell: bash
-        run: |
-          set -euo pipefail
-          if [ -f test/widget_test.dart ] &&
-             grep -q 'MyApp' test/widget_test.dart &&
-             ! grep -R --include='*.dart' -q 'class MyApp' lib; then
-            echo "Removing incompatible Flutter scaffold test (MyApp is not part of OmaSales)."
-            rm test/widget_test.dart
-          fi
-          flutter analyze --no-pub --no-fatal-infos
-          flutter test --no-pub
-
-      - name: Generate launcher icons
-        run: dart run flutter_launcher_icons
-
-      - name: Build signed release APK
-        env:
-          API_URL: ${{ inputs.api_url }}
-          FCM_API_KEY: ${{ secrets.FCM_API_KEY }}
-          FCM_APP_ID: ${{ secrets.FCM_APP_ID }}
-          FCM_MESSAGING_SENDER_ID: ${{ secrets.FCM_MESSAGING_SENDER_ID }}
-          FCM_PROJECT_ID: ${{ secrets.FCM_PROJECT_ID }}
-          FCM_AUTH_DOMAIN: ${{ secrets.FCM_AUTH_DOMAIN }}
-          FCM_STORAGE_BUCKET: ${{ secrets.FCM_STORAGE_BUCKET }}
-          FCM_WEB_VAPID_KEY: ${{ secrets.FCM_WEB_VAPID_KEY }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          case "$API_URL" in
-            https://*) ;;
-            *) echo "API_URL must use HTTPS."; exit 1 ;;
-          esac
-          for key in FCM_API_KEY FCM_APP_ID FCM_MESSAGING_SENDER_ID FCM_PROJECT_ID; do
-            if [ -z "${!key:-}" ]; then
-              echo "Missing GitHub Actions secret: $key"
-              exit 1
-            fi
-          done
-          flutter build apk --release --build-number="$GITHUB_RUN_NUMBER" \
-            --dart-define=API_BASE_URL="$API_URL" \
-            --dart-define=FCM_API_KEY="$FCM_API_KEY" \
-            --dart-define=FCM_APP_ID="$FCM_APP_ID" \
-            --dart-define=FCM_MESSAGING_SENDER_ID="$FCM_MESSAGING_SENDER_ID" \
-            --dart-define=FCM_PROJECT_ID="$FCM_PROJECT_ID" \
-            --dart-define=FCM_AUTH_DOMAIN="$FCM_AUTH_DOMAIN" \
-            --dart-define=FCM_STORAGE_BUCKET="$FCM_STORAGE_BUCKET" \
-            --dart-define=FCM_WEB_VAPID_KEY="$FCM_WEB_VAPID_KEY"
-          test -s build/app/outputs/flutter-apk/app-release.apk
-          mkdir -p build/named
-          cp build/app/outputs/flutter-apk/app-release.apk build/named/OmaSales-Mobile.apk
-          echo "Release APK built successfully."
-
-      - name: Android 16 release startup smoke test
-        # Emulator boot can take longer on GitHub-hosted runners. Keep this
-        # step alive longer than the emulator's own boot timeout.
-        timeout-minutes: 40
-        uses: reactivecircus/android-emulator-runner@v2
-        with:
-          api-level: 36
-          target: google_apis
-          arch: x86_64
-          profile: pixel_6
-          emulator-boot-timeout: 1800
-          disable-animations: true
-          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -camera-front none
-          script: |
-            set -eu; APK="${{ github.workspace }}/mobile/build/named/OmaSales-Mobile.apk"; LOG="${{ github.workspace }}/mobile/build/android-startup-logcat.txt"; echo "Smoke-test APK path: $APK"; if [ ! -s "$APK" ]; then echo "ERROR: expected release APK is missing or empty."; exit 1; fi; timeout 30s adb wait-for-device; timeout 30s adb shell settings put global window_animation_scale 0; timeout 30s adb shell settings put global transition_animation_scale 0; timeout 30s adb shell settings put global animator_duration_scale 0; timeout 30s adb logcat -c; echo "Installing APK (installation was successful in the previous run; this is a fresh emulator)."; INSTALL_RESULT="$(timeout 300s adb install -r "$APK" 2>&1)" || { INSTALL_STATUS=$?; echo "$INSTALL_RESULT"; echo "APK installation failed or timed out (exit $INSTALL_STATUS) after the 300-second allowance."; exit "$INSTALL_STATUS"; }; echo "$INSTALL_RESULT"; echo "Launching the installed app directly through Android Activity Manager."; START_RESULT="$(timeout 30s adb shell am start -W -n com.omagroup.salesapp/.MainActivity 2>&1)" || { echo "$START_RESULT"; exit 1; }; echo "$START_RESULT"; echo "$START_RESULT" | grep -q "Status: ok" || { echo "Android did not confirm successful activity launch."; exit 1; }; for attempt in $(seq 1 15); do sleep 2; timeout 20s adb logcat -d -v time > "$LOG"; if grep -q "FATAL EXCEPTION" "$LOG"; then echo "Fatal Android exception during cold start:"; grep -A 45 -B 8 "FATAL EXCEPTION" "$LOG" || true; exit 1; fi; done; if timeout 20s adb shell pidof com.omagroup.salesapp >/dev/null 2>&1; then echo "PASS: OmaSales process remained alive for 30 seconds after launch."; else echo "FAIL: OmaSales process exited after launch."; tail -n 180 "$LOG"; exit 1; fi
-
-      - name: Collect Android build diagnostics
-        if: always()
-        working-directory: .
-        shell: bash
-        run: |
-          set -euo pipefail
-          OUT="mobile/build/android-diagnostics"
-          mkdir -p "$OUT"
-          for file in \
-            mobile/pubspec.lock \
-            mobile/android/app/src/main/AndroidManifest.xml \
-            mobile/android/app/src/main/kotlin/com/omagroup/salesapp/MainActivity.kt \
-            mobile/android/app/build.gradle.kts \
-            mobile/android/app/build.gradle \
-            mobile/android/settings.gradle.kts \
-            mobile/android/settings.gradle \
-            mobile/android/build.gradle.kts \
-            mobile/android/build.gradle \
-            mobile/android/gradle.properties \
-            mobile/android/gradle/wrapper/gradle-wrapper.properties \
-            mobile/build/android-startup-logcat.txt; do
-            if [ -f "$file" ]; then
-              cp "$file" "$OUT/"
-            fi
-          done
-          git rev-parse HEAD > "$OUT/source-commit.txt"
-          (cd mobile && flutter --version) > "$OUT/flutter-version.txt" 2>&1 || true
-
-      - name: Upload Android diagnostics
-        if: always()
-        uses: actions/upload-artifact@v6
-        with:
-          name: OmaSales-Android-Diagnostics-${{ github.run_number }}
-          path: mobile/build/android-diagnostics
-          if-no-files-found: warn
-          retention-days: 14
-
-      - name: Upload APK artifact
-        if: success()
-        uses: actions/upload-artifact@v6
-        with:
-          name: OmaSales-APK-${{ github.run_number }}
-          path: mobile/build/named/OmaSales-Mobile.apk
-          if-no-files-found: error
-          retention-days: 14
-,
+                  r'(?m)^[ \t]*signingConfig\s+.*$',
                   lambda _: signing_line,
                   release_body,
               )
           if signing_count == 0:
-              release_body = "\\n" + signing_line + release_body
+              release_body = "\n" + signing_line + release_body
           app_text = app_text[:insert] + release_body + app_text[close:]
           if signing_line.strip() not in release_body:
               raise SystemExit("Release build is not configured to use the uploaded production keystore.")
@@ -1162,21 +502,139 @@ jobs:
           echo "Release APK built successfully."
 
       - name: Android 16 release startup smoke test
-        # Emulator boot can take longer on GitHub-hosted runners. Keep this
-        # step alive longer than the emulator's own boot timeout.
+        # Use a directly managed emulator: the third-party runner's post-boot
+        # keyevent was failing with a broken ADB pipe before our script ran.
         timeout-minutes: 40
-        uses: reactivecircus/android-emulator-runner@v2
-        with:
-          api-level: 36
-          target: google_apis
-          arch: x86_64
-          profile: pixel_6
-          emulator-boot-timeout: 1800
-          disable-animations: true
-          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -camera-front none
-          script: |
-            set -eu; APK="${{ github.workspace }}/mobile/build/named/OmaSales-Mobile.apk"; LOG="${{ github.workspace }}/mobile/build/android-startup-logcat.txt"; echo "Smoke-test APK path: $APK"; if [ ! -s "$APK" ]; then echo "ERROR: expected release APK is missing or empty."; exit 1; fi; timeout 30s adb wait-for-device; timeout 30s adb shell settings put global window_animation_scale 0; timeout 30s adb shell settings put global transition_animation_scale 0; timeout 30s adb shell settings put global animator_duration_scale 0; timeout 30s adb logcat -c; echo "Installing APK (installation was successful in the previous run; this is a fresh emulator)."; INSTALL_RESULT="$(timeout 300s adb install -r "$APK" 2>&1)" || { INSTALL_STATUS=$?; echo "$INSTALL_RESULT"; echo "APK installation failed or timed out (exit $INSTALL_STATUS) after the 300-second allowance."; exit "$INSTALL_STATUS"; }; echo "$INSTALL_RESULT"; echo "Launching the installed app directly through Android Activity Manager."; START_RESULT="$(timeout 30s adb shell am start -W -n com.omagroup.salesapp/.MainActivity 2>&1)" || { echo "$START_RESULT"; exit 1; }; echo "$START_RESULT"; echo "$START_RESULT" | grep -q "Status: ok" || { echo "Android did not confirm successful activity launch."; exit 1; }; for attempt in $(seq 1 15); do sleep 2; timeout 20s adb logcat -d -v time > "$LOG"; if grep -q "FATAL EXCEPTION" "$LOG"; then echo "Fatal Android exception during cold start:"; grep -A 45 -B 8 "FATAL EXCEPTION" "$LOG" || true; exit 1; fi; done; if timeout 20s adb shell pidof com.omagroup.salesapp >/dev/null 2>&1; then echo "PASS: OmaSales process remained alive for 30 seconds after launch."; else echo "FAIL: OmaSales process exited after launch."; tail -n 180 "$LOG"; exit 1; fi
+        working-directory: .
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          SDK="\${ANDROID_SDK_ROOT:-\${ANDROID_HOME:-/usr/local/lib/android/sdk}}"
+          export ANDROID_SDK_ROOT="$SDK"
+          export ANDROID_HOME="$SDK"
+          export PATH="$SDK/platform-tools:$SDK/emulator:$PATH"
+          APK="$GITHUB_WORKSPACE/mobile/build/named/OmaSales-Mobile.apk"
+          OUT="$GITHUB_WORKSPACE/mobile/build/android-smoke"
+          SERIAL="emulator-5554"
+          mkdir -p "$OUT"
+          EMULATOR_PID=""
 
+          collect_diagnostics() {
+            set +e
+            adb devices -l > "$OUT/adb-devices.txt" 2>&1
+            timeout 20s adb -s "$SERIAL" shell getprop > "$OUT/android-properties.txt" 2>&1
+            timeout 30s adb -s "$SERIAL" logcat -d -v time > "$OUT/logcat.txt" 2>&1
+            if [ -f "$OUT/emulator.log" ]; then
+              tail -n 300 "$OUT/emulator.log" > "$OUT/emulator-tail.txt"
+            fi
+            set -e
+          }
+
+          cleanup() {
+            status=$?
+            if [ "$status" -ne 0 ]; then
+              echo "Smoke test failed (exit $status); collecting emulator diagnostics."
+              collect_diagnostics
+            else
+              timeout 30s adb -s "$SERIAL" logcat -d -v time > "$OUT/logcat.txt" 2>&1 || true
+            fi
+            if [ -n "$EMULATOR_PID" ] && kill -0 "$EMULATOR_PID" 2>/dev/null; then
+              kill -TERM "$EMULATOR_PID" 2>/dev/null || true
+              for _ in $(seq 1 15); do
+                kill -0 "$EMULATOR_PID" 2>/dev/null || break
+                sleep 1
+              done
+              kill -KILL "$EMULATOR_PID" 2>/dev/null || true
+              wait "$EMULATOR_PID" 2>/dev/null || true
+            fi
+            exit "$status"
+          }
+          trap cleanup EXIT
+
+          echo "Smoke-test APK path: $APK"
+          test -s "$APK" || { echo "ERROR: release APK is missing or empty."; exit 1; }
+          yes | sdkmanager --licenses >/dev/null 2>&1 || true
+          sdkmanager --install emulator platform-tools 'platforms;android-36' 'system-images;android-36;google_apis;x86_64'
+          echo no | avdmanager create avd --force -n oma-smoke -k 'system-images;android-36;google_apis;x86_64' -d pixel_6
+          adb start-server
+
+          echo "Starting Android 16 emulator without hardware acceleration."
+          emulator -avd oma-smoke -port 5554 -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -no-snapshot-save -camera-back none -camera-front none -accel off > "$OUT/emulator.log" 2>&1 &
+          EMULATOR_PID=$!
+
+          BOOT_DEADLINE=$((SECONDS + 1800))
+          echo "Waiting up to 30 minutes for the emulator's ADB device."
+          until adb devices | grep -Eq "^$SERIAL[[:space:]]+device$"; do
+            if ! kill -0 "$EMULATOR_PID" 2>/dev/null; then
+              echo "ERROR: emulator process exited before ADB became ready."
+              tail -n 160 "$OUT/emulator.log" || true
+              exit 1
+            fi
+            if [ "$SECONDS" -ge "$BOOT_DEADLINE" ]; then
+              echo "ERROR: emulator did not connect to ADB within 30 minutes."
+              exit 1
+            fi
+            sleep 5
+          done
+
+          echo "ADB connected; waiting for Android system boot to complete."
+          until [ "$(timeout 25s adb -s "$SERIAL" shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')" = "1" ]; do
+            if ! kill -0 "$EMULATOR_PID" 2>/dev/null; then
+              echo "ERROR: emulator process exited during Android boot."
+              exit 1
+            fi
+            if [ "$SECONDS" -ge "$BOOT_DEADLINE" ]; then
+              echo "ERROR: Android did not finish booting within 30 minutes."
+              exit 1
+            fi
+            sleep 5
+          done
+
+          echo "Android 16 boot completed."
+          timeout 30s adb -s "$SERIAL" shell settings put global window_animation_scale 0
+          timeout 30s adb -s "$SERIAL" shell settings put global transition_animation_scale 0
+          timeout 30s adb -s "$SERIAL" shell settings put global animator_duration_scale 0
+          timeout 30s adb -s "$SERIAL" logcat -c
+
+          echo "Installing the freshly built OmaSales APK."
+          if INSTALL_RESULT="$(timeout 300s adb -s "$SERIAL" install -r "$APK" 2>&1)"; then
+            echo "$INSTALL_RESULT"
+          else
+            INSTALL_STATUS=$?
+            echo "$INSTALL_RESULT"
+            echo "APK installation failed or timed out (exit $INSTALL_STATUS)."
+            exit "$INSTALL_STATUS"
+          fi
+
+          echo "Launching OmaSales directly through Android Activity Manager."
+          if START_RESULT="$(timeout 45s adb -s "$SERIAL" shell am start -W -n com.omagroup.salesapp/.MainActivity 2>&1)"; then
+            echo "$START_RESULT"
+          else
+            START_STATUS=$?
+            echo "$START_RESULT"
+            echo "OmaSales activity launch failed (exit $START_STATUS)."
+            exit "$START_STATUS"
+          fi
+          echo "$START_RESULT" | grep -q "Status: ok" || { echo "Android did not confirm successful activity launch."; exit 1; }
+
+          echo "Monitoring Android logs for fatal exceptions for 30 seconds."
+          for attempt in $(seq 1 15); do
+            sleep 2
+            timeout 25s adb -s "$SERIAL" logcat -d -v time > "$OUT/logcat.txt"
+            if grep -q "FATAL EXCEPTION" "$OUT/logcat.txt"; then
+              echo "Fatal Android exception during cold start:"
+              grep -A 45 -B 8 "FATAL EXCEPTION" "$OUT/logcat.txt" || true
+              exit 1
+            fi
+          done
+
+          if timeout 30s adb -s "$SERIAL" shell pidof com.omagroup.salesapp >/dev/null 2>&1; then
+            echo "PASS: OmaSales remained running for 30 seconds after launch."
+          else
+            echo "FAIL: OmaSales process exited after launch."
+            tail -n 180 "$OUT/logcat.txt" || true
+            exit 1
+          fi
       - name: Collect Android build diagnostics
         if: always()
         working-directory: .
@@ -1204,6 +662,9 @@ jobs:
           done
           git rev-parse HEAD > "$OUT/source-commit.txt"
           (cd mobile && flutter --version) > "$OUT/flutter-version.txt" 2>&1 || true
+          if [ -d mobile/build/android-smoke ]; then
+            cp -a mobile/build/android-smoke "$OUT/"
+          fi
 
       - name: Upload Android diagnostics
         if: always()
