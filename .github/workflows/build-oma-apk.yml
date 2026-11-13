@@ -131,7 +131,6 @@ jobs:
           app_text = gradle.read_text(encoding="utf-8")
           settings_text = settings.read_text(encoding="utf-8")
 
-          # Keep the installed app identity stable so this APK updates the existing app.
           for key in ("namespace", "applicationId"):
               pattern = re.compile(r'(?m)^([ \t]*)' + key + r'(?:[ \t]*=[ \t]*|[ \t]+)["\'][^"\']*["\']')
               replacement = (lambda m, k=key: f'{m.group(1)}{k} = "{package}"') if kts else (lambda m, k=key: f'{m.group(1)}{k} "{package}"')
@@ -139,7 +138,6 @@ jobs:
               if not count:
                   raise SystemExit(f"Could not set Android {key} in {gradle}.")
 
-          # Google Services Gradle plugin: use the syntax required by the file's DSL.
           settings_plugin = 'id("com.google.gms.google-services") version "4.4.2" apply false' if settings_kts else 'id "com.google.gms.google-services" version "4.4.2" apply false'
           app_plugin = 'id("com.google.gms.google-services")' if kts else 'id "com.google.gms.google-services"'
           if "com.google.gms.google-services" not in settings_text:
@@ -153,7 +151,6 @@ jobs:
                   raise SystemExit("No plugins block found in Android app Gradle file.")
               app_text = app_text[:m.end()] + "\n    " + app_plugin + app_text[m.end():]
 
-          # Firebase Messaging requires minSdk 23.
           min_line = "minSdk = 23" if kts else "minSdkVersion 23"
           min_pattern = re.compile(r'(?m)^([ \t]*)minSdk(?:Version)?(?:[ \t]*=[ \t]*|[ \t]+)\S.*$')
           if min_pattern.search(app_text):
@@ -164,7 +161,6 @@ jobs:
                   raise SystemExit("No defaultConfig block found in Android app Gradle file.")
               app_text = app_text[:m.end()] + "\n        " + min_line + app_text[m.end():]
 
-          # flutter_local_notifications requires core library desugaring.
           compile_block = re.search(r'(?ms)^([ \t]*)compileOptions\s*\{(.*?)^\1\}', app_text)
           desugar_line = "isCoreLibraryDesugaringEnabled = true" if kts else "coreLibraryDesugaringEnabled true"
           if compile_block:
@@ -184,7 +180,6 @@ jobs:
           else:
               app_text += "\n\ndependencies {\n    " + dep_line + "\n}\n"
 
-          # Configure signing from the existing repository secrets.
           required = ("ANDROID_KEYSTORE_BASE64", "ANDROID_KEYSTORE_PASSWORD", "ANDROID_KEY_ALIAS", "ANDROID_KEY_PASSWORD")
           missing = [key for key in required if not os.environ.get(key)]
           if missing:
@@ -262,7 +257,6 @@ jobs:
                   )
                   app_text = app_text[:m.start()] + signing + app_text[m.start():]
 
-          # Attach the release signing config to the release build type only.
           build_types = re.search(r'(?m)^([ \t]*)buildTypes\s*\{', app_text)
           if not build_types:
               raise SystemExit("No buildTypes block found.")
@@ -286,7 +280,6 @@ jobs:
           gradle.write_text(app_text, encoding="utf-8")
           settings.write_text(settings_text, encoding="utf-8")
 
-          # Verify the signing key and alias before starting Gradle.
           import subprocess
           subprocess.run([
               "keytool", "-list", "-keystore", "android/app/oma-release.jks",
@@ -294,7 +287,6 @@ jobs:
               "-alias", os.environ["ANDROID_KEY_ALIAS"]
           ], check=True, stdout=subprocess.DEVNULL)
 
-          # Generate the same FlutterFragmentActivity entry point used by the app.
           kotlin_dir = Path("android/app/src/main/kotlin/com/omagroup/salesapp")
           kotlin_dir.mkdir(parents=True, exist_ok=True)
           for old in Path("android/app/src/main/kotlin").glob("**/MainActivity.kt"):
@@ -364,7 +356,6 @@ jobs:
           }
           """, encoding="utf-8")
 
-          # Keep the Android permissions required by networking, location, biometrics and chat audio.
           manifest = Path("android/app/src/main/AndroidManifest.xml")
           xml = manifest.read_text(encoding="utf-8")
           permissions = (
@@ -380,8 +371,6 @@ jobs:
           xml = xml.replace('android:label="oma_mobile"', 'android:label="OmaSales Mobile"')
           manifest.write_text(xml, encoding="utf-8")
 
-          # Use the app's custom notification sounds where present; generate short
-          # valid fallback tones only when a source sound is absent.
           import math, shutil, struct, wave
           raw_dir = Path("android/app/src/main/res/raw")
           raw_dir.mkdir(parents=True, exist_ok=True)
@@ -411,12 +400,9 @@ jobs:
                           samples.extend(struct.pack("<h", int(32767 * .38 * envelope * value)))
                       wav.writeframes(samples)
 
-          # Generate launcher assets from the existing pubspec configuration.
           print("Android identity, Firebase, signing, permissions and sound resources configured.")
           PY
 
-      # Persist the configured native Android host and Gradle wrapper on main.
-      # Subsequent builds reuse this exact project instead of regenerating a new one.
       - name: Persist Android platform configuration
         if: github.ref == 'refs/heads/main'
         working-directory: .
@@ -450,18 +436,12 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          # flutter create may add its stock counter-app widget test to an
-          # existing project. OmaSales has no MyApp widget, so discard only
-          # that generated, incompatible scaffold test.
           if [ -f test/widget_test.dart ] &&
              grep -q 'MyApp' test/widget_test.dart &&
              ! grep -R --include='*.dart' -q 'class MyApp' lib; then
             echo "Removing incompatible Flutter scaffold test (MyApp is not part of OmaSales)."
             rm test/widget_test.dart
           fi
-          # Flutter 3.35 treats info-level lints as fatal by default. Keep
-          # errors and warnings fatal, but don't block APK builds on style/info
-          # notices such as deprecations while they are addressed separately.
           flutter analyze --no-pub --no-fatal-infos
           flutter test --no-pub
 
@@ -505,10 +485,6 @@ jobs:
           cp build/app/outputs/flutter-apk/app-release.apk build/named/OmaSales-Mobile.apk
           echo "Release APK built successfully."
 
-      # Launch the exact release APK on an Android 16 emulator. This catches
-      # native Activity/plugin startup crashes that a successful Gradle build
-      # cannot detect. The step is deliberately bounded and saves logcat on
-      # both success and failure.
       - name: Android 16 release startup smoke test
         timeout-minutes: 20
         uses: reactivecircus/android-emulator-runner@v2
@@ -517,11 +493,10 @@ jobs:
           target: google_apis
           arch: x86_64
           profile: pixel_6
+          emulator-boot-timeout: 900
           disable-animations: true
-          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -camera-front none
+          emulator-options: -no-window -no-snapshot -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -camera-front none
           script: |
-            # The emulator action executes this script through /bin/sh.
-            # POSIX sh has no pipefail option.
             set -eu
             APK="$GITHUB_WORKSPACE/mobile/build/named/OmaSales-Mobile.apk"
             LOG="$GITHUB_WORKSPACE/mobile/build/android-startup-logcat.txt"
