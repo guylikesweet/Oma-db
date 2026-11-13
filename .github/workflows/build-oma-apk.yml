@@ -415,6 +415,158 @@ jobs:
           print("Android identity, Firebase, signing, permissions and sound resources configured.")
           PY
 
+      # Persist the configured native Android host and Gradle wrapper on main.
+      # Subsequent builds reuse this exact project instead of regenerating a new one.
+      - name: Persist Android platform configuration
+        if: github.ref == 'refs/heads/main'
+        working-directory: .
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s mobile/android/gradle/wrapper/gradle-wrapper.properties
+          test -s mobile/android/app/src/main/AndroidManifest.xml
+          test -s mobile/android/app/src/main/kotlin/com/omagroup/salesapp/MainActivity.kt
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A mobile/android
+          if git diff --cached --name-only | grep -E '(^|/)(google-services\\.json|key\\.properties)$|\\.jks        run: |
+          flutter analyze --no-pub
+          flutter test --no-pub
+
+      - name: Generate launcher icons
+        run: dart run flutter_launcher_icons
+
+      - name: Build signed release APK
+        env:
+          API_URL: ${{ inputs.api_url }}
+          FCM_API_KEY: ${{ secrets.FCM_API_KEY }}
+          FCM_APP_ID: ${{ secrets.FCM_APP_ID }}
+          FCM_MESSAGING_SENDER_ID: ${{ secrets.FCM_MESSAGING_SENDER_ID }}
+          FCM_PROJECT_ID: ${{ secrets.FCM_PROJECT_ID }}
+          FCM_AUTH_DOMAIN: ${{ secrets.FCM_AUTH_DOMAIN }}
+          FCM_STORAGE_BUCKET: ${{ secrets.FCM_STORAGE_BUCKET }}
+          FCM_WEB_VAPID_KEY: ${{ secrets.FCM_WEB_VAPID_KEY }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          case "$API_URL" in
+            https://*) ;;
+            *) echo "API_URL must use HTTPS."; exit 1 ;;
+          esac
+          for key in FCM_API_KEY FCM_APP_ID FCM_MESSAGING_SENDER_ID FCM_PROJECT_ID; do
+            if [ -z "${!key:-}" ]; then
+              echo "Missing GitHub Actions secret: $key"
+              exit 1
+            fi
+          done
+          flutter build apk --release --build-number="$GITHUB_RUN_NUMBER" \
+            --dart-define=API_BASE_URL="$API_URL" \
+            --dart-define=FCM_API_KEY="$FCM_API_KEY" \
+            --dart-define=FCM_APP_ID="$FCM_APP_ID" \
+            --dart-define=FCM_MESSAGING_SENDER_ID="$FCM_MESSAGING_SENDER_ID" \
+            --dart-define=FCM_PROJECT_ID="$FCM_PROJECT_ID" \
+            --dart-define=FCM_AUTH_DOMAIN="$FCM_AUTH_DOMAIN" \
+            --dart-define=FCM_STORAGE_BUCKET="$FCM_STORAGE_BUCKET" \
+            --dart-define=FCM_WEB_VAPID_KEY="$FCM_WEB_VAPID_KEY"
+          test -s build/app/outputs/flutter-apk/app-release.apk
+          mkdir -p build/named
+          cp build/app/outputs/flutter-apk/app-release.apk build/named/OmaSales-Mobile.apk
+          echo "Release APK built successfully."
+
+      # Launch the exact release APK on an Android 16 emulator. This catches
+      # native Activity/plugin startup crashes that a successful Gradle build
+      # cannot detect. The step is deliberately bounded and saves logcat on
+      # both success and failure.
+      - name: Android 16 release startup smoke test
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 36
+          target: google_apis
+          arch: x86_64
+          profile: pixel_6
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -camera-front none
+          script: |
+            set -euo pipefail
+            APK="$GITHUB_WORKSPACE/mobile/build/named/OmaSales-Mobile.apk"
+            LOG="$GITHUB_WORKSPACE/mobile/build/android-startup-logcat.txt"
+            mkdir -p "$(dirname "$LOG")"
+            adb wait-for-device
+            adb shell settings put global window_animation_scale 0
+            adb shell settings put global transition_animation_scale 0
+            adb shell settings put global animator_duration_scale 0
+            adb logcat -c
+            adb install -r "$APK"
+            adb shell monkey -p com.omagroup.salesapp 1
+            for attempt in $(seq 1 45); do
+              sleep 2
+              adb logcat -d -v time > "$LOG"
+              if grep -q "FATAL EXCEPTION" "$LOG"; then
+                echo "Fatal Android exception during cold start:"
+                grep -A 45 -B 8 "FATAL EXCEPTION" "$LOG" || true
+                exit 1
+              fi
+              if ! adb shell pidof com.omagroup.salesapp >/dev/null 2>&1; then
+                echo "OmaSales process exited during startup."
+                tail -n 180 "$LOG"
+                exit 1
+              fi
+              if grep -q "Displayed com.omagroup.salesapp/" "$LOG"; then
+                echo "Android reported OmaSales activity displayed."
+                exit 0
+              fi
+            done
+            echo "OmaSales stayed alive but Android did not report the first activity display."
+            tail -n 180 "$LOG"
+            exit 1
+
+      - name: Collect Android build diagnostics
+        if: always()
+        working-directory: .
+        shell: bash
+        run: |
+          set -euo pipefail
+          OUT="mobile/build/android-diagnostics"
+          mkdir -p "$OUT"
+          cp mobile/pubspec.lock "$OUT/" 2>/dev/null || true
+          cp mobile/android/app/src/main/AndroidManifest.xml "$OUT/" 2>/dev/null || true
+          cp mobile/android/app/src/main/kotlin/com/omagroup/salesapp/MainActivity.kt "$OUT/" 2>/dev/null || true
+          cp mobile/android/app/build.gradle.kts "$OUT/" 2>/dev/null || true
+          cp mobile/android/app/build.gradle "$OUT/" 2>/dev/null || true
+          cp mobile/build/android-startup-logcat.txt "$OUT/" 2>/dev/null || true
+          if [ -f mobile/android/app/build/outputs/mapping/release/mapping.txt ]; then
+            cp mobile/android/app/build/outputs/mapping/release/mapping.txt "$OUT/"
+          fi
+          find mobile/android/app/build/outputs -maxdepth 4 -type f \( -name "*.apk" -o -name "*.aab" \) -print 2>/dev/null > "$OUT/native-output-files.txt" || true
+
+      - name: Upload Android diagnostics
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: OmaSales-Android-Diagnostics-${{ github.run_number }}
+          path: mobile/build/android-diagnostics
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Upload APK artifact
+        if: success()
+        uses: actions/upload-artifact@v6
+        with:
+          name: OmaSales-APK-${{ github.run_number }}
+          path: mobile/build/named/OmaSales-Mobile.apk
+          if-no-files-found: error
+          retention-days: 14
+; then
+            echo "Refusing to commit Firebase or Android signing material."
+            exit 1
+          fi
+          if git diff --cached --quiet; then
+            echo "Android platform configuration is already current."
+          else
+            git commit -m "build: persist OmaSales Android platform configuration [skip ci]"
+            git push origin "HEAD:main"
+          fi
+
       - name: Analyze Flutter source and run tests
         run: |
           flutter analyze --no-pub
