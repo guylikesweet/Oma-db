@@ -1,4 +1,4 @@
-name: Build OmaSales Mobile
+name: Build Oma Mobile APK
 
 on:
   # Automatic push/PR builds are intentionally disabled.
