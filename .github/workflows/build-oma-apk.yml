@@ -1384,32 +1384,18 @@ jobs:
         uses: reactivecircus/android-emulator-runner@v2
         # API 36 system-image startup can take longer than older Android images.
         # Give emulator boot its own 15-minute budget and the whole step 25 minutes.
-        timeout-minutes: 25
+        timeout-minutes: 35
         with:
           api-level: 36
           target: google_apis
           arch: x86_64
           profile: pixel_6
-          emulator-boot-timeout: 900
+          emulator-boot-timeout: 1500
           ram-size: 4096M
           heap-size: 512M
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -no-snapshot
           disable-animations: true
-          script: |
-            set -eu
-            PACKAGE="com.omagroup.salesapp"
-            APK="build/app/outputs/flutter-apk/app-release.apk"
-            echo "Emulator script working directory: $(pwd)"
-            test -s "$APK" || { echo "Release APK missing or empty: $APK"; ls -la; exit 1; }
-            adb install -r "$APK"
-            adb logcat -c
-            adb shell am force-stop "$PACKAGE" || true
-            adb shell monkey -p "$PACKAGE" -c android.intent.category.LAUNCHER 1
-            sleep 30
-            adb shell pidof "$PACKAGE" >/dev/null 2>&1 || { echo "OmaSales process exited after launch."; adb logcat -d -t 4000; exit 1; }
-            adb logcat -d -t 4000 > /tmp/oma-startup-log.txt
-            ! grep -qE "FATAL EXCEPTION|Fatal signal|Process: com\\.omagroup\\.salesapp" /tmp/oma-startup-log.txt || { echo "OmaSales crashed during Android 16 startup."; cat /tmp/oma-startup-log.txt; exit 1; }
-            echo "Android 16 startup smoke test passed; OmaSales process is alive."
+          script: bash -c 'set -eu; PACKAGE="com.omagroup.salesapp"; APK="$GITHUB_WORKSPACE/mobile/build/app/outputs/flutter-apk/app-release.apk"; echo "Emulator working directory: $(pwd)"; test -s "$APK" || { echo "Release APK missing or empty: $APK"; ls -la "$GITHUB_WORKSPACE/mobile/build/app/outputs/flutter-apk"; exit 1; }; adb install -r "$APK"; adb logcat -c; adb shell am force-stop "$PACKAGE" || true; adb shell monkey -p "$PACKAGE" -c android.intent.category.LAUNCHER 1; sleep 30; adb shell pidof "$PACKAGE" >/dev/null 2>&1 || { echo "OmaSales process exited after launch."; adb logcat -d -t 4000; exit 1; }; adb logcat -d -t 4000 > /tmp/oma-startup-log.txt; ! grep -qE "FATAL EXCEPTION|Fatal signal|Process: com\\.omagroup\\.salesapp" /tmp/oma-startup-log.txt || { echo "OmaSales crashed during Android 16 startup."; cat /tmp/oma-startup-log.txt; exit 1; }; echo "Android 16 startup smoke test passed; OmaSales process is alive."'
 
       # ------------------------------------------------------------
       # UPLOAD R8 MAPPING WHEN RELEASE SHRINKING PRODUCES ONE
@@ -1513,17 +1499,4 @@ jobs:
           heap-size: 512M
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -no-snapshot
           disable-animations: true
-          script: |
-            set -eu
-            PACKAGE="com.omagroup.salesapp"
-            APK="artifacts/OmaSales-Mobile.apk"
-            test -s "$APK" || { echo "Compatibility APK missing or empty: $APK"; pwd; ls -la; exit 1; }
-            adb install -r "$APK"
-            adb logcat -c
-            adb shell am force-stop "$PACKAGE" || true
-            adb shell monkey -p "$PACKAGE" -c android.intent.category.LAUNCHER 1
-            sleep 30
-            adb shell pidof "$PACKAGE" >/dev/null 2>&1 || { echo "OmaSales process exited on Android API ${{ matrix.api-level }}."; adb logcat -d -t 4000; exit 1; }
-            adb logcat -d -t 4000 > /tmp/oma-startup-log.txt
-            ! grep -qE "FATAL EXCEPTION|Fatal signal|Process: com\\.omagroup\\.salesapp" /tmp/oma-startup-log.txt || { echo "OmaSales crashed on Android API ${{ matrix.api-level }}."; cat /tmp/oma-startup-log.txt; exit 1; }
-            echo "OmaSales startup passed on Android API ${{ matrix.api-level }}."
+          script: bash -c 'set -eu; PACKAGE="com.omagroup.salesapp"; APK="$GITHUB_WORKSPACE/artifacts/OmaSales-Mobile.apk"; test -s "$APK" || { echo "Compatibility APK missing or empty: $APK"; pwd; ls -la "$GITHUB_WORKSPACE/artifacts"; exit 1; }; adb install -r "$APK"; adb logcat -c; adb shell am force-stop "$PACKAGE" || true; adb shell monkey -p "$PACKAGE" -c android.intent.category.LAUNCHER 1; sleep 30; adb shell pidof "$PACKAGE" >/dev/null 2>&1 || { echo "OmaSales process exited on Android API ${{ matrix.api-level }}."; adb logcat -d -t 4000; exit 1; }; adb logcat -d -t 4000 > /tmp/oma-startup-log.txt; ! grep -qE "FATAL EXCEPTION|Fatal signal|Process: com\\.omagroup\\.salesapp" /tmp/oma-startup-log.txt || { echo "OmaSales crashed on Android API ${{ matrix.api-level }}."; cat /tmp/oma-startup-log.txt; exit 1; }; echo "OmaSales startup passed on Android API ${{ matrix.api-level }}."'
