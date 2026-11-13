@@ -1448,6 +1448,7 @@ jobs:
       # only renames the file; applicationId and signing are unchanged.
       # ------------------------------------------------------------
       - name: Rename build outputs
+        if: always()
         shell: bash
         run: |
           set -euo pipefail
@@ -1467,6 +1468,7 @@ jobs:
       # 12. UPLOAD APK
       # ------------------------------------------------------------
       - name: Upload APK
+        if: always()
         uses: actions/upload-artifact@v7
         with:
           name: OmaSales-APK-${{ github.run_number }}
@@ -1477,6 +1479,7 @@ jobs:
       # 13. UPLOAD AAB
       # ------------------------------------------------------------
       - name: Upload AAB
+        if: always()
         uses: actions/upload-artifact@v7
         with:
           name: OmaSales-AAB-${{ github.run_number }}
