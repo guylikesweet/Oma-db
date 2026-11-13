@@ -436,9 +436,21 @@ jobs:
           import android.app.NotificationManager
           import android.media.AudioAttributes
           import android.os.Build
+          import android.util.Log
           import io.flutter.embedding.android.FlutterFragmentActivity
 
           class MainActivity : FlutterFragmentActivity() {
+              override fun onStart() {
+                  Log.i("OmaStartup", "MainActivity.onStart entering FlutterFragmentActivity")
+                  try {
+                      super.onStart()
+                      Log.i("OmaStartup", "MainActivity.onStart completed")
+                  } catch (error: Throwable) {
+                      Log.e("OmaStartup", "Native Activity.onStart failed", error)
+                      throw error
+                  }
+              }
+
               override fun onCreate(savedInstanceState: android.os.Bundle?) {
                   super.onCreate(savedInstanceState)
 
