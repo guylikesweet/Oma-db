@@ -1,15 +1,6 @@
 name: Build Oma Mobile APK
-run-name: Build Oma Mobile APK #${{ github.run_number }}
 
-on:
-  # Automatic push/PR builds are intentionally disabled.
-  # Builds must be started manually from the Actions tab.
-  workflow_dispatch:
-    inputs:
-      api_url:
-        description: 'Backend API base URL'
-        required: true
-        default: 'https://oma-db.onrender.com/api'
+on: [workflow_dispatch]
 
 permissions:
   contents: read
