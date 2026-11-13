@@ -547,24 +547,25 @@ jobs:
           set -euo pipefail
           OUT="mobile/build/android-diagnostics"
           mkdir -p "$OUT"
-          cp mobile/pubspec.lock "$OUT/" 2>/dev/null || true
-          cp mobile/android/app/src/main/AndroidManifest.xml "$OUT/" 2>/dev/null || true
-          cp mobile/android/app/src/main/kotlin/com/omagroup/salesapp/MainActivity.kt "$OUT/" 2>/dev/null || true
-          cp mobile/android/app/build.gradle.kts "$OUT/" 2>/dev/null || true
-          cp mobile/android/app/build.gradle "$OUT/" 2>/dev/null || true
-          cp mobile/android/settings.gradle.kts "$OUT/" 2>/dev/null || true
-          cp mobile/android/settings.gradle "$OUT/" 2>/dev/null || true
-          cp mobile/android/build.gradle.kts "$OUT/" 2>/dev/null || true
-          cp mobile/android/build.gradle "$OUT/" 2>/dev/null || true
-          cp mobile/android/gradle.properties "$OUT/" 2>/dev/null || true
-          cp mobile/android/gradle/wrapper/gradle-wrapper.properties "$OUT/" 2>/dev/null || true
+          for file in \
+            mobile/pubspec.lock \
+            mobile/android/app/src/main/AndroidManifest.xml \
+            mobile/android/app/src/main/kotlin/com/omagroup/salesapp/MainActivity.kt \
+            mobile/android/app/build.gradle.kts \
+            mobile/android/app/build.gradle \
+            mobile/android/settings.gradle.kts \
+            mobile/android/settings.gradle \
+            mobile/android/build.gradle.kts \
+            mobile/android/build.gradle \
+            mobile/android/gradle.properties \
+            mobile/android/gradle/wrapper/gradle-wrapper.properties \
+            mobile/build/android-startup-logcat.txt; do
+            if [ -f "$file" ]; then
+              cp "$file" "$OUT/"
+            fi
+          done
           git rev-parse HEAD > "$OUT/source-commit.txt"
           (cd mobile && flutter --version) > "$OUT/flutter-version.txt" 2>&1 || true
-          cp mobile/build/android-startup-logcat.txt "$OUT/" 2>/dev/null || true
-          if [ -f mobile/android/app/build/outputs/mapping/release/mapping.txt ]; then
-            cp mobile/android/app/build/outputs/mapping/release/mapping.txt "$OUT/"
-          fi
-          find mobile/android/app/build/outputs -maxdepth 4 -type f \( -name "*.apk" -o -name "*.aab" \) -print 2>/dev/null > "$OUT/native-output-files.txt" || true
 
       - name: Upload Android diagnostics
         if: always()
