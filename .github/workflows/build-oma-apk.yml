@@ -272,8 +272,10 @@ jobs:
           for old in Path("android/app/src/main/kotlin").glob("**/MainActivity.kt"):
               if old != kotlin_dir / "MainActivity.kt":
                   old.unlink()
-          for old in Path("android/app/src/main/java").glob("**/MainActivity.java") if Path("android/app/src/main/java").exists() else []:
-              old.unlink()
+          java_dir = Path("android/app/src/main/java")
+          if java_dir.exists():
+              for old in java_dir.glob("**/MainActivity.java"):
+                  old.unlink()
           (kotlin_dir / "MainActivity.kt").write_text("""package com.omagroup.salesapp
 
           import android.app.NotificationChannel
