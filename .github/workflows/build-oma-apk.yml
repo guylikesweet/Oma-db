@@ -447,7 +447,18 @@ jobs:
           fi
 
       - name: Analyze Flutter source and run tests
+        shell: bash
         run: |
+          set -euo pipefail
+          # flutter create may add its stock counter-app widget test to an
+          # existing project. OmaSales has no MyApp widget, so discard only
+          # that generated, incompatible scaffold test.
+          if [ -f test/widget_test.dart ] &&
+             grep -q 'MyApp' test/widget_test.dart &&
+             ! grep -R --include='*.dart' -q 'class MyApp' lib; then
+            echo "Removing incompatible Flutter scaffold test (MyApp is not part of OmaSales)."
+            rm test/widget_test.dart
+          fi
           flutter analyze --no-pub
           flutter test --no-pub
 
