@@ -54,7 +54,7 @@ flutter:
     - assets/images/
 
 flutter_launcher_icons:
-  android: "launcher_icon"
+  android: "ic_launcher"
   ios: false
   # Legacy/fallback icon (pre-Android 8 and any launcher that doesn't support
   # adaptive icons). Must be fully opaque — a transparent legacy icon is what
