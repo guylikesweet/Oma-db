@@ -699,7 +699,7 @@ jobs:
               fi
               if timeout 20s adb -s "$SERIAL" shell pidof com.omagroup.salesapp >/dev/null 2>&1; then
                 ACTIVITY_STATE="$(timeout 20s adb -s "$SERIAL" shell dumpsys activity activities 2>/dev/null || true)"
-                if echo "$ACTIVITY_STATE" | grep -E 'mResumedActivity|topResumedActivity' | grep -q 'com\.omagroup\.salesapp/.MainActivity'; then
+                if [[ "$ACTIVITY_STATE" == *"com.omagroup.salesapp/.MainActivity"* ]]; then
                   RESUMED=1
                   break
                 fi
