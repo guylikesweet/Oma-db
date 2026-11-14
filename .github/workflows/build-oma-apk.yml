@@ -576,8 +576,14 @@ jobs:
           ls -l "$ANDROID_AVD_HOME/$AVD_NAME.ini" "$ANDROID_AVD_HOME/$AVD_NAME.avd/config.ini"
           adb start-server
 
-          echo "Starting Android 16 emulator without hardware acceleration."
-          emulator -avd "$AVD_NAME" -port 5554 -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -no-snapshot-save -camera-back none -camera-front none -accel off > "$OUT/emulator.log" 2>&1 &
+          echo "Checking that the GitHub runner provides usable KVM acceleration."
+          if ! emulator -accel-check; then
+            echo "ERROR: Android x86_64 smoke tests require working KVM acceleration on this runner."
+            exit 1
+          fi
+
+          echo "Starting Android 16 emulator with KVM acceleration."
+          emulator -avd "$AVD_NAME" -port 5554 -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -no-snapshot-save -camera-back none -camera-front none -accel on > "$OUT/emulator.log" 2>&1 &
           EMULATOR_PID=$!
 
           BOOT_DEADLINE=$((SECONDS + 1800))
