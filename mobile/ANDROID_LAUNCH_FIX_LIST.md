@@ -42,6 +42,14 @@ This is a tracking list, not a claim that every item is already proven to cause 
   - Keep the existing analysis, unit, architecture, and sync tests, but make the APK launch test a required release gate.
   - Preserve the diagnostic artifact (Logcat, emulator output, manifest, Gradle configuration, Flutter version, source commit) on both success and failure.
 
+## Confirmed runtime evidence — 2026-11-14
+
+- The release APK builds, installs, and is accepted by Android Activity Manager. The failure occurs after MainActivity.onStart() begins and while super.onStart() is executing.
+- The captured logcat contains the entry marker `OmaStartup: MainActivity.onStart entering`, followed by a fatal NullPointerException in obfuscated frame `V.z.onStart(SourceFile:34)`. The exception is a call to `o0.c.d(String, z4.d)` on a null object.
+- This places the observed failure in the native Android activity/lifecycle chain. It occurs before the first Flutter frame and before `_initializeOptionalServices()` runs. The unrelated Google `UpdateDataCacheStorageWorker` line is not the OmaSales crash.
+- The previous release-only smoke test could not distinguish a release packaging issue from an activity/plugin lifecycle issue common to debug and release. The manual APK workflow now builds both variants, tests both on Android 16, and saves Gradle runtime dependency reports to its diagnostics artifact.
+- The exact native library/plugin responsible is **not yet identified**. Do not remove `FlutterFragmentActivity`, disable the smoke test, or upgrade several plugins together before comparing the debug and release results and examining the dependency graph.
+
 ## Audit notes
 
 - The current manifest declares the expected launcher activity and the package/namespace/application ID are consistently `com.omagroup.salesapp`.
