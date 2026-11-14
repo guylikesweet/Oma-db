@@ -13,7 +13,7 @@ import 'data/api_client.dart';
 /// The three ways a receipt can be handed to a customer. The server draws one
 /// receipt picture; JPG/PNG send it as a photo (best for WhatsApp) and PDF is a
 /// small 80 mm page carrying the same picture.
-enum _ReceiptFormat { jpg, png, pdf }
+enum _ReceiptFormat { png, jpg, pdf }
 
 extension _ReceiptFormatInfo on _ReceiptFormat {
   String get ext {
@@ -129,7 +129,7 @@ class _InvoiceDialog extends StatefulWidget {
 }
 
 class _InvoiceDialogState extends State<_InvoiceDialog> {
-  _ReceiptFormat format = _ReceiptFormat.jpg;
+  _ReceiptFormat format = _ReceiptFormat.png;
   final Map<_ReceiptFormat, Uint8List> cache = {};
   bool loading = false;
   String? error;
@@ -183,12 +183,7 @@ class _InvoiceDialogState extends State<_InvoiceDialog> {
     try {
       Uint8List data;
 
-      try {
-        data = await _fetchReceipt(widget.api, widget.saleId, wanted);
-      } on TimeoutException {
-        // A sleeping server often answers on the second try.
-        data = await _fetchReceipt(widget.api, widget.saleId, wanted);
-      }
+      data = await _fetchReceipt(widget.api, widget.saleId, wanted);
 
       cache[wanted] = data;
     } catch (e) {
