@@ -52,6 +52,14 @@ android {
     buildTypes {
         release {
             signingConfig = signingConfigs.getByName("release")
+
+            // R8 shrinking/obfuscation was enabled in release builds while debug
+            // builds worked. The startup trace dies inside Flutter's Android
+            // embedding during FlutterFragment startup. Keep the Java/Kotlin
+            // embedding and plugin bridge intact until a mapped release build
+            // proves a safe, package-specific shrink configuration.
+            isMinifyEnabled = false
+            isShrinkResources = false
         }
     }
 }
