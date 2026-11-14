@@ -675,9 +675,21 @@ jobs:
               echo "OmaSales $VARIANT activity launch failed (exit $START_STATUS)."
               exit "$START_STATUS"
             fi
-            echo "$START_RESULT" | grep -q "Status: ok" || { echo "Android did not confirm $VARIANT activity launch."; exit 1; }
+            if ! echo "$START_RESULT" | grep -q "Status: ok"; then
+              if echo "$START_RESULT" | grep -q "Status: timeout"; then
+                echo "Android's am start wait timed out; checking the real activity/process state before deciding whether launch failed."
+              else
+                echo "Android returned an unexpected activity launch status."
+              fi
+            fi
 
-            for attempt in $(seq 1 15); do
+            # On cold Android 16 emulator boots, am start -W can report
+            # Status: timeout even after ActivityTaskManager has accepted the
+            # launch and Flutter is still loading its first frame. Do not
+            # treat that wait timeout as an app crash. Require the app to be
+            # alive AND MainActivity to become the resumed foreground activity.
+            RESUMED=0
+            for attempt in $(seq 1 30); do
               sleep 2
               timeout 25s adb -s "$SERIAL" logcat -d -v time > "$OUT/logcat-$VARIANT.txt"
               if grep -q "FATAL EXCEPTION" "$OUT/logcat-$VARIANT.txt"; then
@@ -685,12 +697,36 @@ jobs:
                 grep -A 45 -B 8 "FATAL EXCEPTION" "$OUT/logcat-$VARIANT.txt" || true
                 exit 1
               fi
+              if timeout 20s adb -s "$SERIAL" shell pidof com.omagroup.salesapp >/dev/null 2>&1; then
+                ACTIVITY_STATE="$(timeout 20s adb -s "$SERIAL" shell dumpsys activity activities 2>/dev/null || true)"
+                if echo "$ACTIVITY_STATE" | grep -E 'mResumedActivity|topResumedActivity' | grep -q 'com\.omagroup\.salesapp/.MainActivity'; then
+                  RESUMED=1
+                  break
+                fi
+              fi
             done
 
+            if [ "$RESUMED" -ne 1 ]; then
+              echo "FAIL: OmaSales $VARIANT did not become the resumed foreground activity within 60 seconds."
+              echo "Recent app lifecycle and crash evidence:"
+              grep -E 'OmaStartup|FATAL EXCEPTION|AndroidRuntime|ANR in|Displayed com\.omagroup\.salesapp|ActivityTaskManager.*com\.omagroup\.salesapp' "$OUT/logcat-$VARIANT.txt" | tail -n 120 || true
+              tail -n 180 "$OUT/logcat-$VARIANT.txt" || true
+              exit 1
+            fi
+
+            # Keep it in the foreground long enough to catch delayed native
+            # startup crashes, not just a successful Activity.onStart call.
+            sleep 30
+            timeout 25s adb -s "$SERIAL" logcat -d -v time > "$OUT/logcat-$VARIANT.txt"
+            if grep -q "FATAL EXCEPTION" "$OUT/logcat-$VARIANT.txt"; then
+              echo "Fatal Android exception after $VARIANT activity resumed:"
+              grep -A 45 -B 8 "FATAL EXCEPTION" "$OUT/logcat-$VARIANT.txt" || true
+              exit 1
+            fi
             if timeout 30s adb -s "$SERIAL" shell pidof com.omagroup.salesapp >/dev/null 2>&1; then
-              echo "PASS: OmaSales $VARIANT APK remained running for 30 seconds."
+              echo "PASS: OmaSales $VARIANT APK became the resumed foreground activity and remained running."
             else
-              echo "FAIL: OmaSales $VARIANT process exited."
+              echo "FAIL: OmaSales $VARIANT process exited after launch."
               tail -n 180 "$OUT/logcat-$VARIANT.txt" || true
               exit 1
             fi
