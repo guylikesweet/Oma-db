@@ -21,7 +21,7 @@ const RESOURCES = {"canvaskit/canvaskit.js.symbols": "48c83a2ce573d9692e8d970e28
 "version.json": "eae70c93f89d5649a07e84d80eb48f3d",
 "firebase-messaging-sw.js": "345b6867599672c9127244aeda7bb1a3",
 "sqlite3.wasm": "fa7637a49a0e434f2a98f9981856d118",
-"main.dart.js": "f8577bd95006a20ca7dc0fd68db40673",
+"main.dart.js": "93638ba2e406b945a7dd1a9de08da120",
 "index.html": "fe78b0f42c0ddb06782288229b5cce21",
 "/": "fe78b0f42c0ddb06782288229b5cce21",
 "favicon.png": "27358c7d43ca62c86662c53e56e3f9ab",
@@ -39,7 +39,7 @@ const RESOURCES = {"canvaskit/canvaskit.js.symbols": "48c83a2ce573d9692e8d970e28
 "assets/packages/record_web/assets/js/record.fixwebmduration.js": "1f0108ea80c8951ba702ced40cf8cdce",
 "assets/AssetManifest.bin": "bdb32636716ec09dfee3486fc4c0f88e",
 "assets/NOTICES": "166368de5b903b0f4c77ca96845b7068",
-"flutter_bootstrap.js": "b9d27c32084ff8201bb71479e28663de",
+"flutter_bootstrap.js": "c2d20bc8fc4bccc79652423e7c1c633f",
 "flutter.js": "f393d3c16b631f36852323de8e583132",
 "manifest.json": "b5f92a96a3cc94fd9c95e39c6a8a0f91"};
 // The application shell files that are downloaded before a service worker can
