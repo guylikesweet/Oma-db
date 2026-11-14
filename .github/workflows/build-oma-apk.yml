@@ -45,6 +45,9 @@ jobs:
       - name: Install locked Flutter dependencies
         run: flutter pub get --enforce-lockfile
 
+      - name: Generate Oma launcher icons from repository artwork
+        run: dart run flutter_launcher_icons
+
       - name: Configure Firebase and release signing
         env:
           FIREBASE_GOOGLE_SERVICES_JSON: ${{ secrets.FIREBASE_GOOGLE_SERVICES_JSON }}
