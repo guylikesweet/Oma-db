@@ -524,7 +524,7 @@ jobs:
           ./gradlew :app:tasks --all > ../build/android-dependency-reports/gradle-tasks.txt
           echo "Debug APK and Android dependency reports generated."
 
-      - name: Android 16 release startup smoke test
+      - name: Android 16 debug and release startup smoke test
         # Use a directly managed emulator: the third-party runner's post-boot
         # keyevent was failing with a broken ADB pipe before our script ran.
         timeout-minutes: 40
