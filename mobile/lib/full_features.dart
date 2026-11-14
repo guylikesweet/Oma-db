@@ -1354,7 +1354,15 @@ class _WebSalesPageState extends State<WebSalesPage> {
                         ' • ${sale['payment_status'] ?? ''}'
                         ' • ₦${sale['total_amount'] ?? 0}',
                       ),
-                      trailing:
+                      trailing: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          IconButton(
+                            tooltip: 'Generate receipt',
+                            visualDensity: VisualDensity.compact,
+                            onPressed: () => shareInvoice(sale['id'] as int),
+                            icon: const Icon(Icons.receipt_long_outlined),
+                          ),
                           PopupMenuButton<String>(
                         onSelected: (value) async {
                           if (value == 'status') {
@@ -1385,17 +1393,6 @@ class _WebSalesPageState extends State<WebSalesPage> {
                             );
                           }
 
-                          if (value == 'share_invoice') {
-                            await shareInvoice(
-                              sale['id'] as int,
-                            );
-                          }
-
-                          if (value == 'print_invoice') {
-                            await printInvoice(
-                              sale['id'] as int,
-                            );
-                          }
                         },
                         itemBuilder: (_) => [
                           const PopupMenuItem(
@@ -1429,14 +1426,7 @@ class _WebSalesPageState extends State<WebSalesPage> {
                                 'Notify customer on WhatsApp',
                               ),
                             ),
-                          const PopupMenuDivider(),
-                          const PopupMenuItem(
-                            value: 'share_invoice',
-                            child: Text('Share invoice / receipt'),
-                          ),
-                          const PopupMenuItem(
-                            value: 'print_invoice',
-                            child: Text('Print invoice / receipt'),
+                        ],
                           ),
                         ],
                       ),
