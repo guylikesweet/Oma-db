@@ -502,6 +502,28 @@ jobs:
           cp build/app/outputs/flutter-apk/app-release.apk build/named/OmaSales-Mobile.apk
           echo "Release APK built successfully."
 
+      - name: Build debug APK and capture Android dependency graphs
+        shell: bash
+        run: |
+          set -euo pipefail
+          flutter build apk --debug --build-number="$GITHUB_RUN_NUMBER" \
+            --dart-define=API_BASE_URL="${{ inputs.api_url }}" \
+            --dart-define=FCM_API_KEY="${{ secrets.FCM_API_KEY }}" \
+            --dart-define=FCM_APP_ID="${{ secrets.FCM_APP_ID }}" \
+            --dart-define=FCM_MESSAGING_SENDER_ID="${{ secrets.FCM_MESSAGING_SENDER_ID }}" \
+            --dart-define=FCM_PROJECT_ID="${{ secrets.FCM_PROJECT_ID }}" \
+            --dart-define=FCM_AUTH_DOMAIN="${{ secrets.FCM_AUTH_DOMAIN }}" \
+            --dart-define=FCM_STORAGE_BUCKET="${{ secrets.FCM_STORAGE_BUCKET }}" \
+            --dart-define=FCM_WEB_VAPID_KEY="${{ secrets.FCM_WEB_VAPID_KEY }}"
+          test -s build/app/outputs/flutter-apk/app-debug.apk
+          cp build/app/outputs/flutter-apk/app-debug.apk build/named/OmaSales-Mobile-debug.apk
+          mkdir -p build/android-dependency-reports
+          cd android
+          ./gradlew :app:dependencies --configuration debugRuntimeClasspath > ../build/android-dependency-reports/debugRuntimeClasspath.txt
+          ./gradlew :app:dependencies --configuration releaseRuntimeClasspath > ../build/android-dependency-reports/releaseRuntimeClasspath.txt
+          ./gradlew :app:tasks --all > ../build/android-dependency-reports/gradle-tasks.txt
+          echo "Debug APK and Android dependency reports generated."
+
       - name: Android 16 release startup smoke test
         # Use a directly managed emulator: the third-party runner's post-boot
         # keyevent was failing with a broken ADB pipe before our script ran.
@@ -521,7 +543,8 @@ jobs:
           AVD_NAME="oma-smoke"
           export ANDROID_AVD_HOME="$HOME/.android/avd"
           mkdir -p "$ANDROID_AVD_HOME"
-          APK="$GITHUB_WORKSPACE/mobile/build/named/OmaSales-Mobile.apk"
+          RELEASE_APK="$GITHUB_WORKSPACE/mobile/build/named/OmaSales-Mobile.apk"
+          DEBUG_APK="$GITHUB_WORKSPACE/mobile/build/named/OmaSales-Mobile-debug.apk"
           OUT="$GITHUB_WORKSPACE/mobile/build/android-smoke"
           SERIAL="emulator-5554"
           mkdir -p "$OUT"
@@ -559,8 +582,10 @@ jobs:
           }
           trap cleanup EXIT
 
-          echo "Smoke-test APK path: $APK"
-          test -s "$APK" || { echo "ERROR: release APK is missing or empty."; exit 1; }
+          echo "Debug APK path: $DEBUG_APK"
+          echo "Release APK path: $RELEASE_APK"
+          test -s "$DEBUG_APK" || { echo "ERROR: debug APK is missing or empty."; exit 1; }
+          test -s "$RELEASE_APK" || { echo "ERROR: release APK is missing or empty."; exit 1; }
           yes | sdkmanager --licenses >/dev/null 2>&1 || true
           sdkmanager --install emulator platform-tools 'platforms;android-36' 'system-images;android-36;google_apis;x86_64'
           echo "Creating Android Virtual Device '$AVD_NAME' in $ANDROID_AVD_HOME."
@@ -626,45 +651,51 @@ jobs:
           timeout 30s adb -s "$SERIAL" shell settings put global animator_duration_scale 0
           timeout 30s adb -s "$SERIAL" logcat -c
 
-          echo "Installing the freshly built OmaSales APK."
-          if INSTALL_RESULT="$(timeout 300s adb -s "$SERIAL" install -r "$APK" 2>&1)"; then
-            echo "$INSTALL_RESULT"
-          else
-            INSTALL_STATUS=$?
-            echo "$INSTALL_RESULT"
-            echo "APK installation failed or timed out (exit $INSTALL_STATUS)."
-            exit "$INSTALL_STATUS"
-          fi
+          for VARIANT in debug release; do
+            if [ "$VARIANT" = "debug" ]; then APK="$DEBUG_APK"; else APK="$RELEASE_APK"; fi
+            echo "===== Testing OmaSales $VARIANT APK ====="
+            timeout 30s adb -s "$SERIAL" shell am force-stop com.omagroup.salesapp || true
+            timeout 30s adb -s "$SERIAL" uninstall com.omagroup.salesapp >/dev/null 2>&1 || true
+            timeout 30s adb -s "$SERIAL" logcat -c
+            if INSTALL_RESULT="$(timeout 300s adb -s "$SERIAL" install "$APK" 2>&1)"; then
+              echo "$INSTALL_RESULT"
+            else
+              INSTALL_STATUS=$?
+              echo "$INSTALL_RESULT"
+              echo "OmaSales $VARIANT APK installation failed (exit $INSTALL_STATUS)."
+              exit "$INSTALL_STATUS"
+            fi
 
-          echo "Launching OmaSales directly through Android Activity Manager."
-          if START_RESULT="$(timeout 45s adb -s "$SERIAL" shell am start -W -n com.omagroup.salesapp/.MainActivity 2>&1)"; then
-            echo "$START_RESULT"
-          else
-            START_STATUS=$?
-            echo "$START_RESULT"
-            echo "OmaSales activity launch failed (exit $START_STATUS)."
-            exit "$START_STATUS"
-          fi
-          echo "$START_RESULT" | grep -q "Status: ok" || { echo "Android did not confirm successful activity launch."; exit 1; }
+            echo "Launching OmaSales $VARIANT APK."
+            if START_RESULT="$(timeout 45s adb -s "$SERIAL" shell am start -W -n com.omagroup.salesapp/.MainActivity 2>&1)"; then
+              echo "$START_RESULT"
+            else
+              START_STATUS=$?
+              echo "$START_RESULT"
+              echo "OmaSales $VARIANT activity launch failed (exit $START_STATUS)."
+              exit "$START_STATUS"
+            fi
+            echo "$START_RESULT" | grep -q "Status: ok" || { echo "Android did not confirm $VARIANT activity launch."; exit 1; }
 
-          echo "Monitoring Android logs for fatal exceptions for 30 seconds."
-          for attempt in $(seq 1 15); do
-            sleep 2
-            timeout 25s adb -s "$SERIAL" logcat -d -v time > "$OUT/logcat.txt"
-            if grep -q "FATAL EXCEPTION" "$OUT/logcat.txt"; then
-              echo "Fatal Android exception during cold start:"
-              grep -A 45 -B 8 "FATAL EXCEPTION" "$OUT/logcat.txt" || true
+            for attempt in $(seq 1 15); do
+              sleep 2
+              timeout 25s adb -s "$SERIAL" logcat -d -v time > "$OUT/logcat-$VARIANT.txt"
+              if grep -q "FATAL EXCEPTION" "$OUT/logcat-$VARIANT.txt"; then
+                echo "Fatal Android exception during $VARIANT cold start:"
+                grep -A 45 -B 8 "FATAL EXCEPTION" "$OUT/logcat-$VARIANT.txt" || true
+                exit 1
+              fi
+            done
+
+            if timeout 30s adb -s "$SERIAL" shell pidof com.omagroup.salesapp >/dev/null 2>&1; then
+              echo "PASS: OmaSales $VARIANT APK remained running for 30 seconds."
+            else
+              echo "FAIL: OmaSales $VARIANT process exited."
+              tail -n 180 "$OUT/logcat-$VARIANT.txt" || true
               exit 1
             fi
           done
-
-          if timeout 30s adb -s "$SERIAL" shell pidof com.omagroup.salesapp >/dev/null 2>&1; then
-            echo "PASS: OmaSales remained running for 30 seconds after launch."
-          else
-            echo "FAIL: OmaSales process exited after launch."
-            tail -n 180 "$OUT/logcat.txt" || true
-            exit 1
-          fi
+          echo "PASS: both debug and release APKs survived Android 16 cold-start smoke tests."
       - name: Collect Android build diagnostics
         if: always()
         working-directory: .
@@ -695,6 +726,12 @@ jobs:
           if [ -d mobile/build/android-smoke ]; then
             cp -a mobile/build/android-smoke "$OUT/"
           fi
+          if [ -d mobile/build/android-dependency-reports ]; then
+            cp -a mobile/build/android-dependency-reports "$OUT/"
+          fi
+          for apk in mobile/build/named/OmaSales-Mobile-debug.apk mobile/build/named/OmaSales-Mobile.apk; do
+            if [ -s "$apk" ]; then sha256sum "$apk" >> "$OUT/apk-sha256.txt"; fi
+          done
 
       - name: Upload Android diagnostics
         if: always()
