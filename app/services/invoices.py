@@ -20,6 +20,8 @@ Deliberately separate from app/services/labels.py (the courier shipping label).
 import hashlib
 import hmac
 import io
+import json
+from functools import lru_cache
 from datetime import date, datetime, timedelta, timezone
 
 from flask import current_app, request
@@ -286,18 +288,39 @@ def get_invoice_context(sale):
     }
 
 
+@lru_cache(maxsize=2)
+def _render_cached(context_json, logo_bytes):
+    """Keep the last two rendered receipts in this worker.
+
+    PNG, JPG and PDF are different encodings of the same artwork. Caching the
+    Pillow image avoids repeating the expensive text layout, watermark, seal
+    and QR drawing when a user changes format or prints the same receipt.
+    The complete rendered context and logo bytes form the cache key, so edits
+    to sale details, business settings or logo automatically invalidate it.
+    """
+    from app.services import receipt_image
+
+    return receipt_image.render_receipt(json.loads(context_json), logo_bytes)
+
+
 def _render(sale):
     """Draws the receipt and returns the Pillow image (RGBA, rounded corners)."""
     reason = receipt_block_reason(sale)
     if reason:
         raise ReceiptNotAllowed(reason)
-    from app.services import receipt_image
 
     logo_bytes, _ = get_logo_bytes()
     if not logo_bytes:
         # Fall back to a logo uploaded in Settings, if there is one.
         logo_bytes = getattr(get_settings(), "logo_data", None)
-    return receipt_image.render_receipt(get_invoice_context(sale), logo_bytes)
+
+    context_json = json.dumps(
+        get_invoice_context(sale),
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=False,
+    )
+    return _render_cached(context_json, logo_bytes or b"")
 
 
 def generate_invoice_image(sale, fmt="png"):
