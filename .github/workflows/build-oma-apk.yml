@@ -667,7 +667,7 @@ jobs:
           timeout 30s adb -s "$SERIAL" logcat -c
 
           NO_SHRINK_APK="$GITHUB_WORKSPACE/mobile/build/named/OmaSales-Mobile-release-no-shrink.apk"
-          for VARIANT in debug release release_no_shrink; do
+          for VARIANT in debug release_no_shrink release; do
             case "$VARIANT" in
               debug) APK="$DEBUG_APK" ;;
               release) APK="$RELEASE_APK" ;;
@@ -803,6 +803,6 @@ jobs:
         uses: actions/upload-artifact@v6
         with:
           name: OmaSales-APK-${{ github.run_number }}
-          path: mobile/build/named/OmaSales-Mobile.apk
+          path: mobile/build/named/OmaSales-Mobile*.apk
           if-no-files-found: error
           retention-days: 14
