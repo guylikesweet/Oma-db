@@ -2,11 +2,9 @@
 Invoice / receipt generation for one Sale.
 
 The receipt is a tall phone-sized picture (1080 px wide, 9:16 or a little
-taller when there is a lot of text), drawn by app/services/receipt_image.py,
-because it is almost always sent on WhatsApp. It can be handed out as a
-PNG, a JPG (smaller; light-grey corners instead of transparent ones, which is
-the safer choice for WhatsApp photos) or a small PDF (80 mm wide) that simply
-carries the same picture, so all three always match exactly.
+taller when there is a lot of text), drawn by app/services/receipt_image.py.
+PNG is the preferred photo, JPG is a smaller alternative, and PDF is a small
+80 mm page carrying the same picture, so all three always match exactly.
 
 Rules for what a customer may be sent:
   * Only PAID orders get a receipt. Pending / refunded / cancelled orders are
@@ -320,7 +318,7 @@ def _render(sale):
         separators=(",", ":"),
         ensure_ascii=False,
     )
-    return _render_cached(context_json, logo_bytes or b"")
+    return _render_cached(context_json, bytes(logo_bytes or b""))
 
 
 def generate_invoice_image(sale, fmt="png"):
