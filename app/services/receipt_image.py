@@ -657,7 +657,9 @@ def render_receipt(ctx, logo_bytes=None):
 
 def to_png_bytes(img):
     buf = io.BytesIO()
-    img.save(buf, format="PNG", optimize=True)
+    # Low compression level is substantially faster for this large receipt canvas;
+    # the result remains a standards-compliant PNG with the same visual quality.
+    img.save(buf, format="PNG", optimize=False, compress_level=2)
     return buf.getvalue()
 
 
