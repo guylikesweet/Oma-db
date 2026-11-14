@@ -500,7 +500,22 @@ jobs:
           test -s build/app/outputs/flutter-apk/app-release.apk
           mkdir -p build/named
           cp build/app/outputs/flutter-apk/app-release.apk build/named/OmaSales-Mobile.apk
-          echo "Release APK built successfully."
+
+          # Diagnostic control build: identical release configuration and
+          # signing, but explicitly disable code shrinking. This isolates
+          # release-only R8/shrinker effects without changing the shipped APK.
+          flutter build apk --release --no-shrink --build-number="$GITHUB_RUN_NUMBER" \
+            --dart-define=API_BASE_URL="$API_URL" \
+            --dart-define=FCM_API_KEY="$FCM_API_KEY" \
+            --dart-define=FCM_APP_ID="$FCM_APP_ID" \
+            --dart-define=FCM_MESSAGING_SENDER_ID="$FCM_MESSAGING_SENDER_ID" \
+            --dart-define=FCM_PROJECT_ID="$FCM_PROJECT_ID" \
+            --dart-define=FCM_AUTH_DOMAIN="$FCM_AUTH_DOMAIN" \
+            --dart-define=FCM_STORAGE_BUCKET="$FCM_STORAGE_BUCKET" \
+            --dart-define=FCM_WEB_VAPID_KEY="$FCM_WEB_VAPID_KEY"
+          test -s build/app/outputs/flutter-apk/app-release.apk
+          cp build/app/outputs/flutter-apk/app-release.apk build/named/OmaSales-Mobile-release-no-shrink.apk
+          echo "Release APK and no-shrink diagnostic APK built successfully."
 
       - name: Build debug APK and capture Android dependency graphs
         shell: bash
@@ -651,8 +666,13 @@ jobs:
           timeout 30s adb -s "$SERIAL" shell settings put global animator_duration_scale 0
           timeout 30s adb -s "$SERIAL" logcat -c
 
-          for VARIANT in debug release; do
-            if [ "$VARIANT" = "debug" ]; then APK="$DEBUG_APK"; else APK="$RELEASE_APK"; fi
+          NO_SHRINK_APK="$GITHUB_WORKSPACE/mobile/build/named/OmaSales-Mobile-release-no-shrink.apk"
+          for VARIANT in debug release release_no_shrink; do
+            case "$VARIANT" in
+              debug) APK="$DEBUG_APK" ;;
+              release) APK="$RELEASE_APK" ;;
+              release_no_shrink) APK="$NO_SHRINK_APK" ;;
+            esac
             echo "===== Testing OmaSales $VARIANT APK ====="
             timeout 30s adb -s "$SERIAL" shell am force-stop com.omagroup.salesapp || true
             timeout 30s adb -s "$SERIAL" uninstall com.omagroup.salesapp >/dev/null 2>&1 || true
@@ -731,7 +751,7 @@ jobs:
               exit 1
             fi
           done
-          echo "PASS: both debug and release APKs survived Android 16 cold-start smoke tests."
+          echo "PASS: debug, release, and release-no-shrink APKs survived Android 16 cold-start smoke tests."
       - name: Collect Android build diagnostics
         if: always()
         working-directory: .
