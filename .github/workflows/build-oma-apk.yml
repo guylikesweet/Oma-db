@@ -516,6 +516,11 @@ jobs:
           export ANDROID_SDK_ROOT="$SDK"
           export ANDROID_HOME="$SDK"
           export PATH="$SDK/platform-tools:$SDK/emulator:$SDK/cmdline-tools/latest/bin:$PATH"
+          # Pin AVD creation and lookup to the same directory. GitHub runners
+          # can expose a different SDK home to avdmanager and emulator.
+          AVD_NAME="oma-smoke"
+          export ANDROID_AVD_HOME="$HOME/.android/avd"
+          mkdir -p "$ANDROID_AVD_HOME"
           APK="$GITHUB_WORKSPACE/mobile/build/named/OmaSales-Mobile.apk"
           OUT="$GITHUB_WORKSPACE/mobile/build/android-smoke"
           SERIAL="emulator-5554"
@@ -558,11 +563,21 @@ jobs:
           test -s "$APK" || { echo "ERROR: release APK is missing or empty."; exit 1; }
           yes | sdkmanager --licenses >/dev/null 2>&1 || true
           sdkmanager --install emulator platform-tools 'platforms;android-36' 'system-images;android-36;google_apis;x86_64'
-          echo no | avdmanager create avd --force -n oma-smoke -k 'system-images;android-36;google_apis;x86_64' -d pixel_6
+          echo "Creating Android Virtual Device '$AVD_NAME' in $ANDROID_AVD_HOME."
+          echo no | avdmanager create avd --force --name "$AVD_NAME" --package 'system-images;android-36;google_apis;x86_64' --device pixel_6 --path "$ANDROID_AVD_HOME/$AVD_NAME.avd"
+          if [ ! -s "$ANDROID_AVD_HOME/$AVD_NAME.ini" ] || [ ! -s "$ANDROID_AVD_HOME/$AVD_NAME.avd/config.ini" ]; then
+            echo "ERROR: avdmanager did not create the expected AVD files."
+            echo "Expected: $ANDROID_AVD_HOME/$AVD_NAME.ini"
+            echo "Expected: $ANDROID_AVD_HOME/$AVD_NAME.avd/config.ini"
+            find "$HOME/.android" -maxdepth 4 -type f -print 2>/dev/null || true
+            exit 1
+          fi
+          echo "AVD files verified:"
+          ls -l "$ANDROID_AVD_HOME/$AVD_NAME.ini" "$ANDROID_AVD_HOME/$AVD_NAME.avd/config.ini"
           adb start-server
 
           echo "Starting Android 16 emulator without hardware acceleration."
-          emulator -avd oma-smoke -port 5554 -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -no-snapshot-save -camera-back none -camera-front none -accel off > "$OUT/emulator.log" 2>&1 &
+          emulator -avd "$AVD_NAME" -port 5554 -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -no-snapshot-save -camera-back none -camera-front none -accel off > "$OUT/emulator.log" 2>&1 &
           EMULATOR_PID=$!
 
           BOOT_DEADLINE=$((SECONDS + 1800))
