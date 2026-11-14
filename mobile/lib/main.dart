@@ -3594,22 +3594,10 @@ class _SaleDetailPageState extends State<SaleDetailPage> {
       appBar: AppBar(
         title: Text(orderId),
         actions: [
-          PopupMenuButton<String>(
-            tooltip: 'Invoice',
-            onSelected: (value) {
-              if (value == 'share_invoice') shareInvoice();
-              if (value == 'print_invoice') printInvoice();
-            },
-            itemBuilder: (_) => const [
-              PopupMenuItem(
-                value: 'share_invoice',
-                child: Text('Share invoice / receipt'),
-              ),
-              PopupMenuItem(
-                value: 'print_invoice',
-                child: Text('Print invoice / receipt'),
-              ),
-            ],
+          IconButton(
+            tooltip: 'Generate receipt',
+            onPressed: shareInvoice,
+            icon: const Icon(Icons.receipt_long_outlined),
           ),
         ],
       ),
