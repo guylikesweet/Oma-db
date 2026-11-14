@@ -11,8 +11,8 @@ import 'core/network_errors.dart';
 import 'data/api_client.dart';
 
 /// The three ways a receipt can be handed to a customer. The server draws one
-/// receipt picture; JPG/PNG send it as a photo (best for WhatsApp) and PDF is a
-/// small 80 mm page carrying the same picture.
+/// receipt picture; PNG is the preferred photo, JPG is a smaller alternative,
+/// and PDF is a small 80 mm page carrying the same picture.
 enum _ReceiptFormat { png, jpg, pdf }
 
 extension _ReceiptFormatInfo on _ReceiptFormat {
@@ -94,9 +94,8 @@ Future<Uint8List> _fetchReceipt(
 /// Share fixes that: the share sheet opens straight away, to WhatsApp
 /// Business or any other app, and nothing is saved to the phone.
 ///
-/// The format chips choose what is shared: a JPG or PNG photo (opens straight
-/// in WhatsApp, no zoom needed) or a small PDF. JPG is the default because a
-/// WhatsApp photo cannot show transparent corners.
+/// The format chips choose what is shared: PNG first, JPG second, or a small
+/// PDF third. PNG is the default so the original receipt image is preserved.
 Future<void> showInvoiceDialog(
   BuildContext context,
   ApiClient api,
