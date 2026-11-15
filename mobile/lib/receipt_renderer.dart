@@ -251,7 +251,7 @@ class LocalReceiptRenderer {
 
   static Future<Uint8List> image(Map<String, dynamic> payload, {required bool jpeg}) async {
     final document = await pdf(payload);
-    final first = await Printing.raster(document, dpi: 144).first;
+    final first = await Printing.raster(document, dpi: 342).first;
     final png = await first.toPng();
     if (!jpeg) return png;
     final decoded = img.decodePng(png);
