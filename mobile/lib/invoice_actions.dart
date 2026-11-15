@@ -2,16 +2,17 @@ import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 import 'package:printing/printing.dart';
 import 'package:share_plus/share_plus.dart';
 
+import 'core/config.dart';
 import 'core/network_errors.dart';
 import 'data/api_client.dart';
-import 'data/local_database.dart';
-import 'receipt_renderer.dart';
 
-/// The three locally rendered receipt formats. PNG is the preferred photo,
-/// JPG is a smaller alternative, and PDF is an 80 mm page carrying the same artwork.
+/// The three ways a receipt can be handed to a customer. The server draws one
+/// receipt picture; PNG is the preferred photo, JPG is a smaller alternative,
+/// and PDF is a small 80 mm page carrying the same picture.
 enum _ReceiptFormat { png, jpg, pdf }
 
 extension _ReceiptFormatInfo on _ReceiptFormat {
@@ -36,59 +37,51 @@ extension _ReceiptFormatInfo on _ReceiptFormat {
   bool get isImage => this != _ReceiptFormat.pdf;
 }
 
-/// Fetches signed receipt facts for a synced sale, then renders the selected
-/// file locally. Unsynced negative-ID sales receive a provisional local copy.
+/// Downloads one receipt from the server. Same authenticated binary fetch as
+/// [ApiClient.invoicePdf], but for the receipt endpoints that can return a
+/// photo as well as a PDF.
 Future<Uint8List> _fetchReceipt(
-  _ReceiptFormat format, {
-  required Map<String, dynamic> payload,
-}) async {
-  if (format == _ReceiptFormat.pdf) {
-    return LocalReceiptRenderer.pdf(payload);
-  }
-  return LocalReceiptRenderer.image(
-    payload,
-    jpeg: format == _ReceiptFormat.jpg,
+  ApiClient api,
+  int saleId,
+  _ReceiptFormat format,
+) async {
+  final savedToken = await api.token();
+
+  final base = Uri.parse(AppConfig.apiBaseUrl);
+  final basePath = base.path.replaceFirst(RegExp(r'/$'), '');
+  final uri = base.replace(
+    path: '$basePath/v1/sales/$saleId/receipt.${format.ext}',
   );
-}
-Future<Map<String, dynamic>> _offlineReceiptPayload(int saleId) async {
-  final db = await LocalDatabase.instance.db;
-  final sales = await db.query('sales', where: 'id = ? AND local_only = 1', whereArgs: [saleId], limit: 1);
-  if (sales.isEmpty) throw ApiException(404, 'This offline sale is no longer available locally.');
-  final sale = sales.first;
-  if ('${sale['order_status'] ?? ''}' == 'Cancelled') throw ApiException(400, 'A cancelled order does not get a receipt.');
-  if ('${sale['payment_status'] ?? ''}' != 'Paid') throw ApiException(400, 'Receipts are only issued for paid orders.');
-  final rows = await db.query('sale_items', where: 'sale_id = ?', whereArgs: [saleId], orderBy: 'id ASC');
-  String money(dynamic value) {
-    final amount = double.tryParse('${value ?? ''}') ?? 0;
-    final fixed = amount.toStringAsFixed(2).split('.');
-    final whole = fixed[0].replaceAllMapped(RegExp(r'\B(?=(\d{3})+(?!\d))'), (_) => ',');
-    return '$whole.${fixed[1]}';
+
+  final headers = <String, String>{'Accept': format.mime};
+  if (savedToken != null && savedToken.isNotEmpty) {
+    headers['Authorization'] = 'Bearer $savedToken';
   }
-  final items = rows.map((item) {
-    final qty = item['qty'] as int? ?? 0;
-    final unit = double.tryParse('${item['unit_price'] ?? ''}') ?? 0;
-    return <String, dynamic>{'name': item['product_name'] ?? 'Product', 'variant': item['variant_note'], 'qty': qty, 'unit_text': money(unit), 'line_text': money(unit * qty)};
-  }).toList();
-  final saleDate = DateTime.tryParse('${sale['sale_date'] ?? ''}');
-  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-  final dateText = saleDate == null ? 'Pending synchronization' : '${saleDate.day.toString().padLeft(2, '0')} ${months[saleDate.month - 1]} ${saleDate.year}';
-  final address = [sale['customer_address'], sale['customer_state']].where((v) => v != null && v.toString().trim().isNotEmpty).map((v) => v.toString().trim()).toSet().join(', ');
-  final subtotal = money(sale['subtotal_amount']);
-  final stockSale = sale['sale_type'] == 'stock';
-  return {
-    'version': 1, 'provisional': true, 'logo_base64': null,
-    'receipt': {
-      'business_name': 'OmaBuy Nigeria Limited', 'business_phone': null, 'business_address': null, 'instagram': null,
-      'order_id': sale['order_id'] ?? 'OFFLINE', 'date_text': dateText,
-      'order_status_label': 'PROVISIONAL — PENDING SYNC',
-      'customer_name': sale['customer_name'] ?? 'Customer', 'customer_phone': sale['customer_phone'], 'address_text': address,
-      'line_items': items, 'total_text': subtotal, 'total_note': stockSale ? null : '(products only; provisional)',
-      'notice_paragraphs': stockSale ? [] : [[['This is a provisional receipt created offline. It is not yet verified. ', false], ['The official receipt and verification QR will be available after this sale synchronizes.', true]]],
-      'verify_url': '', 'signature': '', 'code_text': 'PROVISIONAL — PENDING SYNC',
-      'track_display': 'Official tracking available after synchronization',
-      'footer_text': 'Provisional receipt — not proof of server verification',
-    },
-  };
+
+  late http.Response response;
+  try {
+    response = await http
+        .get(uri, headers: headers)
+        .timeout(const Duration(seconds: 90));
+  } on TimeoutException catch (e) {
+    throw ApiException(0, 'Network request timed out.', cause: e);
+  } on http.ClientException catch (e) {
+    throw ApiException(0, 'Network connection failed.', cause: e);
+  }
+
+  if (response.statusCode < 200 || response.statusCode >= 300) {
+    // The server explains refusals in plain words, e.g. "Receipts are only
+    // issued for paid orders."
+    var message = 'Could not generate the receipt.';
+    try {
+      final text = response.body;
+      final match = RegExp(r'"error"\s*:\s*"([^"]+)"').firstMatch(text);
+      if (match != null) message = match.group(1) ?? message;
+    } catch (_) {}
+    throw ApiException(response.statusCode, message);
+  }
+
+  return response.bodyBytes;
 }
 
 /// Opens a "Receipt ready" popup for one sale with Share and Print buttons.
@@ -102,7 +95,7 @@ Future<Map<String, dynamic>> _offlineReceiptPayload(int saleId) async {
 /// Business or any other app, and nothing is saved to the phone.
 ///
 /// The format chips choose what is shared: PNG first, JPG second, or a small
-/// PDF third. PNG is the default for a crisp receipt image.
+/// PDF third. PNG is the default so the original receipt image is preserved.
 Future<void> showInvoiceDialog(
   BuildContext context,
   ApiClient api,
@@ -137,7 +130,6 @@ class _InvoiceDialog extends StatefulWidget {
 class _InvoiceDialogState extends State<_InvoiceDialog> {
   _ReceiptFormat format = _ReceiptFormat.png;
   final Map<_ReceiptFormat, Uint8List> cache = {};
-  Map<String, dynamic>? receiptPayload;
   bool loading = false;
   String? error;
   // After a few seconds of waiting we explain why (free servers go to sleep
@@ -149,14 +141,6 @@ class _InvoiceDialogState extends State<_InvoiceDialog> {
   String? shareError;
 
   Uint8List? get bytes => cache[format];
-
-  Future<Map<String, dynamic>> loadReceiptPayload() async {
-    if (receiptPayload != null) return receiptPayload!;
-    receiptPayload = widget.saleId < 0
-        ? await _offlineReceiptPayload(widget.saleId)
-        : await widget.api.receiptData(widget.saleId);
-    return receiptPayload!;
-  }
 
   String get fileName => 'receipt-${widget.label}.${format.ext}';
 
@@ -198,10 +182,7 @@ class _InvoiceDialogState extends State<_InvoiceDialog> {
     try {
       Uint8List data;
 
-      data = await _fetchReceipt(
-        wanted,
-        payload: await loadReceiptPayload(),
-      );
+      data = await _fetchReceipt(widget.api, widget.saleId, wanted);
 
       cache[wanted] = data;
     } catch (e) {
@@ -306,8 +287,9 @@ class _InvoiceDialogState extends State<_InvoiceDialog> {
     try {
       var pdf = cache[_ReceiptFormat.pdf];
       pdf ??= await _fetchReceipt(
+        widget.api,
+        widget.saleId,
         _ReceiptFormat.pdf,
-        payload: await loadReceiptPayload(),
       );
       cache[_ReceiptFormat.pdf] = pdf;
       final data = pdf;
