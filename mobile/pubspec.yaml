@@ -30,6 +30,8 @@ dependencies:
   share_plus: ^10.1.4
   sqflite_common_ffi_web: ^0.4.5+4
   printing: ^5.13.4
+  pdf: ^3.11.3
+  image: ^4.5.4
   url_launcher: ^6.3.1
 
 dev_dependencies:
