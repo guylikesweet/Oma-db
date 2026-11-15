@@ -21,17 +21,6 @@ class LocalReceiptRenderer {
   static String _s(dynamic value, [String fallback = '']) =>
       value == null ? fallback : value.toString().trim();
 
-  static String _money(dynamic value) {
-    final n = double.tryParse(_s(value)) ?? 0;
-    final fixed = n.toStringAsFixed(2);
-    final parts = fixed.split('.');
-    final whole = parts[0];
-    final grouped = whole.replaceAllMapped(
-      RegExp(r'\B(?=(\d{3})+(?!\d))'),
-      (_) => ',',
-    );
-    return 'NGN $grouped.${parts[1]}';
-  }
 
   static Future<Uint8List> pdf(Map<String, dynamic> payload) async {
     final data = Map<String, dynamic>.from(payload['receipt'] as Map);
