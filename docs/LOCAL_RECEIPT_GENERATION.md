@@ -14,6 +14,7 @@
 
 - Added `mobile/lib/receipt_renderer.dart`.
 - The Flutter client now builds the 80 mm PDF locally, including logo, customer/order information, item table, total, shipping notice, QR code, verification code/seal, watermark and footer.
+- PNG/JPG are rendered locally from the PDF at approximately the original 1080 px receipt width.
 - PNG and JPG are rasterized from that locally generated PDF. JPG encoding uses the existing Flutter image ecosystem via a direct `image` dependency.
 - The renderer is shared by Android and Flutter Web; no platform-specific rendering path was introduced.
 
@@ -29,6 +30,7 @@
 - `ApiClient.receiptData()` fetches the compact JSON payload.
 - `invoice_actions.dart` now renders PDF/PNG/JPG on the client instead of requesting server-generated files.
 - The original binary receipt endpoints remain registered for older installed app versions and external compatibility; the updated client no longer calls them.
+- Negative-ID offline sales can render a provisional local receipt from SQLite. It is prominently marked NOT VERIFIED and contains no QR/signature. The normal server-signed receipt becomes available after synchronization.
 - Share and print continue to use the same popup and existing share/print plugins.
 
 ## Stage 5 — Validation
@@ -37,6 +39,6 @@
 - GitHub Actions CI is triggered by pushes to main and is responsible for dependency resolution, Flutter analysis, Flutter tests and Flutter Web release compilation, alongside backend tests.
 - A passing CI run is required before calling this fully validated. Android release APK installation and visual parity still require a real device check.
 
-## Explicit remaining limitation
+## Security boundary
 
-A negative-ID offline sale cannot receive an official receipt yet: it has no server HMAC or verification URL until it synchronizes. It must remain clearly provisional until then. The current local renderer path is for server-confirmed paid sales. Do not create a fake signature or a fake verified QR for offline sales.
+An offline receipt is only provisional. It has no server HMAC or verification URL until synchronization, and the renderer deliberately omits the QR and authenticity seal in that state. Do not create a fake signature or fake verified QR for offline sales.
