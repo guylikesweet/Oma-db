@@ -2,11 +2,9 @@ import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
 import 'package:printing/printing.dart';
 import 'package:share_plus/share_plus.dart';
 
-import 'core/config.dart';
 import 'core/network_errors.dart';
 import 'data/api_client.dart';
 import 'receipt_renderer.dart';
