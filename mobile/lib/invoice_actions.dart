@@ -10,9 +10,8 @@ import 'data/api_client.dart';
 import 'data/local_database.dart';
 import 'receipt_renderer.dart';
 
-/// The three ways a receipt can be handed to a customer. The server draws one
-/// receipt picture; PNG is the preferred photo, JPG is a smaller alternative,
-/// and PDF is a small 80 mm page carrying the same picture.
+/// The three locally rendered receipt formats. PNG is the preferred photo,
+/// JPG is a smaller alternative, and PDF is an 80 mm page carrying the same artwork.
 enum _ReceiptFormat { png, jpg, pdf }
 
 extension _ReceiptFormatInfo on _ReceiptFormat {
@@ -37,9 +36,8 @@ extension _ReceiptFormatInfo on _ReceiptFormat {
   bool get isImage => this != _ReceiptFormat.pdf;
 }
 
-/// Downloads one receipt from the server. Same authenticated binary fetch as
-/// [ApiClient.invoicePdf], but for the receipt endpoints that can return a
-/// photo as well as a PDF.
+/// Fetches signed receipt facts for a synced sale, then renders the selected
+/// file locally. Unsynced negative-ID sales receive a provisional local copy.
 Future<Uint8List> _fetchReceipt(
   ApiClient api,
   int saleId,
@@ -111,7 +109,7 @@ Future<Map<String, dynamic>> _offlineReceiptPayload(int saleId) async {
 /// Business or any other app, and nothing is saved to the phone.
 ///
 /// The format chips choose what is shared: PNG first, JPG second, or a small
-/// PDF third. PNG is the default so the original receipt image is preserved.
+/// PDF third. PNG is the default for a crisp receipt image.
 Future<void> showInvoiceDialog(
   BuildContext context,
   ApiClient api,
