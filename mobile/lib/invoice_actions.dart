@@ -9,6 +9,7 @@ import 'package:share_plus/share_plus.dart';
 import 'core/config.dart';
 import 'core/network_errors.dart';
 import 'data/api_client.dart';
+import 'receipt_renderer.dart';
 
 /// The three ways a receipt can be handed to a customer. The server draws one
 /// receipt picture; PNG is the preferred photo, JPG is a smaller alternative,
@@ -45,45 +46,17 @@ Future<Uint8List> _fetchReceipt(
   int saleId,
   _ReceiptFormat format,
 ) async {
-  final savedToken = await api.token();
-
-  final base = Uri.parse(AppConfig.apiBaseUrl);
-  final basePath = base.path.replaceFirst(RegExp(r'/$'), '');
-  final uri = base.replace(
-    path: '$basePath/v1/sales/$saleId/receipt.${format.ext}',
+  // One small JSON response carries the signed facts and logo. Flutter then
+  // draws the receipt and encodes the requested file locally on this device.
+  final payload = await api.receiptData(saleId);
+  if (format == _ReceiptFormat.pdf) {
+    return LocalReceiptRenderer.pdf(payload);
+  }
+  return LocalReceiptRenderer.image(
+    payload,
+    jpeg: format == _ReceiptFormat.jpg,
   );
-
-  final headers = <String, String>{'Accept': format.mime};
-  if (savedToken != null && savedToken.isNotEmpty) {
-    headers['Authorization'] = 'Bearer $savedToken';
-  }
-
-  late http.Response response;
-  try {
-    response = await http
-        .get(uri, headers: headers)
-        .timeout(const Duration(seconds: 90));
-  } on TimeoutException catch (e) {
-    throw ApiException(0, 'Network request timed out.', cause: e);
-  } on http.ClientException catch (e) {
-    throw ApiException(0, 'Network connection failed.', cause: e);
-  }
-
-  if (response.statusCode < 200 || response.statusCode >= 300) {
-    // The server explains refusals in plain words, e.g. "Receipts are only
-    // issued for paid orders."
-    var message = 'Could not generate the receipt.';
-    try {
-      final text = response.body;
-      final match = RegExp(r'"error"\s*:\s*"([^"]+)"').firstMatch(text);
-      if (match != null) message = match.group(1) ?? message;
-    } catch (_) {}
-    throw ApiException(response.statusCode, message);
-  }
-
-  return response.bodyBytes;
 }
-
 /// Opens a "Receipt ready" popup for one sale with Share and Print buttons.
 ///
 /// Why a popup instead of acting straight away: browsers only allow the
