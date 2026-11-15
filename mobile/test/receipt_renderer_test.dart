@@ -38,4 +38,32 @@ void main() {
     expect(bytes.length, greaterThan(1000));
     expect(String.fromCharCodes(bytes.take(4)), '%PDF');
   });
+  test('provisional receipt renders without inventing a verification QR', () async {
+    final payload = <String, dynamic>{
+      'version': 1,
+      'provisional': true,
+      'logo_base64': null,
+      'receipt': {
+        'business_name': 'OmaBuy Nigeria Limited',
+        'order_id': 'OFF-000001',
+        'date_text': 'Pending synchronization',
+        'order_status_label': 'PROVISIONAL — PENDING SYNC',
+        'customer_name': 'Offline Customer',
+        'address_text': 'Lagos',
+        'line_items': [],
+        'total_text': '0.00',
+        'notice_paragraphs': [],
+        'verify_url': '',
+        'signature': '',
+        'code_text': 'PROVISIONAL — PENDING SYNC',
+        'track_display': 'Available after sync',
+        'footer_text': 'Provisional receipt — not proof of server verification',
+      },
+    };
+
+    final bytes = await LocalReceiptRenderer.pdf(payload);
+    expect(String.fromCharCodes(bytes.take(4)), '%PDF');
+    expect(bytes.length, greaterThan(500));
+  });
+
 }
