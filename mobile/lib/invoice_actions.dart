@@ -41,14 +41,11 @@ extension _ReceiptFormatInfo on _ReceiptFormat {
 Future<Uint8List> _fetchReceipt(
   ApiClient api,
   int saleId,
-  _ReceiptFormat format,
-) async {
+  _ReceiptFormat format, {
+  required Map<String, dynamic> payload,
+}) async {
   // Negative IDs are unsynchronized offline sales. They may have a clearly
   // marked provisional receipt, but never a server signature or fake QR.
-  final payload = saleId < 0
-      ? await _offlineReceiptPayload(saleId)
-      : await api.receiptData(saleId);
-
   if (format == _ReceiptFormat.pdf) {
     return LocalReceiptRenderer.pdf(payload);
   }
@@ -144,6 +141,7 @@ class _InvoiceDialog extends StatefulWidget {
 class _InvoiceDialogState extends State<_InvoiceDialog> {
   _ReceiptFormat format = _ReceiptFormat.png;
   final Map<_ReceiptFormat, Uint8List> cache = {};
+  Map<String, dynamic>? receiptPayload;
   bool loading = false;
   String? error;
   // After a few seconds of waiting we explain why (free servers go to sleep
@@ -155,6 +153,14 @@ class _InvoiceDialogState extends State<_InvoiceDialog> {
   String? shareError;
 
   Uint8List? get bytes => cache[format];
+
+  Future<Map<String, dynamic>> loadReceiptPayload() async {
+    if (receiptPayload != null) return receiptPayload!;
+    receiptPayload = widget.saleId < 0
+        ? await _offlineReceiptPayload(widget.saleId)
+        : await widget.api.receiptData(widget.saleId);
+    return receiptPayload!;
+  }
 
   String get fileName => 'receipt-${widget.label}.${format.ext}';
 
@@ -196,7 +202,12 @@ class _InvoiceDialogState extends State<_InvoiceDialog> {
     try {
       Uint8List data;
 
-      data = await _fetchReceipt(widget.api, widget.saleId, wanted);
+      data = await _fetchReceipt(
+        widget.api,
+        widget.saleId,
+        wanted,
+        payload: await loadReceiptPayload(),
+      );
 
       cache[wanted] = data;
     } catch (e) {
@@ -304,6 +315,7 @@ class _InvoiceDialogState extends State<_InvoiceDialog> {
         widget.api,
         widget.saleId,
         _ReceiptFormat.pdf,
+        payload: await loadReceiptPayload(),
       );
       cache[_ReceiptFormat.pdf] = pdf;
       final data = pdf;
