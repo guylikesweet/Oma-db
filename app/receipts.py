@@ -88,12 +88,13 @@ def receipt_data(sale_id):
     sale = Sale.query.get_or_404(sale_id)
     reason = receipt_block_reason(sale)
     if reason:
-        raise ReceiptNotAllowed(reason)
+        return jsonify({"error": reason}), 400
 
     logo_bytes, logo_mimetype = get_logo_bytes()
     if not logo_bytes:
-        logo_bytes = getattr(get_settings(), "logo_data", None)
-        logo_mimetype = getattr(get_settings(), "logo_mimetype", None)
+        settings = get_settings()
+        logo_bytes = getattr(settings, "logo_data", None)
+        logo_mimetype = getattr(settings, "logo_mimetype", None)
 
     context = get_invoice_context(sale)
     return _no_store(jsonify({
