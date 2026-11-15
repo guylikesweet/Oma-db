@@ -531,6 +531,12 @@ class ApiClient {
     );
   }
 
+  /// Fetches authoritative receipt facts and the server-issued HMAC
+  /// verification URL. The Flutter client renders the actual files locally.
+  Future<Map<String, dynamic>> receiptData(int id) {
+    return _map('GET', '/v1/sales/$id/receipt-data');
+  }
+
   /// Downloads a PDF invoice/receipt for one sale — same
   /// authenticated-binary-fetch pattern as [labelPdf] below.
   Future<Uint8List> invoicePdf(
