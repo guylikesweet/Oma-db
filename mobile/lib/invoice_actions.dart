@@ -39,13 +39,9 @@ extension _ReceiptFormatInfo on _ReceiptFormat {
 /// Fetches signed receipt facts for a synced sale, then renders the selected
 /// file locally. Unsynced negative-ID sales receive a provisional local copy.
 Future<Uint8List> _fetchReceipt(
-  ApiClient api,
-  int saleId,
   _ReceiptFormat format, {
   required Map<String, dynamic> payload,
 }) async {
-  // Negative IDs are unsynchronized offline sales. They may have a clearly
-  // marked provisional receipt, but never a server signature or fake QR.
   if (format == _ReceiptFormat.pdf) {
     return LocalReceiptRenderer.pdf(payload);
   }
@@ -203,8 +199,6 @@ class _InvoiceDialogState extends State<_InvoiceDialog> {
       Uint8List data;
 
       data = await _fetchReceipt(
-        widget.api,
-        widget.saleId,
         wanted,
         payload: await loadReceiptPayload(),
       );
@@ -312,8 +306,6 @@ class _InvoiceDialogState extends State<_InvoiceDialog> {
     try {
       var pdf = cache[_ReceiptFormat.pdf];
       pdf ??= await _fetchReceipt(
-        widget.api,
-        widget.saleId,
         _ReceiptFormat.pdf,
         payload: await loadReceiptPayload(),
       );
