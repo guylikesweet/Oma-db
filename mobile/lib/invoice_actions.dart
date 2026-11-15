@@ -7,6 +7,7 @@ import 'package:share_plus/share_plus.dart';
 
 import 'core/network_errors.dart';
 import 'data/api_client.dart';
+import 'data/local_database.dart';
 import 'receipt_renderer.dart';
 
 /// The three ways a receipt can be handed to a customer. The server draws one
@@ -44,9 +45,12 @@ Future<Uint8List> _fetchReceipt(
   int saleId,
   _ReceiptFormat format,
 ) async {
-  // One small JSON response carries the signed facts and logo. Flutter then
-  // draws the receipt and encodes the requested file locally on this device.
-  final payload = await api.receiptData(saleId);
+  // Negative IDs are unsynchronized offline sales. They may have a clearly
+  // marked provisional receipt, but never a server signature or fake QR.
+  final payload = saleId < 0
+      ? await _offlineReceiptPayload(saleId)
+      : await api.receiptData(saleId);
+
   if (format == _ReceiptFormat.pdf) {
     return LocalReceiptRenderer.pdf(payload);
   }
@@ -55,6 +59,47 @@ Future<Uint8List> _fetchReceipt(
     jpeg: format == _ReceiptFormat.jpg,
   );
 }
+Future<Map<String, dynamic>> _offlineReceiptPayload(int saleId) async {
+  final db = await LocalDatabase.instance.db;
+  final sales = await db.query('sales', where: 'id = ? AND local_only = 1', whereArgs: [saleId], limit: 1);
+  if (sales.isEmpty) throw ApiException(404, 'This offline sale is no longer available locally.');
+  final sale = sales.first;
+  if ('${sale['order_status'] ?? ''}' == 'Cancelled') throw ApiException(400, 'A cancelled order does not get a receipt.');
+  if ('${sale['payment_status'] ?? ''}' != 'Paid') throw ApiException(400, 'Receipts are only issued for paid orders.');
+  final rows = await db.query('sale_items', where: 'sale_id = ?', whereArgs: [saleId], orderBy: 'id ASC');
+  String money(dynamic value) {
+    final amount = double.tryParse('${value ?? ''}') ?? 0;
+    final fixed = amount.toStringAsFixed(2).split('.');
+    final whole = fixed[0].replaceAllMapped(RegExp(r'\B(?=(\d{3})+(?!\d))'), (_) => ',');
+    return '$whole.${fixed[1]}';
+  }
+  final items = rows.map((item) {
+    final qty = item['qty'] as int? ?? 0;
+    final unit = double.tryParse('${item['unit_price'] ?? ''}') ?? 0;
+    return <String, dynamic>{'name': item['product_name'] ?? 'Product', 'variant': item['variant_note'], 'qty': qty, 'unit_text': money(unit), 'line_text': money(unit * qty)};
+  }).toList();
+  final saleDate = DateTime.tryParse('${sale['sale_date'] ?? ''}');
+  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  final dateText = saleDate == null ? 'Pending synchronization' : '${saleDate.day.toString().padLeft(2, '0')} ${months[saleDate.month - 1]} ${saleDate.year}';
+  final address = [sale['customer_address'], sale['customer_state']].where((v) => v != null && v.toString().trim().isNotEmpty).map((v) => v.toString().trim()).toSet().join(', ');
+  final subtotal = money(sale['subtotal_amount']);
+  final stockSale = sale['sale_type'] == 'stock';
+  return {
+    'version': 1, 'provisional': true, 'logo_base64': null,
+    'receipt': {
+      'business_name': 'OmaBuy Nigeria Limited', 'business_phone': null, 'business_address': null, 'instagram': null,
+      'order_id': sale['order_id'] ?? 'OFFLINE', 'date_text': dateText,
+      'order_status_label': 'PROVISIONAL — PENDING SYNC',
+      'customer_name': sale['customer_name'] ?? 'Customer', 'customer_phone': sale['customer_phone'], 'address_text': address,
+      'line_items': items, 'total_text': subtotal, 'total_note': stockSale ? null : '(products only; provisional)',
+      'notice_paragraphs': stockSale ? [] : [[['This is a provisional receipt created offline. It is not yet verified. ', false], ['The official receipt and verification QR will be available after this sale synchronizes.', true]]],
+      'verify_url': '', 'signature': '', 'code_text': 'PROVISIONAL — PENDING SYNC',
+      'track_display': 'Official tracking available after synchronization',
+      'footer_text': 'Provisional receipt — not proof of server verification',
+    },
+  };
+}
+
 /// Opens a "Receipt ready" popup for one sale with Share and Print buttons.
 ///
 /// Why a popup instead of acting straight away: browsers only allow the
