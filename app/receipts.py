@@ -5,6 +5,8 @@ Receipt downloads for the mobile app: the same receipt as a PNG or JPG photo
 Only PAID, non-cancelled orders get one; anything else answers 400 with a
 plain explanation (the app shows it). See app/services/invoices.py.
 """
+import base64
+
 from flask import Blueprint, jsonify, send_file
 
 from app.api import require_api_token
@@ -13,7 +15,11 @@ from app.services.invoices import (
     ReceiptNotAllowed,
     generate_invoice_image,
     generate_invoice_pdf,
+    get_invoice_context,
+    receipt_block_reason,
 )
+from app.services.labels import get_logo_bytes
+from app.services.settings import get_settings
 
 receipts_bp = Blueprint("receipts", __name__, url_prefix="/api")
 
@@ -70,16 +76,6 @@ The server remains authoritative: it checks payment/cancellation state and
 issues the HMAC-backed verification URL. Clients only lay out this payload.
 """
 import base64
-
-from flask import jsonify
-
-from app.services.invoices import (
-    ReceiptNotAllowed,
-    get_invoice_context,
-    receipt_block_reason,
-)
-from app.services.labels import get_logo_bytes
-from app.services.settings import get_settings
 
 
 @receipts_bp.route("/v1/sales/<int:sale_id>/receipt-data", methods=("GET",))
