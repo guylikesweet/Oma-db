@@ -49,7 +49,7 @@ class LocalReceiptRenderer {
         items.fold<int>(0, (n, item) => n + 38 + (_s(item['name']).length ~/ 28) * 10) +
         notices.length * 42 +
         (logo == null ? 0 : 35);
-    final pageHeight = (estimatedHeight * PdfPageFormat.point).clamp(520.0, 1800.0);
+    final pageHeight = (estimatedHeight * PdfPageFormat.point).clamp(520.0, 1800.0).toDouble();
     final doc = pw.Document(
       title: 'Receipt $orderId',
       author: business,
