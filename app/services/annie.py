@@ -790,3 +790,38 @@ def maybe_process_due_payment_reminders():
         return process_due_payment_reminders()
     finally:
         lock.release()
+
+
+def process_annie_question(message_id, asker_user_id):
+    """Answer a tagged chat message immediately using the local Oma database engine.
+
+    This path intentionally does not depend on the optional AnnieReplyTask queue
+    table: a missing queue migration must never silence direct @Annie questions.
+    """
+    message = db.session.get(ChatMessage, int(message_id))
+    asker = db.session.get(User, int(asker_user_id))
+    if (
+        message is None or asker is None or not asker.is_active
+        or message.deleted_at is not None
+        or message.sender_user_id != asker.id
+        or not is_annie_mention(message.content)
+    ):
+        return None
+
+    question = _ANNIE_MENTION.sub("", message.content or "").strip()
+    answer = (
+        "Hi! I'm Annie. What would you like to know about Oma?"
+        if not question else answer_question(asker, question)
+    )
+    reply, created = post_annie_message(
+        answer,
+        event_key=f"annie-reply-{message.id}",
+        recipient_user_ids=_active_staff_ids(),
+        push_type="chat_message",
+        push_data={"reply_to_id": str(message.id)},
+    )
+    if created:
+        db.session.commit()
+        from app.services.audit import _schedule_outbox_flush
+        _schedule_outbox_flush()
+    return reply
