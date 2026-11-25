@@ -157,3 +157,32 @@ def test_annie_distinguishes_calendar_week_and_month_periods(monkeypatch):
     assert "this calendar week" in this_week and "3 order(s)" in this_week
     assert "last calendar week" in last_week and "4 order(s)" in last_week
     assert "last calendar month" in last_month and "12 order(s)" in last_month
+
+
+
+def test_process_annie_question_posts_a_database_answer_without_reply_queue(monkeypatch):
+    import app.services.annie as annie
+
+    message = SimpleNamespace(
+        id=321, sender_user_id=7, content="@Annie how many sales today?",
+        deleted_at=None,
+    )
+    asker = SimpleNamespace(id=7, is_active=True)
+    monkeypatch.setattr(annie.db.session, "get", lambda model, key: message if model is annie.ChatMessage else asker)
+    monkeypatch.setattr(annie, "answer_question", lambda user, question: f"Answer for: {question}")
+    posted = {}
+    monkeypatch.setattr(annie, "post_annie_message", lambda content, **kwargs: (
+        posted.update(content=content, kwargs=kwargs) or SimpleNamespace(id=999), True
+    ))
+    commits = []
+    monkeypatch.setattr(annie.db.session, "commit", lambda: commits.append(True))
+    monkeypatch.setattr(annie, "_active_staff_ids", lambda: [7, 8])
+    monkeypatch.setattr("app.services.audit._schedule_outbox_flush", lambda: None)
+
+    result = annie.process_annie_question(321, 7)
+
+    assert result.id == 999
+    assert posted["content"] == "Answer for: how many sales today?"
+    assert posted["kwargs"]["event_key"] == "annie-reply-321"
+    assert posted["kwargs"]["recipient_user_ids"] == [7, 8]
+    assert commits
