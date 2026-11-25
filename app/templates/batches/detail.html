@@ -5,7 +5,7 @@
   <h2>{{ batch.name }}</h2>
   <p>
     <span class="label label-info">{{ batch.status }}</span>
-    <span class="label" style="background:{{ '#FC4300' if batch.is_air else '#039664' }}; color:#fff;">{{ '\u2708 Air' if batch.is_air else '\U0001F6A2 Sea' }}</span>
+    <span class="label" style="background:{{ '#FC4300' if batch.is_air else '#039664' }}; color:#fff;">{{ '✈ Air' if batch.is_air else '🚢 Sea' }}</span>
   </p>
 
   {% with messages = get_flashed_messages(with_categories=true) %}
@@ -14,97 +14,65 @@
     {% endfor %}
   {% endwith %}
 
-  <table class="table table-borderless" style="max-width:500px;">
+  <table class="table table-borderless" style="max-width:560px;">
     <tr><th>Departed</th><td>{{ batch.departed_at or '—' }}</td></tr>
     <tr><th>Arrived</th><td>{{ batch.arrived_at or '—' }}</td></tr>
     <tr><th>Notes</th><td>{{ batch.notes or '—' }}</td></tr>
   </table>
 
-  <div style="margin-bottom:16px;">
+  <div style="display:flex;flex-wrap:wrap;gap:8px;margin:16px 0;">
     {% if batch.status == 'In Transit' %}
-    <form method="post" action="{{ url_for('batches.mark_arrived_route', batch_id=batch.id) }}" style="display:inline-block;">
-      <button type="submit" class="btn btn-primary btn-sm">Mark Arrived</button>
-    </form>
+      {% if reminders_available %}
+      <a href="{{ url_for('batches.remind_customers', batch_id=batch.id) }}" class="btn btn-success btn-sm">Remind customers of shipping cost</a>
+      {% else %}
+      <button type="button" class="btn btn-default btn-sm" disabled>Remind customers (available {{ reminders_available_at.strftime('%d %b %Y') }})</button>
+      {% endif %}
+      <form method="post" action="{{ url_for('batches.mark_arrived_route', batch_id=batch.id) }}" style="display:inline-block;">
+        <button type="submit" class="btn btn-primary btn-sm">Mark Arrived</button>
+      </form>
     {% elif batch.status == 'Arrived - Awaiting Shipping Payment' %}
-    <span class="text-muted">Batch has arrived — actual shipping cost is set below. Settle each order's payment individually; only settled orders become eligible for delivery.</span>
-    {% if current_user.is_admin %}
-    <form method="post" action="{{ url_for('batches.undo_arrival_route', batch_id=batch.id) }}" style="display:inline-block; margin-left:8px;">
-      <button type="submit" class="btn btn-warning btn-sm">Undo Arrival</button>
-    </form>
+      <a href="{{ url_for('batches.notify_customers', batch_id=batch.id) }}" class="btn btn-success btn-sm">Notify customers of arrival</a>
+      <span class="text-muted" style="align-self:center;">Actual shipping cost is calculated. Settle each order's shipping individually; only settled orders become eligible for delivery.</span>
+      {% if current_user.is_admin %}
+      <form method="post" action="{{ url_for('batches.undo_arrival_route', batch_id=batch.id) }}" style="display:inline-block;">
+        <button type="submit" class="btn btn-warning btn-sm">Undo Arrival</button>
+      </form>
+      {% endif %}
     {% endif %}
-    {% endif %}
+  </div>
+
+  <div class="alert alert-info">
+    <strong>Shipment manifest locked.</strong> This batch left its country of origin when it was created. Sales cannot be added or removed.
   </div>
 
   <h4>Sales in this batch ({{ batch.sales|length }})</h4>
-  <table class="table table-striped">
-    <thead><tr><th>Sale</th><th>Customer</th><th>State</th><th>Estimated ({{ batch.mode_label }})</th><th>Actual Shipping</th><th>Payment</th><th></th></tr></thead>
-    <tbody>
-      {% for sale in batch.sales %}
-      <tr>
-        <td><a href="{{ url_for('sales.sale_detail', sale_id=sale.id) }}">{{ sale.order_id }}</a></td>
-        <td>{{ sale.customer_name }}</td>
-        <td>{{ sale.customer_state }}</td>
-        <td>{% set est = sale.estimated_shipping_air if batch.is_air else (sale.estimated_shipping_sea if sale.estimated_shipping_sea is not none else sale.estimated_shipping_cost) %}{{ est if est is not none else '—' }}</td>
-        <td>{{ sale.actual_shipping_cost if sale.actual_shipping_cost is not none else '—' }}</td>
-        <td>
-          {% if sale.shipping_payment_settled %}
-          <span class="label label-success">Settled</span>
-          {% else %}
-          <span class="label label-default">Pending</span>
-          {% endif %}
-        </td>
-        <td>
-          {% if batch.status == 'In Transit' %}
-          <label style="display:inline-flex;align-items:center;gap:5px;margin-right:8px;">
-            <input type="checkbox" name="remove_sale_ids" value="{{ sale.id }}" form="bulk-remove-sales">
-            Remove
-          </label>
-          <form method="post" action="{{ url_for('batches.remove_sale', batch_id=batch.id, sale_id=sale.id) }}" style="display:inline;">
-            <button type="submit" class="btn btn-xs btn-default">Remove one</button>
-          </form>
-          {% elif batch.status == 'Arrived - Awaiting Shipping Payment' and not sale.shipping_payment_settled %}
-          <form method="post" action="{{ url_for('batches.settle_sale_route', batch_id=batch.id, sale_id=sale.id) }}" style="display:inline;">
-            <button type="submit" class="btn btn-xs btn-primary">Settle Shipping Payment</button>
-          </form>
-          {% endif %}
-        </td>
-      </tr>
-      {% else %}
-      <tr><td colspan="7">No sales assigned yet.</td></tr>
-      {% endfor %}
-    </tbody>
-  </table>
-
-  {% if batch.status == 'In Transit' %}
-  <h4>Add sales to this batch</h4>
-  {% if eligible_sales %}
-  <div style="border:1px solid #ddd;border-radius:8px;padding:10px;max-height:360px;overflow:auto;">
-    {% for s in eligible_sales %}
-    <label style="display:flex;align-items:flex-start;gap:8px;padding:8px 4px;border-bottom:1px solid #eee;">
-      <input type="checkbox" name="add_sale_ids" value="{{ s.id }}" form="bulk-add-sales" style="margin-top:3px;">
-      <span>
-        <strong>{{ s.order_id }}</strong> — {{ s.customer_name }}
-        <small style="display:block;color:#777;">{{ s.customer_state or 'No state' }} · {{ s.sale_date }}</small>
-      </span>
-    </label>
-    {% endfor %}
+  <div class="table-responsive">
+    <table class="table table-striped">
+      <thead><tr><th>Sale</th><th>Customer</th><th>Phone</th><th>State</th><th>Estimated ({{ batch.mode_label }})</th><th>Actual Shipping</th><th>Payment</th><th></th></tr></thead>
+      <tbody>
+        {% for sale in batch.sales %}
+        <tr>
+          <td><a href="{{ url_for('sales.sale_detail', sale_id=sale.id) }}">{{ sale.order_id }}</a></td>
+          <td>{{ sale.customer_name }}</td>
+          <td>{{ sale.customer_phone or '—' }}</td>
+          <td>{{ sale.customer_state or '—' }}</td>
+          <td>{% set est = sale.estimated_shipping_air if batch.is_air else (sale.estimated_shipping_sea if sale.estimated_shipping_sea is not none else sale.estimated_shipping_cost) %}{{ est if est is not none else '—' }}</td>
+          <td>{{ sale.actual_shipping_cost if sale.actual_shipping_cost is not none else '—' }}</td>
+          <td>{% if sale.shipping_payment_settled %}<span class="label label-success">Settled</span>{% else %}<span class="label label-default">Pending</span>{% endif %}</td>
+          <td>
+            {% if batch.status == 'Arrived - Awaiting Shipping Payment' and not sale.shipping_payment_settled %}
+            <form method="post" action="{{ url_for('batches.settle_sale_route', batch_id=batch.id, sale_id=sale.id) }}">
+              <button type="submit" class="btn btn-xs btn-primary">Settle Shipping Payment</button>
+            </form>
+            {% endif %}
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="8">No sales were included in this shipment manifest.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
   </div>
-  <div style="margin-top:10px;">
-    <form id="bulk-add-sales" method="post" action="{{ url_for('batches.bulk_sales', batch_id=batch.id) }}" style="display:inline-block;">
-      <button type="submit" class="btn btn-primary">Add selected sales</button>
-    </form>
-  </div>
-  {% else %}
-  <p class="text-muted">No eligible unassigned sales.</p>
-  {% endif %}
-
-  <form id="bulk-remove-sales" method="post" action="{{ url_for('batches.bulk_sales', batch_id=batch.id) }}" style="margin-top:8px;">
-    <button type="submit" class="btn btn-warning">Remove selected sales</button>
-  </form>
-  <p class="text-muted" style="margin-top:8px;">
-    Select any number of sales above, then use the matching Add or Remove button.
-  </p>
-  {% endif %}
 
   {% if batch.sales|selectattr('shipping_payment_settled')|list %}
   <p style="margin-top:16px;"><a href="{{ url_for('delivery.ready') }}" class="btn btn-primary btn-sm">Go to Ready for Delivery</a></p>
