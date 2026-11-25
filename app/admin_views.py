@@ -419,12 +419,9 @@ class ShipmentBatchView(SecureModelView):
     def on_model_delete(self, model):
         if model.status != ShipmentBatch.STATUS_IN_TRANSIT:
             raise Exception("Only an In Transit shipment batch can be deleted. Undo its arrival first.")
-        if any(s.shipping_payment_settled or s.delivery_id for s in model.sales):
-            raise Exception("This batch contains sales that are already settled or assigned to delivery.")
-        sale_ids = [sale.id for sale in model.sales]
-        for sale in model.sales:
-            sale.batch_id = None
-            sale.batch_assigned_at = None
+        if model.sales:
+            raise Exception("This departed batch has a locked sales manifest and cannot be deleted.")
+        sale_ids = []
         record_audit(
             "batch.delete",
             target_type="shipment_batch",
