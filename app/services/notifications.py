@@ -31,6 +31,10 @@ Product Name: {{2}}
 Sale ID: {{3}}
 Amount Paid: {{4}}
 Total Shipping Cost Due: {{5}}
+Outstanding Product Balance: {{11}}
+Total Pieces: {{12}}
+Demurrage: NGN 150 per piece per day from day 8
+Daily Demurrage From Day 8: {{13}}
 
 Payment Details:
 Bank Name: {{6}}
@@ -209,6 +213,9 @@ def build_arrival_notice(sale):
         "{{8}}": settings.bank_account_name.strip(),
         "{{9}}": (sale.customer_phone or "").strip(),
         "{{10}}": settings.business_name.strip(),
+        "{{11}}": format_ngn(max(Decimal("0"), Decimal(str(sale.subtotal_amount or 0)) - amount_paid)),
+        "{{12}}": str(sum(int(item.qty or 0) for item in sale.items)),
+        "{{13}}": format_ngn(sum(int(item.qty or 0) for item in sale.items) * 150),
     }
     # One pass over the template, so text inside a value (a product name, say)
     # can never be mistaken for another placeholder.

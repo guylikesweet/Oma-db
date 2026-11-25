@@ -1519,8 +1519,7 @@ def mobile_sale_status(sale_id):
                 user=g.api_user,
             )
         if payment_status is not None:
-            payment_status = str(payment_status)
-            if payment_status not in {"Paid", "Pending", "Refunded"}: raise ValueError("Invalid payment status.")
+            raise ValueError("Payment status is calculated from verified payments. Use Pay Small Small to record or review payments.")
             old_payment = sale.payment_status
             sale.payment_status = payment_status
             record_audit(

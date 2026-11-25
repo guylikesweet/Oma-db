@@ -2333,53 +2333,34 @@ class _BatchesPageState extends State<BatchesPage> {
                         ' • $saleCount sales',
                       ),
                       onTap: () => manageBatch(batch),
-                      trailing: widget.isAdmin
-                          ? PopupMenuButton<String>(
-                              onSelected: (value) async {
-                                if (value == 'arrive') {
-                                  await arriveBatch(batch['id'] as int);
-                                } else if (value == 'notify') {
-                                  await notifyBatchCustomers(context, batch['id'] as int);
-                                } else if (value == 'remind') {
-                                  await notifyBatchPaymentReminders(context, batch['id'] as int);
-                                } else if (value == 'undo') {
-                                  await undoArrival(batch['id'] as int);
-                                } else if (value == 'delete') {
-                                  await deleteBatch(
-                                    batch['id'] as int,
-                                    '${batch['name'] ?? 'Batch'}',
-                                  );
-                                }
-                              },
-                              itemBuilder: (_) => [
-                                if (batch['status'] == 'In Transit')
-                                  const PopupMenuItem(
-                                    value: 'arrive',
-                                    child: Text('Mark arrived'),
-                                  ),
-                                if (batch['status'] == 'In Transit' && batch['created_at'] != null &&
-                                    DateTime.now().difference(DateTime.tryParse('${batch['created_at']}') ?? DateTime.now()).inDays >= 45)
-                                  const PopupMenuItem(
-                                    value: 'remind',
-                                    child: Text('45-day customer payment reminders'),
-                                  ),
-                                if (batch['status'] == 'Arrived - Awaiting Shipping Payment')
-                                  const PopupMenuItem(
-                                    value: 'notify',
-                                    child: Text('Notify customers on WhatsApp'),
-                                  ),
-                                if (batch['status'] == 'Arrived - Awaiting Shipping Payment')
-                                  const PopupMenuItem(
-                                    value: 'undo',
-                                    child: Text('Undo arrival'),
-                                  ),
-                                const PopupMenuItem(
-                                  value: 'delete',
-                                  child: Text('Delete batch'),
-                                ),
-                              ],
-                            )
-                          : null,
+                      trailing: PopupMenuButton<String>(
+                        onSelected: (value) async {
+                          if (value == 'remind') {
+                            await notifyBatchPaymentReminders(context, batch['id'] as int);
+                          } else if (value == 'arrive' && widget.isAdmin) {
+                            await arriveBatch(batch['id'] as int);
+                          } else if (value == 'notify' && widget.isAdmin) {
+                            await notifyBatchCustomers(context, batch['id'] as int);
+                          } else if (value == 'undo' && widget.isAdmin) {
+                            await undoArrival(batch['id'] as int);
+                          } else if (value == 'delete' && widget.isAdmin) {
+                            await deleteBatch(batch['id'] as int, '${batch['name'] ?? 'Batch'}');
+                          }
+                        },
+                        itemBuilder: (_) => [
+                          if (batch['status'] == 'In Transit' && batch['created_at'] != null &&
+                              DateTime.now().difference(DateTime.tryParse('${batch['created_at']}') ?? DateTime.now()).inDays >= 45)
+                            const PopupMenuItem(value: 'remind', child: Text('45-day customer payment reminders')),
+                          if (widget.isAdmin && batch['status'] == 'In Transit')
+                            const PopupMenuItem(value: 'arrive', child: Text('Mark arrived')),
+                          if (widget.isAdmin && batch['status'] == 'Arrived - Awaiting Shipping Payment')
+                            const PopupMenuItem(value: 'notify', child: Text('Notify customers on WhatsApp')),
+                          if (widget.isAdmin && batch['status'] == 'Arrived - Awaiting Shipping Payment')
+                            const PopupMenuItem(value: 'undo', child: Text('Undo arrival')),
+                          if (widget.isAdmin)
+                            const PopupMenuItem(value: 'delete', child: Text('Delete batch')),
+                        ],
+                      ),
                     ),
                   );
                 },
