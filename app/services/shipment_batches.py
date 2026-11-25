@@ -101,11 +101,7 @@ def add_sale_to_batch(batch_id, sale_id):
 
 
 def remove_sale_from_batch(sale_id):
-    sale = Sale.query.get(sale_id)
-    if not sale:
-        raise BatchValidationError("Sale not found.")
-    if sale.batch_id is None:
-        raise BatchValidationError("This sale is not assigned to a shipment batch.")
+    """A sale cannot be detached from a departed shipment manifest."""
     raise BatchValidationError(
         "Shipment contents are locked when the batch is created. A departed sale cannot be removed."
     )
