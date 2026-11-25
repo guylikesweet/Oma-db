@@ -1,8 +1,8 @@
-"""Annie, the role-aware Oma team-chat assistant.
+"""Annie, the role-aware, zero-API-cost Oma team-chat assistant.
 
-Business facts are read from Oma's database; the language model only explains
-those facts. It has no write tools and cannot change sales, payments, stock,
-users, or shipment records.
+Business facts are read directly from Oma's database and answered with local,
+deterministic question handling. Annie has no write tools and cannot change
+sales, payments, stock, users, or shipment records.
 """
 import logging
 import re
