@@ -19,7 +19,7 @@ the loop so mobile/webapp clients actually clear too.
 """
 from app import db
 from app.models import (
-    Sale, SaleItem, Shipping, StockLog, ShipmentBatch, Delivery,
+    Sale, SaleItem, SalePayment, Shipping, StockLog, ShipmentBatch, Delivery,
     CourierRate, MonthlyShippingRate, MonthlyAirRate,
 )
 
@@ -28,6 +28,7 @@ from app.models import (
 CLEARABLE_MODELS = [
     ("Sale Items", SaleItem),
     ("Shipping", Shipping),
+    ("Sale Payments", SalePayment),
     ("Stock Log", StockLog),
     ("Sales", Sale),
     ("Shipment Batches", ShipmentBatch),
