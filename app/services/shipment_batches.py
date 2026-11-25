@@ -121,13 +121,13 @@ def remove_sale_from_batch(sale_id):
 
 def update_batch_sales(batch_id, *, add_sale_ids=None, remove_sale_ids=None, commit=True):
     """Legacy compatibility endpoint: a departed batch manifest is immutable."""
-    batch = ShipmentBatch.query.get(batch_id)
-    if not batch:
-        raise BatchValidationError("Batch not found.")
     if add_sale_ids or remove_sale_ids:
         raise BatchValidationError(
             "Shipment contents are locked when the batch is created. Sales cannot be added or removed."
         )
+    batch = ShipmentBatch.query.get(batch_id)
+    if not batch:
+        raise BatchValidationError("Batch not found.")
     return batch
 
 
