@@ -4,24 +4,89 @@ from flask_login import login_required
 from app.access import admin_required, password_required
 from app.models import ShipmentBatch, Sale
 from app.services.shipment_batches import (
-    add_sale_to_batch, remove_sale_from_batch, update_batch_sales,
+    create_batch, add_sale_to_batch, remove_sale_from_batch, update_batch_sales,
     mark_arrived, mark_unarrived, settle_sale_shipping, BatchValidationError,
 )
 
 batches_bp = Blueprint("batches", __name__, url_prefix="/batches", template_folder="templates/batches")
 
 
+@batches_bp.route("/create", methods=("GET", "POST"))
+@login_required
+def create_batch_route():
+    eligible_sales = (
+        Sale.query.filter(
+            Sale.batch_id.is_(None),
+            Sale.order_status != "Cancelled",
+            Sale.sale_type != "stock",
+            Sale.shipping_payment_settled.is_(False),
+            Sale.delivery_id.is_(None),
+        )
+        .order_by(Sale.sale_date.desc(), Sale.id.desc())
+        .all()
+    )
+    if request.method == "POST":
+        try:
+            batch = create_batch(
+                request.form.get("name", ""),
+                notes=request.form.get("notes") or None,
+                transport_mode=request.form.get("transport_mode", "sea"),
+                sale_ids=request.form.getlist("sale_ids"),
+                user=current_user,
+            )
+            flash(
+                f"Shipment batch '{batch.name}' created and locked with {len(batch.sales)} sale(s).",
+                "success",
+            )
+            return redirect(url_for("batches.batch_detail", batch_id=batch.id))
+        except (BatchValidationError, ValueError) as e:
+            flash(str(e), "error")
+    return render_template("batches/create.html", eligible_sales=eligible_sales)
+
+
 @batches_bp.route("/<int:batch_id>")
 @login_required
 def batch_detail(batch_id):
     batch = ShipmentBatch.query.get_or_404(batch_id)
-    eligible_sales = (
-        Sale.query.filter(Sale.batch_id.is_(None), Sale.order_status != "Cancelled", Sale.sale_type != "stock")
-        .order_by(Sale.sale_date.desc())
-        .limit(100)
-        .all()
+    return render_template("batches/detail.html", batch=batch)
+
+
+@batches_bp.route("/<int:batch_id>/remind-customers")
+@login_required
+def remind_customers(batch_id):
+    from app.services.payments import build_batch_payment_reminders, PaymentError
+    batch = ShipmentBatch.query.get_or_404(batch_id)
+    try:
+        notices = build_batch_payment_reminders(batch)
+    except PaymentError as e:
+        flash(str(e), "error")
+        return redirect(url_for("batches.batch_detail", batch_id=batch.id))
+    return render_template(
+        "batches/notices.html",
+        batch=batch,
+        notices=notices,
+        heading="Remind customers of shipping cost",
+        intro="One WhatsApp reminder per normalized customer phone number within this batch.",
     )
-    return render_template("batches/detail.html", batch=batch, eligible_sales=eligible_sales)
+
+
+@batches_bp.route("/<int:batch_id>/notify-customers")
+@login_required
+def notify_customers(batch_id):
+    from app.services.notifications import build_batch_arrival_notices, NotificationError
+    batch = ShipmentBatch.query.get_or_404(batch_id)
+    try:
+        notices = build_batch_arrival_notices(batch)
+    except NotificationError as e:
+        flash(str(e), "error")
+        return redirect(url_for("batches.batch_detail", batch_id=batch.id))
+    return render_template(
+        "batches/notices.html",
+        batch=batch,
+        notices=notices,
+        heading="Notify customers of arrival",
+        intro="One arrival message per normalized customer phone number within this batch.",
+    )
 
 
 @batches_bp.route("/<int:batch_id>/add-sale", methods=("POST",))
