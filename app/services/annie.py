@@ -444,7 +444,10 @@ def process_pending_annie_replies(limit=1):
             task = db.session.get(AnnieReplyTask, task_id)
             message = task.message if task else None
             asker = task.asker if task else None
-            if message is None or asker is None or message.deleted_at is not None or not asker.is_active:
+            if (
+                message is None or asker is None or message.deleted_at is not None
+                or not asker.is_active or not is_annie_mention(message.content)
+            ):
                 if task:
                     task.status = "failed"
                     task.last_error = "The original message was removed or the asking account is no longer active."

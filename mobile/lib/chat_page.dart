@@ -1129,28 +1129,53 @@ class _ChatPageState extends State<ChatPage> {
                     itemBuilder: (context, index) {
                       final user = mentionOptions[index];
                       final username = (user['username'] ?? 'User').toString();
+                      final isAnnie = user['is_bot'] == true;
+                      final scheme = Theme.of(context).colorScheme;
                       return InkWell(
                         onTap: () => _selectMention(user, composer),
                         child: Padding(
                           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                           child: Row(
                             children: [
-                              _profileAvatar(
-                                userId: _asInt(user['id']) ?? -1,
-                                url: (user['profile_photo_url'] ?? '').toString(),
-                                username: username,
-                                radius: 18,
-                              ),
+                              if (isAnnie)
+                                CircleAvatar(
+                                  radius: 18,
+                                  backgroundColor: scheme.tertiaryContainer,
+                                  child: Icon(
+                                    Icons.auto_awesome_rounded,
+                                    size: 19,
+                                    color: scheme.onTertiaryContainer,
+                                  ),
+                                )
+                              else
+                                _profileAvatar(
+                                  userId: _asInt(user['id']) ?? -1,
+                                  url: (user['profile_photo_url'] ?? '').toString(),
+                                  username: username,
+                                  radius: 18,
+                                ),
                               const SizedBox(width: 10),
                               Expanded(
-                                child: Text(
-                                  '@' + username,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w700,
-                                  ),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      '@' + username,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
+                                    if (isAnnie)
+                                      Text(
+                                        'Oma business assistant',
+                                        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                                          color: scheme.onSurfaceVariant,
+                                        ),
+                                      ),
+                                  ],
                                 ),
                               ),
                             ],
