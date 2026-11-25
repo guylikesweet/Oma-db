@@ -35,8 +35,8 @@ def test_batch_payment_reminders_require_45_days():
         created_at=created,
         sales=[],
     )
-    with pytest.raises(PaymentError, match="45 days"):
-        build_batch_payment_reminders(batch, now=created + timedelta(days=44))
+    with pytest.raises(PaymentError, match="35 days"):
+        build_batch_payment_reminders(batch, now=created + timedelta(days=34))
 
 
 def test_batch_payment_reminders_merge_normalized_phone_within_one_batch():
@@ -51,7 +51,7 @@ def test_batch_payment_reminders_merge_normalized_phone_within_one_batch():
             _sale(3, "", 5000, 0, 1, 200),
         ],
     )
-    notices = build_batch_payment_reminders(batch, now=created + timedelta(days=45))
+    notices = build_batch_payment_reminders(batch, now=created + timedelta(days=35))
     assert len(notices) == 1
     notice = notices[0]
     assert notice["phone"] == "2348012345678"
@@ -126,6 +126,6 @@ def test_batch_reminders_use_the_batch_transport_estimate():
         created_at=created,
         sales=[sale],
     )
-    now = created + timedelta(days=45)
+    now = created + timedelta(days=35)
     assert build_batch_payment_reminders(sea, now=now)[0]["estimated_shipping"] == 1200
     assert build_batch_payment_reminders(air, now=now)[0]["estimated_shipping"] == 3400
