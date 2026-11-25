@@ -829,11 +829,12 @@ def process_annie_question(message_id, asker_user_id):
         # The chat timeline also polls, so a notification outage cannot silence Annie.
         try:
             from app.services.push_notifications import queue_user_notification
-            preview = " ".join(reply.content.split())
+            preview = " ".join(getattr(reply, "content", answer).split())
             if len(preview) > 180:
                 preview = preview[:177].rstrip() + "..."
-            bot = User.query.filter_by(is_system=True).first()
-            for user_id in _active_staff_ids():
+            staff_ids = _active_staff_ids()
+            bot = User.query.filter_by(is_system=True).first() if staff_ids else None
+            for user_id in staff_ids:
                 if not PushDevice.query.filter_by(user_id=user_id, enabled=True).first():
                     continue
                 queue_user_notification(
