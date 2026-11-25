@@ -171,12 +171,11 @@ def test_process_annie_question_posts_a_database_answer_without_reply_queue(monk
     import app.services.annie as annie
 
     message = SimpleNamespace(
-        id=321, sender_user_id=7, content="@Annie how many sales today?",
+        id=321, sender_user_id=7, content="@Annie what can you do for me in Oma?",
         deleted_at=None,
     )
     asker = SimpleNamespace(id=7, is_active=True)
     monkeypatch.setattr(annie.db.session, "get", lambda model, key: message if model is annie.ChatMessage else asker)
-    monkeypatch.setattr(annie, "answer_question", lambda user, question: f"Answer for: {question}")
     posted = {}
     monkeypatch.setattr(annie, "post_annie_message", lambda content, **kwargs: (
         posted.update(content=content, kwargs=kwargs) or SimpleNamespace(id=999), True
@@ -189,7 +188,7 @@ def test_process_annie_question_posts_a_database_answer_without_reply_queue(monk
     result = annie.process_annie_question(321, 7)
 
     assert result.id == 999
-    assert posted["content"] == "Answer for: how many sales today?"
+    assert "live Oma records" in posted["content"]
     assert posted["kwargs"]["event_key"] == "annie-reply-321"
     assert posted["kwargs"]["recipient_user_ids"] == []
     assert commits
