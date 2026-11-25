@@ -15,7 +15,7 @@
   {% endwith %}
 
   <table class="table table-borderless" style="max-width:560px;">
-    <tr><th>Departed</th><td>{{ batch.departed_at or '—' }}</td></tr>
+    <tr><th>Departed</th><td>{{ batch.departed_at or batch.created_at or '—' }}</td></tr>
     <tr><th>Arrived</th><td>{{ batch.arrived_at or '—' }}</td></tr>
     <tr><th>Notes</th><td>{{ batch.notes or '—' }}</td></tr>
   </table>
