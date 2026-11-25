@@ -2880,6 +2880,8 @@ def mobile_delete_sale(sale_id):
     sale = Sale.query.get_or_404(sale_id)
     if sale.delivery_id:
         return jsonify({"error": "Remove the sale from its delivery before deleting it."}), 400
+    if sale.batch_id is not None:
+        return jsonify({"error": "This sale belongs to a departed shipment batch. Its manifest is locked and the sale cannot be deleted."}), 400
     if sale.payments:
         return jsonify({"error": "A sale with recorded payments cannot be deleted; its payment ledger must be preserved."}), 400
     if sale.shipping_payment_settled:
