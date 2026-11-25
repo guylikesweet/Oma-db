@@ -20,6 +20,8 @@ def _sale(sale_id, phone, subtotal, paid, qty, estimate=0):
         customer_name="Ada",
         subtotal_amount=Decimal(str(subtotal)),
         estimated_shipping_cost=Decimal(str(estimate)),
+        estimated_shipping_sea=None,
+        estimated_shipping_air=None,
         payments=payment_rows,
         items=[item],
     )
@@ -29,6 +31,7 @@ def test_batch_payment_reminders_require_45_days():
     created = datetime(2026, 1, 1)
     batch = SimpleNamespace(
         status=ShipmentBatch.STATUS_IN_TRANSIT,
+        is_air=False,
         created_at=created,
         sales=[],
     )
@@ -40,6 +43,7 @@ def test_batch_payment_reminders_merge_normalized_phone_within_one_batch():
     created = datetime(2026, 1, 1)
     batch = SimpleNamespace(
         status=ShipmentBatch.STATUS_IN_TRANSIT,
+        is_air=False,
         created_at=created,
         sales=[
             _sale(1, "08012345678", 20000, 5000, 2, 1500),
@@ -64,11 +68,13 @@ def test_same_customer_in_different_batches_gets_separate_notices():
     created = datetime(2026, 1, 1)
     first = SimpleNamespace(
         status=ShipmentBatch.STATUS_IN_TRANSIT,
+        is_air=False,
         created_at=created,
         sales=[_sale(1, "08012345678", 10000, 0, 1)],
     )
     second = SimpleNamespace(
         status=ShipmentBatch.STATUS_IN_TRANSIT,
+        is_air=False,
         created_at=created,
         sales=[_sale(2, "2348012345678", 15000, 5000, 2)],
     )
@@ -101,3 +107,25 @@ def test_partial_order_can_receive_server_order_receipt_after_verified_payment()
         payments=[SimpleNamespace(amount=Decimal("5000"))],
     )
     assert receipt_block_reason(sale) is None
+
+
+def test_batch_reminders_use_the_batch_transport_estimate():
+    created = datetime(2026, 1, 1)
+    sale = _sale(9, "08012345678", 10000, 0, 1, estimate=100)
+    sale.estimated_shipping_sea = Decimal("1200")
+    sale.estimated_shipping_air = Decimal("3400")
+    sea = SimpleNamespace(
+        status=ShipmentBatch.STATUS_IN_TRANSIT,
+        is_air=False,
+        created_at=created,
+        sales=[sale],
+    )
+    air = SimpleNamespace(
+        status=ShipmentBatch.STATUS_IN_TRANSIT,
+        is_air=True,
+        created_at=created,
+        sales=[sale],
+    )
+    now = created + timedelta(days=45)
+    assert build_batch_payment_reminders(sea, now=now)[0]["estimated_shipping"] == 1200
+    assert build_batch_payment_reminders(air, now=now)[0]["estimated_shipping"] == 3400
