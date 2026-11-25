@@ -868,11 +868,12 @@ def _create_sale_api(require_operation_id):
         # Pending orders remain unpaid and can enter the installment ledger later.
         if (sale.payment_status or "").lower() == "paid" and not sale.payments:
             db.session.add(SalePayment(
-                sale_id=sale.id, amount=Decimal(str(sale.subtotal_amount or 0)),
+                sale=sale, amount=Decimal(str(sale.subtotal_amount or 0)),
                 received_at=datetime.utcnow(), transaction_reference=f"SALE-{sale.order_id or sale.id}",
                 payment_method="sale_creation", verified_at=datetime.utcnow(),
                 verified_by_user_id=g.api_user.id, created_by_user_id=g.api_user.id,
             ))
+            db.session.flush()
         payload = _sale_json(sale)
         if operation_id:
             db.session.add(MobileOperation(
@@ -982,11 +983,12 @@ def mobile_record_sale_payment(sale_id):
         notes=str(data.get("notes") or "").strip()[:500] or None,
     )
     db.session.add(payment)
+    db.session.flush()
     paid += amount
     balance -= amount
     sale.payment_status = "Paid" if balance <= 0 else "Partially Paid"
     record_audit("sale.payment.verified", target_type="sale", target_id=sale.id,
-        details={"payment_id": None, "amount": str(amount), "reference": reference, "outstanding": str(balance)},
+        details={"payment_id": payment.id, "amount": str(amount), "reference": reference, "outstanding": str(balance)},
         user=g.api_user)
     try:
         db.session.commit()
