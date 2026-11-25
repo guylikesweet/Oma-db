@@ -101,7 +101,7 @@ def build_batch_arrival_notices(batch):
 
     groups = {}
     for sale in batch.sales:
-        if sale.is_stock_sale or sale.shipping_payment_settled or sale.order_status == "Cancelled":
+        if sale.is_stock_sale or sale.order_status == "Cancelled":
             continue
         if sale.actual_shipping_cost is None:
             continue
@@ -126,8 +126,8 @@ def build_batch_arrival_notices(batch):
         total_paid = Decimal("0")
         total_shipping = Decimal("0")
         for sale in sales:
-            paid = sale.subtotal_amount if sale.payment_status == "Paid" else Decimal("0")
-            shipping = sale.actual_shipping_cost or Decimal("0")
+            paid = sum((p.amount or Decimal("0") for p in sale.payments), Decimal("0"))
+            shipping = Decimal("0") if sale.shipping_payment_settled else (sale.actual_shipping_cost or Decimal("0"))
             total_paid += paid
             total_shipping += shipping
             lines.append(
@@ -135,12 +135,19 @@ def build_batch_arrival_notices(batch):
                 f"Paid {format_ngn(paid)} — Shipping {format_ngn(shipping)}"
             )
 
+        total_product = sum((Decimal(str(s.subtotal_amount or 0)) for s in sales), Decimal("0"))
+        product_balance = max(Decimal("0"), total_product - total_paid)
+        piece_count = sum((int(item.qty or 0) for sale in sales for item in sale.items), 0)
+        daily_demurrage = piece_count * 150
         message = (
             f"Hello {customer_name},\n\n"
-            f"Your goods have arrived. Please settle the shipping balance so we can prepare your delivery.\n\n"
+            f"Your goods have arrived. Please settle the shipping balance so we can prepare your delivery. "
+            f"You have 7 days from arrival to pay shipping; demurrage starts on day 8 at NGN 150 per piece per day.\n\n"
             f"Orders:\n" + "\n".join(lines) + "\n\n"
-            f"Total paid: {format_ngn(total_paid)}\n"
-            f"Total shipping due: {format_ngn(total_shipping)}\n\n"
+            f"Total product payments received: {format_ngn(total_paid)}\n"
+            f"Outstanding product balance: {format_ngn(product_balance)}\n"
+            f"Total shipping due: {format_ngn(total_shipping)} (separate from product balance)\n"
+            f"Pieces: {piece_count} • Daily demurrage from day 8: {format_ngn(daily_demurrage)}\n\n"
             f"Payment: {settings.bank_name.strip()} — "
             f"{settings.bank_account_number.strip()} ({settings.bank_account_name.strip()})\n"
             f"Use your phone number {raw_phone} as narration.\n\n"
@@ -155,6 +162,9 @@ def build_batch_arrival_notices(batch):
             "order_ids": [s.order_id or f"#{s.id}" for s in sales],
             "sale_count": len(sales),
             "total_paid": float(total_paid),
+            "product_outstanding": float(product_balance),
+            "piece_count": piece_count,
+            "daily_demurrage": daily_demurrage,
             "total_shipping": float(total_shipping),
             "message": message,
             "whatsapp_url": f"https://wa.me/{phone}?text={quote(message)}",
@@ -186,7 +196,7 @@ def build_arrival_notice(sale):
         raise NotificationError("Add the " + ", ".join(missing) + " in Settings first.")
 
     phone = whatsapp_number(sale.customer_phone)
-    amount_paid = sale.subtotal_amount if sale.payment_status == "Paid" else Decimal("0")
+    amount_paid = sum((p.amount or Decimal("0") for p in sale.payments), Decimal("0"))
 
     values = {
         "{{1}}": (sale.customer_name or "Customer").strip(),

@@ -363,3 +363,34 @@ def generate_invoice_pdf(sale):
     c.save()
     buf.seek(0)
     return buf
+
+
+
+def generate_payment_receipt_image(payment, fmt="png"):
+    """Render an individual verified instalment receipt on the server."""
+    from app.services import receipt_image
+    sale = payment.sale
+    if sale is None:
+        raise ReceiptNotAllowed("This payment is not linked to an order.")
+    context = get_invoice_context(sale)
+    context["order_id"] = f"{sale.order_id or sale.id} • PAYMENT {payment.id}"
+    context["total_text"] = _money(payment.amount)
+    context["total_note"] = "(payment received)"
+    context["notice_paragraphs"] = [[
+        ("Payment reference: ", False), (payment.transaction_reference, True),
+    ], [
+        ("Verified at: ", False), (payment.verified_at.strftime("%d %b %Y %H:%M") if payment.verified_at else "Server verified", True),
+    ], [
+        ("Outstanding product balance: ", False),
+        (_money(max(0, (sale.subtotal_amount or 0) - sum((p.amount or 0 for p in sale.payments))), True)),
+    ], [
+        ("Shipping is billed separately and is not included in this payment.", False),
+    ]]
+    logo_bytes, _ = get_logo_bytes()
+    if not logo_bytes:
+        logo_bytes = getattr(get_settings(), "logo_data", None)
+    context_json = json.dumps(context, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+    img = _render_cached(context_json, bytes(logo_bytes or b""))
+    if (fmt or "png").lower().lstrip(".") in ("jpg", "jpeg"):
+        return io.BytesIO(receipt_image.to_jpeg_bytes(img)), "image/jpeg", "jpg"
+    return io.BytesIO(receipt_image.to_png_bytes(img)), "image/png", "png"

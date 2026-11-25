@@ -8,12 +8,14 @@ plain explanation (the app shows it). See app/services/invoices.py.
 import base64
 
 from flask import Blueprint, jsonify, send_file
+from app.models import SalePayment
 
 from app.api import require_api_token
 from app.models import Sale
 from app.services.invoices import (
     ReceiptNotAllowed,
     generate_invoice_image,
+    generate_payment_receipt_image,
     generate_invoice_pdf,
     get_invoice_context,
     receipt_block_reason,
@@ -99,3 +101,17 @@ def receipt_data(sale_id):
         "logo_base64": base64.b64encode(logo_bytes).decode("ascii") if logo_bytes else None,
         "logo_mimetype": logo_mimetype or "image/png",
     }))
+
+
+
+@receipts_bp.route("/v1/sales/<int:sale_id>/payments/<int:payment_id>/receipt.png", methods=("GET",))
+@require_api_token
+def payment_receipt_png(sale_id, payment_id):
+    payment = SalePayment.query.filter_by(id=payment_id, sale_id=sale_id).first_or_404()
+    try:
+        buf, mimetype, ext = generate_payment_receipt_image(payment, "png")
+    except ReceiptNotAllowed as exc:
+        return jsonify({"error": str(exc)}), 400
+    response = send_file(buf, mimetype=mimetype, as_attachment=True,
+                         download_name=f"payment-receipt-{payment.id}.{ext}")
+    return _no_store(response)
