@@ -9,6 +9,7 @@ import re
 import secrets
 from datetime import datetime, timedelta
 from decimal import Decimal
+from zoneinfo import ZoneInfo
 
 from sqlalchemy import desc
 
@@ -226,9 +227,18 @@ def build_audit_update(action, target_type=None, target_id=None, details=None):
 
 def build_business_context(user, question):
     """Build a bounded, permission-aware, read-only snapshot for Annie."""
-    now = datetime.utcnow()
-    day_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    # Oma operates in Nigeria. Sales are stored as naive UTC timestamps, so
+    # calculate calendar periods at Africa/Lagos midnight and convert their
+    # boundaries back to naive UTC before querying the database.
+    utc_now = datetime.now(timezone.utc)
+    lagos_now = utc_now.astimezone(ZoneInfo("Africa/Lagos"))
+    now = utc_now.replace(tzinfo=None)
+    local_day_start = lagos_now.replace(hour=0, minute=0, second=0, microsecond=0)
+    day_start = local_day_start.astimezone(timezone.utc).replace(tzinfo=None)
     week_start = now - timedelta(days=7)
+
+    def local_boundary(value):
+        return value.astimezone(timezone.utc).replace(tzinfo=None)
 
     def summarize_sales(rows):
         product_value = sum((Decimal(str(s.subtotal_amount or 0)) for s in rows), Decimal("0"))
@@ -244,11 +254,16 @@ def build_business_context(user, question):
         }
 
     yesterday_start = day_start - timedelta(days=1)
-    this_week_start = day_start - timedelta(days=day_start.weekday())
-    last_week_start = this_week_start - timedelta(days=7)
-    month_start = day_start.replace(day=1)
-    next_month_start = (month_start.replace(day=28) + timedelta(days=4)).replace(day=1)
-    last_month_start = (month_start - timedelta(days=1)).replace(day=1)
+    local_week_start = local_day_start - timedelta(days=local_day_start.weekday())
+    this_week_start = local_boundary(local_week_start)
+    last_week_start = local_boundary(local_week_start - timedelta(days=7))
+    local_month_start = local_day_start.replace(day=1)
+    local_next_month_start = (local_month_start.replace(day=28) + timedelta(days=4)).replace(day=1)
+    local_last_month_start = (local_month_start - timedelta(days=1)).replace(day=1)
+    month_start = local_boundary(local_month_start)
+    next_month_start = local_boundary(local_next_month_start)
+    last_month_start = local_boundary(local_last_month_start)
+    next_week_start = local_boundary(local_week_start + timedelta(days=7))
     today_sales = Sale.query.filter(
         Sale.created_at >= day_start, Sale.order_status != "Cancelled"
     ).all()
@@ -260,7 +275,7 @@ def build_business_context(user, question):
         Sale.created_at >= week_start, Sale.order_status != "Cancelled"
     ).all()
     this_week_sales = Sale.query.filter(
-        Sale.created_at >= this_week_start, Sale.created_at < this_week_start + timedelta(days=7),
+        Sale.created_at >= this_week_start, Sale.created_at < next_week_start,
         Sale.order_status != "Cancelled"
     ).all()
     last_week_sales = Sale.query.filter(
@@ -389,7 +404,7 @@ def build_business_context(user, question):
             "A sale becomes ready for delivery after its shipping payment is settled, or when it is a stocked sale.",
             "Annie is read-only. Staff must use the normal Oma workflows to create, verify, edit or settle records."
         ],
-        "as_of_utc": now.isoformat(),
+        "as_of_local": lagos_now.isoformat(),
         "staff_role": "admin" if user.is_admin else "staff",
         "sales_today": summarize_sales(today_sales),
         "sales_yesterday": summarize_sales(yesterday_sales),
