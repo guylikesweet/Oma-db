@@ -37,11 +37,59 @@ def test_annie_payment_update_uses_only_payment_and_outstanding_values():
     assert "unit cost" not in result["body"].lower()
 
 
-def test_annie_without_provider_key_explains_configuration(monkeypatch):
-    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
-    answer = answer_question(SimpleNamespace(is_admin=False), "How many batches are in transit?")
-    assert "OPENAI_API_KEY" in answer
+def test_annie_answers_from_database_snapshot_without_provider_or_api_key(monkeypatch):
+    import app.services.annie as annie
 
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    monkeypatch.setattr(annie, "build_business_context", lambda user, question: {
+        "sales_today": {
+            "orders": 3, "product_value_ngn": 150000,
+            "verified_product_payments_ngn": 90000,
+            "product_balance_ngn": 60000,
+        },
+        "sales_last_7_days": {},
+        "outstanding_product_balance_recent_500_open_orders_ngn": 60000,
+        "largest_outstanding_orders_recent_500": [],
+        "matching_customer_orders": [],
+        "shipment_batches": [],
+        "shipment_batch_status_counts": {},
+        "product_count": 12,
+        "total_stock_pieces": 80,
+        "matching_products": [],
+        "low_stock_products": [],
+        "recent_deliveries": [],
+        "app_process_guide": [],
+        "staff_role": "staff",
+        "data_scope_note": "recent 500",
+    })
+    answer = answer_question(SimpleNamespace(is_admin=False), "How many sales today?")
+    assert "3 order(s)" in answer
+    assert "₦150,000.00" in answer
+    assert "OPENAI_API_KEY" not in answer
+
+
+def test_annie_does_not_disclose_profit_to_staff(monkeypatch):
+    import app.services.annie as annie
+
+    monkeypatch.setattr(annie, "build_business_context", lambda user, question: {
+        "staff_role": "staff",
+    })
+    answer = answer_question(SimpleNamespace(is_admin=False), "What is our profit?")
+    assert "can't share profit" in answer
+
+
+def test_annie_answers_process_questions_from_oma_guide(monkeypatch):
+    import app.services.annie as annie
+
+    monkeypatch.setattr(annie, "build_business_context", lambda user, question: {
+        "app_process_guide": [
+            "Pay Small Small applies to preorder sales: a customer may pay in full or by instalments.",
+            "After the first payment, the plan allows up to two further settlements.",
+        ],
+    })
+    answer = answer_question(SimpleNamespace(is_admin=False), "How does Pay Small Small work?")
+    assert "Pay Small Small" in answer
+    assert "instalments" in answer
 
 
 def test_only_the_main_branch_annie_scheduler_workflow_is_trusted():
