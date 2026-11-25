@@ -42,7 +42,7 @@ Open `http://127.0.0.1:5000/` for the private Flutter Web staff application. The
 | 3 | Admin/staff boundaries, immutable audit log, audited sensitive operations, mobile idempotency and offline actor attribution. |
 | 4 | Android/iOS-capable local biometric gate with password fallback, Firebase Cloud Messaging device registration, notification outbox, batch-arrival push events and shipment-specific Android notification sounds. |
 | 5 | Green/white brand system, light/dark/sunrise themes, responsive desktop/mobile layouts, operational dashboard KPIs, reports/CSV, offline/sync states, PDF branding/watermarks, Flutter Web and Android parity, Team Chat, push notifications, landed-cost pricing and shipment workflows. |
-| 6 | Annie, the internal team-chat assistant: database-backed Oma answers with no paid AI API or web search, role-aware financial visibility, automatic operational updates, and scheduled 45-day batch reminders. |
+| 6 | Annie, the internal team-chat assistant: database-backed Oma answers with no paid AI API or web search, role-aware financial visibility, automatic operational updates, and scheduled 35-day batch reminders. |
 
 ### Sensitive-action verification
 
