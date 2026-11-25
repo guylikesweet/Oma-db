@@ -413,6 +413,7 @@ class ShipmentBatchView(SecureModelView):
     column_labels = {"batch_link": "Manage"}
     form_columns = ("name", "transport_mode", "notes")
     form_args = {"transport_mode": {"choices": [("air", "Air"), ("sea", "Sea")]}}
+    can_create = False
     can_edit = False
     can_delete = True
 
