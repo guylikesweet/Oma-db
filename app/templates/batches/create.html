@@ -1,0 +1,46 @@
+{% extends 'base_standalone.html' %}
+{% block title %}Create Shipment Batch{% endblock %}
+{% block body %}
+<div class="container" style="max-width:900px;margin-top:20px;">
+  <h2>Create shipment batch</h2>
+  <p class="text-muted">Creating this batch records it as departed. Select its complete sales manifest now; you cannot add or remove sales afterwards.</p>
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% for category, message in messages %}
+      <div class="alert alert-{{ 'danger' if category == 'error' else 'success' }}">{{ message }}</div>
+    {% endfor %}
+  {% endwith %}
+  <form method="post">
+    <div class="form-group">
+      <label for="batch-name">Batch name</label>
+      <input id="batch-name" name="name" class="form-control" required maxlength="255" value="{{ request.form.get('name','') }}">
+    </div>
+    <div class="form-group">
+      <label>Transport method</label>
+      <select name="transport_mode" class="form-control">
+        <option value="sea" {{ 'selected' if request.form.get('transport_mode','sea') == 'sea' }}>Sea</option>
+        <option value="air" {{ 'selected' if request.form.get('transport_mode') == 'air' }}>Air</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label for="batch-notes">Notes (optional)</label>
+      <textarea id="batch-notes" name="notes" class="form-control" rows="2">{{ request.form.get('notes','') }}</textarea>
+    </div>
+    <h4>Select sales for this shipment ({{ eligible_sales|length }} available)</h4>
+    <div style="border:1px solid #ddd;border-radius:8px;padding:10px;max-height:440px;overflow:auto;">
+      {% for sale in eligible_sales %}
+      <label style="display:flex;align-items:flex-start;gap:10px;padding:9px 4px;border-bottom:1px solid #eee;">
+        <input type="checkbox" name="sale_ids" value="{{ sale.id }}" style="margin-top:4px;" {{ 'checked' if sale.id|string in request.form.getlist('sale_ids') }}>
+        <span><strong>{{ sale.order_id }}</strong> — {{ sale.customer_name or 'Customer' }}<small style="display:block;color:#777;">{{ sale.customer_phone or 'No phone' }} · {{ sale.customer_state or 'No state' }} · {{ sale.sale_date }}</small></span>
+      </label>
+      {% else %}
+      <p class="text-muted">There are no eligible unassigned preorder sales.</p>
+      {% endfor %}
+    </div>
+    <p class="text-muted" style="margin-top:10px;">Only selected sales will be assigned. Customers with the same normalized phone number will be grouped together for reminders within this batch only.</p>
+    <div style="display:flex;gap:8px;margin-top:16px;">
+      <button type="submit" class="btn btn-primary" {{ 'disabled' if not eligible_sales }}>Create departed batch</button>
+      <a href="{{ url_for('admin.index') }}" class="btn btn-default">Cancel</a>
+    </div>
+  </form>
+</div>
+{% endblock %}
