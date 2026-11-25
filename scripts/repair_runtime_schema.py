@@ -92,6 +92,84 @@ def repair() -> None:
                     )
                     repaired.append(f"{table}.{column}")
 
+            # These two tables are required by current application code. The
+            # normal Alembic migrations create them; this idempotent fallback
+            # repairs databases whose revision marker advanced without the
+            # physical tables. Existing rows are never dropped or rewritten.
+            if table_exists(connection, "sales") and table_exists(connection, "users"):
+                connection.execute(text("""
+                    CREATE TABLE IF NOT EXISTS public.sale_payments (
+                        id SERIAL PRIMARY KEY,
+                        sale_id INTEGER NOT NULL REFERENCES public.sales(id) ON DELETE RESTRICT,
+                        amount NUMERIC(12, 2) NOT NULL,
+                        received_at TIMESTAMP NOT NULL,
+                        transaction_reference VARCHAR(160) NOT NULL UNIQUE,
+                        session_id VARCHAR(160) UNIQUE,
+                        payment_method VARCHAR(40) NOT NULL DEFAULT 'bank_transfer',
+                        verified_at TIMESTAMP NOT NULL,
+                        verified_by_user_id INTEGER REFERENCES public.users(id),
+                        created_by_user_id INTEGER REFERENCES public.users(id),
+                        is_legacy BOOLEAN NOT NULL DEFAULT FALSE,
+                        notes VARCHAR(500)
+                    )
+                """))
+                connection.execute(text("""
+                    CREATE INDEX IF NOT EXISTS ix_sale_payments_sale_id
+                    ON public.sale_payments (sale_id)
+                """))
+                connection.execute(text("""
+                    CREATE INDEX IF NOT EXISTS ix_sale_payments_received_at
+                    ON public.sale_payments (received_at)
+                """))
+                # Preserve the legacy Paid-sale balances exactly once. These
+                # entries are explicitly marked legacy and cannot duplicate
+                # a verified payment with the same reference.
+                connection.execute(text("""
+                    INSERT INTO public.sale_payments
+                        (sale_id, amount, received_at, transaction_reference,
+                         payment_method, verified_at, is_legacy, notes)
+                    SELECT s.id,
+                           COALESCE(s.subtotal_amount, s.total_amount, 0),
+                           COALESCE(s.created_at, CURRENT_TIMESTAMP),
+                           'LEGACY-SALE-' || CAST(s.id AS VARCHAR(32)),
+                           'legacy_import',
+                           COALESCE(s.created_at, CURRENT_TIMESTAMP),
+                           TRUE,
+                           'Imported from legacy Paid sale status'
+                    FROM public.sales s
+                    WHERE s.payment_status = 'Paid'
+                      AND COALESCE(s.subtotal_amount, s.total_amount, 0) > 0
+                      AND NOT EXISTS (
+                          SELECT 1 FROM public.sale_payments p
+                          WHERE p.transaction_reference =
+                              'LEGACY-SALE-' || CAST(s.id AS VARCHAR(32))
+                      )
+                """))
+
+            if table_exists(connection, "chat_messages") and table_exists(connection, "users"):
+                connection.execute(text("""
+                    CREATE TABLE IF NOT EXISTS public.annie_reply_tasks (
+                        id SERIAL PRIMARY KEY,
+                        message_id INTEGER NOT NULL UNIQUE
+                            REFERENCES public.chat_messages(id) ON DELETE CASCADE,
+                        asker_user_id INTEGER
+                            REFERENCES public.users(id) ON DELETE SET NULL,
+                        status VARCHAR(20) NOT NULL DEFAULT 'pending',
+                        attempts INTEGER NOT NULL DEFAULT 0,
+                        created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                        processed_at TIMESTAMP NULL,
+                        last_error TEXT NULL
+                    )
+                """))
+                connection.execute(text("""
+                    CREATE INDEX IF NOT EXISTS ix_annie_reply_tasks_status
+                    ON public.annie_reply_tasks (status)
+                """))
+                connection.execute(text("""
+                    CREATE INDEX IF NOT EXISTS ix_annie_reply_tasks_created_at
+                    ON public.annie_reply_tasks (created_at)
+                """))
+
             # The ORM selects every mapped User column even for the admin seed
             # command. Seed Annie here as well as in Alembic so this defensive
             # pre-migration repair keeps the production build self-consistent.

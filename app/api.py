@@ -2536,6 +2536,10 @@ def mobile_chat_diagnostic():
             "missing_columns": [column for column in columns if column not in present],
         }
 
+    # Inspector calls above use independent connections. Clear any failed
+    # request-scoped ORM transaction before reading Alembic metadata; PostgreSQL
+    # rejects every statement after a transaction error until rollback.
+    db.session.rollback()
     alembic_versions = []
     try:
         alembic_versions = [
