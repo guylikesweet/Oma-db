@@ -32,6 +32,7 @@ REQUIRED_COLUMNS = {
         "profile_photo_data": "BYTEA",
         "profile_photo_mimetype": "VARCHAR(50)",
         "profile_photo_updated_at": "TIMESTAMP",
+        "is_system": "BOOLEAN NOT NULL DEFAULT FALSE",
     },
     "app_settings": {
         "instagram_handle": "VARCHAR(100)",
@@ -90,6 +91,20 @@ def repair() -> None:
                         )
                     )
                     repaired.append(f"{table}.{column}")
+
+            # The ORM selects every mapped User column even for the admin seed
+            # command. Seed Annie here as well as in Alembic so this defensive
+            # pre-migration repair keeps the production build self-consistent.
+            if table_exists(connection, "users"):
+                connection.execute(text("""
+                    INSERT INTO public.users
+                        (username, password_hash, created_at, is_active, role, is_primary_admin, is_system)
+                    SELECT '__annie__', '!system-account-disabled!', CURRENT_TIMESTAMP,
+                           FALSE, 'staff', FALSE, TRUE
+                    WHERE NOT EXISTS (
+                        SELECT 1 FROM public.users WHERE username = '__annie__'
+                    )
+                """))
 
             connection.commit()
 

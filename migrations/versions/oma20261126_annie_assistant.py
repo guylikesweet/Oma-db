@@ -13,10 +13,17 @@ depends_on = None
 
 
 def upgrade():
-    op.add_column(
-        "users",
-        sa.Column("is_system", sa.Boolean(), nullable=False, server_default=sa.false()),
-    )
+    bind = op.get_bind()
+    inspector = sa.inspect(bind)
+    columns = {column["name"] for column in inspector.get_columns("users")}
+    if "is_system" not in columns:
+        op.add_column(
+            "users",
+            sa.Column("is_system", sa.Boolean(), nullable=False, server_default=sa.false()),
+        )
+    indexes = {index["name"] for index in sa.inspect(bind).get_indexes("users")}
+    if "ix_users_is_system" not in indexes:
+        op.create_index("ix_users_is_system", "users", ["is_system"])
     op.execute(sa.text("""
         INSERT INTO users
             (username, password_hash, created_at, is_active, role, is_primary_admin, is_system)
@@ -26,7 +33,6 @@ def upgrade():
             SELECT 1 FROM users WHERE username = '__annie__'
         )
     """))
-    op.create_index("ix_users_is_system", "users", ["is_system"])
 
 
 def downgrade():
