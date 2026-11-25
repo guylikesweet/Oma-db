@@ -21,7 +21,7 @@ def upgrade():
         INSERT INTO users
             (username, password_hash, created_at, is_active, role, is_primary_admin, is_system)
         SELECT '__annie__', '!system-account-disabled!', CURRENT_TIMESTAMP,
-               TRUE, 'staff', FALSE, TRUE
+               FALSE, 'staff', FALSE, TRUE
         WHERE NOT EXISTS (
             SELECT 1 FROM users WHERE username = '__annie__'
         )
