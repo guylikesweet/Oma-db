@@ -94,33 +94,10 @@ def create_batch(
 
 
 def add_sale_to_batch(batch_id, sale_id):
-    batch = ShipmentBatch.query.get(batch_id)
-    if not batch:
-        raise BatchValidationError("Batch not found.")
+    """A departed batch manifest is immutable."""
     raise BatchValidationError(
         "Shipment contents are locked when the batch is created. Select all sales before creating the batch."
     )
-
-    sale = Sale.query.get(sale_id)
-    if not sale:
-        raise BatchValidationError("Sale not found.")
-    if sale.order_status == "Cancelled":
-        raise BatchValidationError("Cannot add a cancelled sale to a batch.")
-    if sale.shipping_payment_settled or sale.delivery_id:
-        raise BatchValidationError("This sale has already been settled or assigned to delivery and cannot be added to a batch.")
-    if sale.is_stock_sale:
-        raise BatchValidationError("Stocked sales are not shipped in batches.")
-
-    sale.batch_id = batch.id
-    sale.batch_assigned_at = datetime.utcnow()
-    record_audit(
-        "batch.add_sale",
-        target_type="sale",
-        target_id=sale.id,
-        details={"batch_id": batch.id, "transport_mode": batch.transport_mode},
-    )
-    db.session.commit()
-    return batch
 
 
 def remove_sale_from_batch(sale_id):
@@ -129,6 +106,14 @@ def remove_sale_from_batch(sale_id):
         raise BatchValidationError("Sale not found.")
     if sale.batch_id is None:
         raise BatchValidationError("This sale is not assigned to a shipment batch.")
+    raise BatchValidationError(
+        "Shipment contents are locked when the batch is created. A departed sale cannot be removed."
+    )
+
+
+
+def remove_sale_from_batch(sale_id):
+    """A departed batch manifest is immutable."""
     raise BatchValidationError(
         "Shipment contents are locked when the batch is created. A departed sale cannot be removed."
     )
