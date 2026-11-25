@@ -161,18 +161,26 @@ def build_audit_update(action, target_type=None, target_id=None, details=None):
         body = f"Order #{target_id} was {'added to' if action.endswith('add_sale') else 'removed from'} {batch_name}."
     elif action == "batch.arrive":
         batch = db.session.get(ShipmentBatch, entity_id) if entity_id else None
-        pieces = sum(
-            int(item.qty or 0)
-            for sale in (batch.sales if batch else [])
-            for item in sale.items
-        )
+        sales = [
+            sale for sale in (batch.sales if batch else [])
+            if not sale.is_stock_sale and sale.order_status != "Cancelled"
+        ]
+        pieces = sum(int(item.qty or 0) for sale in sales for item in sale.items)
+        outstanding = sum((
+            max(
+                Decimal("0"),
+                Decimal(str(sale.subtotal_amount or 0))
+                - sum((Decimal(str(payment.amount or 0)) for payment in sale.payments), Decimal("0")),
+            )
+            for sale in sales
+        ), Decimal("0"))
         name = (batch.name if batch else details.get("name")) or f"Batch #{target_id}"
         mode = str(details.get("transport_mode") or (batch.transport_mode if batch else "sea")).upper()
         body = (
-            f"{name} has arrived ({mode}). "
-            f"{len(batch.sales) if batch else int(details.get('sale_count') or 0)} orders, "
-            f"{pieces} pieces. Staff can now prepare customer shipping-payment and arrival notices. "
-            "Demurrage is ₦150 per piece per day after the 7-day grace period."
+            f"{name} has arrived ({mode}). {len(sales)} orders, {pieces} pieces. "
+            f"Outstanding product balance: {_money(outstanding)}. "
+            f"Daily demurrage at the current piece count: {_money(pieces * 150)}. "
+            "Customers have 7 days after arrival to settle shipping; demurrage starts on day 8."
         )
     elif action == "sale.payment.verified":
         order = details.get("order_id") or f"sale #{target_id}"
