@@ -1,0 +1,46 @@
+name: Annie Scheduled Reminders
+
+on:
+  schedule:
+    - cron: "*/15 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: annie-scheduled-reminders
+  cancel-in-progress: false
+
+jobs:
+  notify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Request GitHub OIDC token and process due reminders
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [ -z "$ACTIONS_ID_TOKEN_REQUEST_URL" ] || [ -z "$ACTIONS_ID_TOKEN_REQUEST_TOKEN" ]; then
+            echo "GitHub did not provide an OIDC request token."
+            exit 1
+          fi
+
+          OIDC_URL="$ACTIONS_ID_TOKEN_REQUEST_URL&audience=oma-db-annie-cron"
+          TOKEN="$(curl --fail --silent --show-error \
+            -H "Authorization: Bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            "$OIDC_URL" | jq -r '.value')"
+
+          if [ -z "$TOKEN" ] || [ "$TOKEN" = "null" ]; then
+            echo "Could not obtain the short-lived GitHub identity token."
+            exit 1
+          fi
+
+          curl --fail-with-body --silent --show-error \
+            --retry 6 --retry-delay 10 --retry-all-errors --max-time 90 \
+            -X POST "https://oma-db.onrender.com/api/v1/annie/scheduled-reminders" \
+            -H "Authorization: Bearer $TOKEN" \
+            -H "Content-Type: application/json" \
+            -d '{}'

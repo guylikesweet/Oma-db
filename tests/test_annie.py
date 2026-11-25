@@ -41,3 +41,21 @@ def test_annie_without_provider_key_explains_configuration(monkeypatch):
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     answer = answer_question(SimpleNamespace(is_admin=False), "How many batches are in transit?")
     assert "OPENAI_API_KEY" in answer
+
+
+
+def test_only_the_main_branch_annie_scheduler_workflow_is_trusted():
+    from app.services.annie import is_trusted_annie_scheduler_claims
+
+    claims = {
+        "repository": "guylikesweet/Oma-db",
+        "ref": "refs/heads/main",
+        "workflow_ref": "guylikesweet/Oma-db/.github/workflows/annie-scheduler.yml@refs/heads/main",
+        "event_name": "schedule",
+    }
+    assert is_trusted_annie_scheduler_claims(claims)
+    assert is_trusted_annie_scheduler_claims({**claims, "event_name": "workflow_dispatch"})
+    assert not is_trusted_annie_scheduler_claims({**claims, "repository": "attacker/other"})
+    assert not is_trusted_annie_scheduler_claims({**claims, "ref": "refs/heads/feature"})
+    assert not is_trusted_annie_scheduler_claims({**claims, "workflow_ref": "other.yml"})
+    assert not is_trusted_annie_scheduler_claims({**claims, "event_name": "push"})

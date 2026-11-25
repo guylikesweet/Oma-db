@@ -168,6 +168,45 @@ def _ensure_api_token(user):
         return raw_token
 
 
+@api_bp.route("/v1/annie/scheduled-reminders", methods=("POST",))
+@limiter.limit("10 per minute")
+def annie_scheduled_reminders():
+    """GitHub Actions OIDC endpoint for the 45-day reminder scheduler."""
+    auth = (request.headers.get("Authorization") or "").strip()
+    token = auth[7:].strip() if auth.lower().startswith("bearer ") else ""
+    if not token:
+        return jsonify({"error": "A trusted scheduler identity is required."}), 403
+
+    try:
+        import jwt
+        jwks = jwt.PyJWKClient(
+            "https://token.actions.githubusercontent.com/.well-known/jwks",
+            cache_jwk_set=True,
+            lifespan=3600,
+        )
+        signing_key = jwks.get_signing_key_from_jwt(token).key
+        claims = jwt.decode(
+            token,
+            signing_key,
+            algorithms=["RS256"],
+            audience="oma-db-annie-cron",
+            issuer="https://token.actions.githubusercontent.com",
+        )
+    except Exception:
+        current_app.logger.warning("Rejected invalid Annie scheduler identity", exc_info=True)
+        return jsonify({"error": "The scheduler identity could not be verified."}), 403
+
+    from app.services.annie import (
+        is_trusted_annie_scheduler_claims,
+        process_due_payment_reminders,
+    )
+    if not is_trusted_annie_scheduler_claims(claims):
+        return jsonify({"error": "This workflow is not authorized to run Annie reminders."}), 403
+
+    posted = process_due_payment_reminders()
+    return jsonify({"assistant": "Annie", "reminders_posted": posted}), 200
+
+
 @api_bp.route("/v1/audit", methods=("GET",))
 @require_api_token
 def mobile_audit_log():

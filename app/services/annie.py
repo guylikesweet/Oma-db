@@ -28,6 +28,18 @@ def is_annie_mention(content):
     return bool(_ANNIE_MENTION.search(content or ""))
 
 
+def is_trusted_annie_scheduler_claims(claims):
+    """Allow only the dedicated main-branch reminder workflow to run the scheduler."""
+    return bool(
+        isinstance(claims, dict)
+        and claims.get("repository") == "guylikesweet/Oma-db"
+        and claims.get("ref") == "refs/heads/main"
+        and claims.get("workflow_ref")
+        == "guylikesweet/Oma-db/.github/workflows/annie-scheduler.yml@refs/heads/main"
+        and claims.get("event_name") in {"schedule", "workflow_dispatch"}
+    )
+
+
 def _money(value):
     try:
         return f"₦{Decimal(str(value or 0)):,.2f}"
