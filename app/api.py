@@ -527,7 +527,8 @@ def _chat_message_json(message):
         "content": message.content if (not deleted or show_deleted_content) else "",
         "original_content": message.original_content if show_original else None,
         "sender_user_id": message.sender_user_id,
-        "sender_username": message.sender.username if message.sender else None,
+        "sender_username": ("Annie" if message.sender and getattr(message.sender, "is_system", False) else message.sender.username) if message.sender else None,
+        "sender_is_bot": bool(message.sender and getattr(message.sender, "is_system", False)),
         "sender_profile_photo_url": (
             f"/api/v1/users/{message.sender.id}/avatar"
             if message.sender and message.sender.profile_photo_data
@@ -561,7 +562,8 @@ def _chat_message_json(message):
                     )
                 ) else None,
                 "sender_user_id": reply.sender_user_id,
-                "sender_username": reply.sender.username if reply.sender else None,
+                "sender_username": ("Annie" if reply.sender and getattr(reply.sender, "is_system", False) else reply.sender.username) if reply.sender else None,
+                "sender_is_bot": bool(reply.sender and getattr(reply.sender, "is_system", False)),
                 "sender_profile_photo_url": (
                     f"/api/v1/users/{reply.sender.id}/avatar"
                     if reply.sender and reply.sender.profile_photo_data
@@ -2271,7 +2273,7 @@ def mobile_users():
         'created_at': u.created_at.isoformat() if u.created_at else None,
         'has_profile_photo': bool(u.profile_photo_data),
         'profile_photo_url': f"/api/v1/users/{u.id}/avatar" if u.profile_photo_data else None,
-    } for u in User.query.order_by(User.username).all()])
+    } for u in User.query.filter(User.is_system.is_(False)).order_by(User.username).all()])
 
 @api_bp.route("/v1/users", methods=("POST",))
 @require_api_token
@@ -2305,6 +2307,8 @@ def mobile_update_user(user_id):
         op,existing=_mobile_operation(data)
         if existing:return _mobile_replay(existing)
         u=User.query.get_or_404(user_id)
+        if u.is_system:
+            raise PermissionError("System assistant accounts cannot be edited.")
         # Staff (and admins) can always edit their own username/password —
         # that's plain self-service, same as the change-password screen.
         # Editing someone ELSE's account is an admin-only action.
@@ -2354,6 +2358,8 @@ def mobile_update_user(user_id):
 @require_admin_api
 def mobile_delete_user(user_id):
     u=User.query.get_or_404(user_id)
+    if u.is_system:
+        return jsonify({'error':'System assistant accounts cannot be removed.'}),403
     if u.is_primary_admin:
         return jsonify({'error':'The original admin account cannot be removed.'}),400
     if u.id==g.api_user.id:
@@ -2624,6 +2630,12 @@ def mobile_create_chat_message():
             mentioned_ids.add(mentioned.id)
             db.session.add(ChatMention(message_id=message.id, user_id=mentioned.id))
 
+        if re.search(r"(?<![A-Za-z0-9_])@annie\b", content, re.IGNORECASE):
+            annie_user = User.query.filter_by(is_system=True).first()
+            if annie_user and annie_user.id not in mentioned_ids:
+                mentioned_ids.add(annie_user.id)
+                db.session.add(ChatMention(message_id=message.id, user_id=annie_user.id))
+
         db.session.flush()
         special_user_ids = set(mentioned_ids)
         if reply_to is not None and reply_to.sender_user_id != g.api_user.id:
@@ -2654,6 +2666,13 @@ def mobile_create_chat_message():
         # delivery is attempted by the response callback after this commit.
         db.session.commit()
 
+        if re.search(r"(?<![A-Za-z0-9_])@annie\b", content, re.IGNORECASE):
+            try:
+                from app.services.annie import process_annie_question
+                process_annie_question(message.id, g.api_user.id)
+            except Exception:
+                db.session.rollback()
+                current_app.logger.exception("Annie could not answer a tagged chat question")
         return jsonify(_chat_message_json(message)), 201
     except ValueError as exc:
         db.session.rollback()
@@ -2673,6 +2692,8 @@ def mobile_create_chat_message():
 @require_api_token
 def mobile_modify_chat_message(message_id):
     message = ChatMessage.query.get_or_404(message_id)
+    if message.sender is not None and getattr(message.sender, "is_system", False):
+        return jsonify({"error": "Annie's assistant messages cannot be edited or deleted."}), 403
     if g.api_user.created_at and message.created_at < g.api_user.created_at:
         return jsonify({"error": "This message predates your account."}), 403
 

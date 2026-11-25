@@ -33,6 +33,8 @@ class User(db.Model, UserMixin):
     # admin, though the primary admin can remove admins added after it.
     role = db.Column(db.String(20), nullable=False, default=ROLE_STAFF, server_default=ROLE_STAFF)
     is_primary_admin = db.Column(db.Boolean, nullable=False, default=False, server_default="false")
+    # System accounts (such as Annie) can speak in chat but can never log in.
+    is_system = db.Column(db.Boolean, nullable=False, default=False, server_default="false", index=True)
 
     # Small square avatar used in team chat and notifications. Full-size
     # profile images are never exposed by the API.

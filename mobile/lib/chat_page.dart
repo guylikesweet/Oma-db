@@ -984,7 +984,11 @@ class _ChatPageState extends State<ChatPage> {
     }
 
     final query = (match.group(2) ?? '').toLowerCase();
-    final filtered = users
+    final candidates = [
+      ...users,
+      {'id': -1, 'username': 'Annie', 'is_active': true, 'is_bot': true},
+    ];
+    final filtered = candidates
         .where((user) => user['is_active'] != false)
         .where((user) {
           final username = (user['username'] ?? '').toString().toLowerCase();
@@ -1384,6 +1388,14 @@ class _ChatPageState extends State<ChatPage> {
     }
   }
   Widget _senderAvatar(Map<String, dynamic> message, String sender) {
+    if (message['sender_is_bot'] == true) {
+      final scheme = Theme.of(context).colorScheme;
+      return CircleAvatar(
+        radius: 13,
+        backgroundColor: scheme.tertiaryContainer,
+        child: Icon(Icons.auto_awesome_rounded, size: 15, color: scheme.onTertiaryContainer),
+      );
+    }
     final rawId = message['sender_user_id'];
     final userId = rawId is int ? rawId : int.tryParse('$rawId');
     final url = message['sender_profile_photo_url']?.toString() ?? '';
@@ -1407,7 +1419,9 @@ class _ChatPageState extends State<ChatPage> {
     final reply = message['reply_to'];
     final sender = mine
         ? 'Me'
-        : (message['sender_username']?.toString() ?? 'User');
+        : (message['sender_is_bot'] == true
+            ? 'Annie · AI assistant'
+            : (message['sender_username']?.toString() ?? 'User'));
     final senderId = message['sender_user_id']?.toString() ?? '';
     final messageIndex = messages.indexOf(message);
     final previousMessage =

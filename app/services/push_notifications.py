@@ -125,7 +125,7 @@ def queue_chat_message_notifications(message, *, special_user_ids=None):
     specific notification instead of the generic chat notification.
     """
     special_user_ids = set(special_user_ids or ())
-    sender_name = getattr(message.sender, "username", "Someone")
+    sender_name = "Annie" if getattr(message.sender, "is_system", False) else getattr(message.sender, "username", "Someone")
     preview = " ".join((message.content or "").split())
     if not preview and getattr(message, "attachment_data", None):
         preview = "📷 Photo"
@@ -135,8 +135,10 @@ def queue_chat_message_notifications(message, *, special_user_ids=None):
         preview = preview[:177].rstrip() + "..."
 
     active_users = (
-        User.query.filter(User.is_active.is_(True))
-        .with_entities(User.id)
+        User.query.filter(
+            User.is_active.is_(True),
+            User.is_system.is_(False),
+        ).with_entities(User.id)
         .all()
     )
 

@@ -18,7 +18,7 @@ from app import db
 from app.models import ShipmentBatch, Sale, SaleJourneyEvent
 from app.services.rates import get_volume_rate, get_rate_per_kg, RateMissingError
 from app.services.sales import shipping_cost_for_items, refresh_sale_profit
-from app.services.push_notifications import queue_batch_arrival, flush_outbox
+from app.services.push_notifications import flush_outbox
 from app.services.audit import record_audit
 
 
@@ -221,8 +221,8 @@ def mark_arrived(batch_id):
         target_id=batch.id,
         details={'transport_mode': batch.transport_mode, 'sale_count': len(batch.sales), 'name': batch.name},
     )
-    from flask_login import current_user
-    queue_batch_arrival(batch, exclude_user_id=current_user.id if current_user.is_authenticated else None)
+    # record_audit has already posted Annie's arrival update and queued its
+    # air/sea-specific push notification in the same transaction.
     db.session.commit()
     try:
         flush_outbox()

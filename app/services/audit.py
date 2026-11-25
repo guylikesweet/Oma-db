@@ -112,14 +112,31 @@ def record_audit(
         details=details or {},
         actor_id=getattr(actor, "id", None),
     )
-    if notification is not None:
-        from app.services.push_notifications import queue_change_notification
-        queue_change_notification(
-            **notification,
+    from app.services.annie import build_audit_update, post_annie_message
+    annie_update = build_audit_update(
+        str(action), target_type, target_id, details or {}
+    )
+    if annie_update is not None:
+        event_type = "batch_arrival" if str(action) == "batch.arrive" else "chat_message"
+        push_data = {}
+        if str(action) == "batch.arrive":
+            push_data["transport_mode"] = str((details or {}).get("transport_mode") or "sea")
+        post_annie_message(
+            annie_update["body"],
+            recipient_user_ids=(
+                notification.get("recipient_user_ids")
+                if notification is not None else None
+            ),
+            exclude_user_id=getattr(actor, "id", None),
+            push_type=event_type,
+            push_data=push_data,
         )
-        # The outbox row is part of the same transaction, so a failed business
-        # write cannot produce a push notification. Delivery is attempted only
-        # after the response is ready (i.e. after the commit).
+        # Annie's chat update is also the push source for this event, avoiding
+        # a duplicate generic notification.
+        _schedule_outbox_flush()
+    elif notification is not None:
+        from app.services.push_notifications import queue_change_notification
+        queue_change_notification(**notification)
         _schedule_outbox_flush()
 
     return row
@@ -144,6 +161,7 @@ def _change_notification_for_audit(
         "sale.create": ("sale_change", "New sale created", "A new sale has been created."),
         "sale.status": ("sale_change", "Sale status changed", "A sale's status has been updated."),
         "sale.payment_status": ("sale_change", "Sale payment updated", "A sale's payment status has been updated."),
+        "sale.payment.verified": ("sale_change", "Customer payment verified", "A customer instalment payment has been verified."),
         "sale.delete": ("sale_change", "Sale removed", "A sale has been removed."),
         "product.create": ("product_change", "Product created", "A new product has been created."),
         "product.update": ("product_change", "Product updated", "A product has been updated."),
@@ -154,6 +172,7 @@ def _change_notification_for_audit(
         "batch.remove_sale": ("batch_change", "Sale removed from batch", "A sale has been removed from a shipment batch."),
         "batch.delete": ("batch_change", "Shipment batch removed", "A shipment batch has been removed."),
         "batch.undo_arrival": ("batch_change", "Shipment arrival undone", "A shipment batch has been moved back to In Transit."),
+        "batch.arrive": ("batch_arrival", "Shipment batch arrived", "A shipment batch has arrived."),
         "shipping.settle": ("shipping_change", "Shipping payment settled", "A sale's shipping payment has been settled."),
         "shipping.create": ("shipping_change", "Shipment created", "A shipment record has been created."),
         "shipping.update": ("shipping_change", "Shipment updated", "A shipment record has been updated."),
