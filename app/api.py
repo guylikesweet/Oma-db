@@ -651,6 +651,19 @@ def bootstrap():
     })
 
 
+def _staff_safe_sync_payload(payload):
+    """Remove internal cost/profit fields from append-only sync events for staff."""
+    if not isinstance(payload, dict) or g.api_user.is_admin:
+        return payload
+    safe = dict(payload)
+    for key in (
+        "cost", "supplier_cost", "inbound_shipping_cost", "landed_cost",
+        "unit_cost", "profit", "gross_profit", "gross_margin_percent",
+    ):
+        safe.pop(key, None)
+    return safe
+
+
 @api_bp.route("/v1/sync", methods=("GET",))
 @require_api_token
 def sync():
@@ -684,7 +697,7 @@ def sync():
                 "entity": row.entity_type,
                 "entity_id": row.entity_id,
                 "action": "deleted" if row.operation == "delete" else "updated",
-                "payload": row.payload,
+                "payload": _staff_safe_sync_payload(row.payload),
                 "entity_type": row.entity_type,
                 "operation": row.operation,
                 "created_at": row.created_at.isoformat() if row.created_at else None,
