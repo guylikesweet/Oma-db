@@ -813,15 +813,50 @@ def process_annie_question(message_id, asker_user_id):
         "Hi! I'm Annie. What would you like to know about Oma?"
         if not question else answer_question(asker, question)
     )
+    # Save the actual answer independently of Firebase/notification tables.
+    # A push-queue problem must never erase Annie's chat reply.
     reply, created = post_annie_message(
         answer,
         event_key=f"annie-reply-{message.id}",
-        recipient_user_ids=_active_staff_ids(),
+        recipient_user_ids=[],
         push_type="chat_message",
         push_data={"reply_to_id": str(message.id)},
     )
     if created:
         db.session.commit()
-        from app.services.audit import _schedule_outbox_flush
-        _schedule_outbox_flush()
+
+        # Best-effort push delivery happens only after the reply is durable.
+        # The chat timeline also polls, so a notification outage cannot silence Annie.
+        try:
+            from app.services.push_notifications import queue_user_notification
+            preview = " ".join(reply.content.split())
+            if len(preview) > 180:
+                preview = preview[:177].rstrip() + "..."
+            bot = User.query.filter_by(is_system=True).first()
+            for user_id in _active_staff_ids():
+                if not PushDevice.query.filter_by(user_id=user_id, enabled=True).first():
+                    continue
+                queue_user_notification(
+                    user_id,
+                    event_type="chat_message",
+                    title="Annie",
+                    body=preview,
+                    data={
+                        "type": "chat_message",
+                        "chat_message_id": str(reply.id),
+                        "sender_user_id": str(bot.id if bot else ""),
+                        "sender_username": "Annie",
+                        "message_content": preview,
+                        "sound": "chat_message",
+                        "reply_to_id": str(message.id),
+                    },
+                )
+            db.session.commit()
+            from app.services.audit import _schedule_outbox_flush
+            _schedule_outbox_flush()
+        except Exception:
+            db.session.rollback()
+            log.exception("Annie reply %s was saved, but push delivery could not be queued", reply.id)
+
+    log.info("Annie answered tagged chat message %s", message.id)
     return reply
