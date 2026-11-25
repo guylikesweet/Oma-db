@@ -1352,7 +1352,8 @@ class _WebSalesPageState extends State<WebSalesPage> {
                       subtitle: Text(
                         '${sale['journey_label'] ?? sale['order_status'] ?? ''}'
                         ' • ${sale['payment_status'] ?? ''}'
-                        ' • ₦${sale['total_amount'] ?? 0}',
+                        ' • Paid ₦${sale['amount_paid'] ?? 0}'
+                        ' • Balance ₦${sale['product_balance'] ?? sale['subtotal_amount'] ?? 0}',
                       ),
                       trailing: Row(
                         mainAxisSize: MainAxisSize.min,
@@ -1372,11 +1373,11 @@ class _WebSalesPageState extends State<WebSalesPage> {
                             );
                           }
 
-                          if (value == 'payment_status') {
-                            await changePaymentStatus(
-                              sale['id'] as int,
-                              '${sale['payment_status'] ?? ''}',
-                            );
+                          if (value == 'payments') {
+                            await Navigator.push(context, MaterialPageRoute(
+                              builder: (_) => SalePaymentsPage(api: widget.api, saleId: sale['id'] as int),
+                            ));
+                            await load();
                           }
 
                           if (value == 'settle') {
@@ -1402,10 +1403,8 @@ class _WebSalesPageState extends State<WebSalesPage> {
                             ),
                           ),
                           const PopupMenuItem(
-                            value: 'payment_status',
-                            child: Text(
-                              'Update payment status',
-                            ),
+                            value: 'payments',
+                            child: Text('Pay Small Small / Payment history'),
                           ),
                           if (sale['batch_id'] != null &&
                               sale['shipping_payment_settled'] !=
@@ -1438,6 +1437,136 @@ class _WebSalesPageState extends State<WebSalesPage> {
     );
   }
 }
+
+
+class SalePaymentsPage extends StatefulWidget {
+  const SalePaymentsPage({super.key, required this.api, required this.saleId});
+  final ApiClient api;
+  final int saleId;
+  @override
+  State<SalePaymentsPage> createState() => _SalePaymentsPageState();
+}
+
+class _SalePaymentsPageState extends State<SalePaymentsPage> {
+  Map<String, dynamic>? data;
+  bool busy = true;
+  String? error;
+
+  @override
+  void initState() { super.initState(); load(); }
+
+  Future<void> load() async {
+    try {
+      final value = await widget.api.salePayments(widget.saleId);
+      if (mounted) setState(() { data = value; error = null; });
+    } catch (e) {
+      if (mounted) setState(() => error = userFacingError(e));
+    } finally {
+      if (mounted) setState(() => busy = false);
+    }
+  }
+
+  Future<void> addPayment() async {
+    final amount = TextEditingController();
+    final reference = TextEditingController();
+    final session = TextEditingController();
+    bool verified = false;
+    final minimum = (data?['minimum_first_payment'] as num?)?.toDouble() ?? 0;
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(builder: (context, setDialogState) => AlertDialog(
+        title: const Text('Record verified bank transfer'),
+        content: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, children: [
+          Text('First payment minimum: NGN ${minimum.toStringAsFixed(0)}. Later payments can be any amount up to the outstanding product balance.'),
+          TextField(controller: amount, keyboardType: const TextInputType.numberWithOptions(decimal: true), decoration: const InputDecoration(labelText: 'Amount received (NGN)')),
+          TextField(controller: reference, decoration: const InputDecoration(labelText: 'Bank transaction reference')),
+          TextField(controller: session, decoration: const InputDecoration(labelText: 'Session ID (optional)')),
+          CheckboxListTile(
+            contentPadding: EdgeInsets.zero,
+            value: verified,
+            onChanged: (v) => setDialogState(() => verified = v == true),
+            title: const Text('I have checked the bank account and verified this transfer.'),
+            controlAffinity: ListTileControlAffinity.leading,
+          ),
+        ])),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('Cancel')),
+          FilledButton(onPressed: () => Navigator.pop(dialogContext, true), child: const Text('Record payment')),
+        ],
+      )),
+    );
+    if (result != true) return;
+    final parsed = double.tryParse(amount.text.replaceAll(',', '').trim());
+    if (parsed == null || parsed <= 0 || reference.text.trim().isEmpty || !verified) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Enter a valid amount and reference, then confirm the transfer was verified.')));
+      return;
+    }
+    try {
+      await widget.api.recordSalePayment(widget.saleId, amount: parsed, transactionReference: reference.text.trim(), sessionId: session.text.trim(), verificationConfirmed: verified);
+      await load();
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Verified payment recorded.')));
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(userFacingError(e))));
+    }
+  }
+
+  Future<void> shareReceipt(Map<String, dynamic> payment) async {
+    try {
+      final id = payment['id'] as int;
+      final bytes = await widget.api.paymentReceipt(widget.saleId, id);
+      await Share.shareXFiles([XFile.fromData(bytes, mimeType: 'image/png', name: 'payment-receipt-$id.png')],
+        text: 'Oma payment receipt • Order ${data?['order_id'] ?? widget.saleId} • NGN ${payment['amount']}');
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(userFacingError(e))));
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final payments = (data?['payments'] as List?) ?? const [];
+    return Scaffold(
+      appBar: AppBar(title: const Text('Pay Small Small'), actions: [IconButton(onPressed: load, icon: const Icon(Icons.refresh))]),
+      floatingActionButton: FloatingActionButton.extended(onPressed: data == null ? null : addPayment, icon: const Icon(Icons.add), label: const Text('Record payment')),
+      body: busy ? const Center(child: BrandLoader()) : error != null ? Center(child: Text(error!)) : RefreshIndicator(
+        onRefresh: load,
+        child: ListView(padding: const EdgeInsets.fromLTRB(16, 12, 16, 90), children: [
+          Card(child: Padding(padding: const EdgeInsets.all(16), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text('Order ${data?['order_id'] ?? widget.saleId}', style: Theme.of(context).textTheme.titleLarge),
+            const SizedBox(height: 12),
+            _summary('Product total', data?['total']),
+            _summary('Payments received', data?['amount_paid']),
+            _summary('Outstanding product balance', data?['outstanding']),
+            const Text('Shipping is separate and is not included in this balance.', style: TextStyle(color: Colors.grey)),
+            if (data?['minimum_first_payment'] != null)
+              _summary('Minimum first payment', data?['minimum_first_payment']),
+          ]))),
+          const SizedBox(height: 12),
+          Text('Payment history', style: Theme.of(context).textTheme.titleMedium),
+          if (payments.isEmpty) const Padding(padding: EdgeInsets.all(18), child: Text('No payments recorded yet.')),
+          ...payments.map((raw) {
+            final p = Map<String, dynamic>.from(raw as Map);
+            return Card(child: ListTile(
+              leading: const Icon(Icons.verified_outlined),
+              title: Text('NGN ${(p['amount'] as num?)?.toStringAsFixed(2) ?? p['amount']}'),
+              subtitle: Text('Ref: ${p['transaction_reference']}\n${p['received_at']} • Verified by ${p['verified_by'] ?? 'system'}'),
+              isThreeLine: true,
+              trailing: IconButton(tooltip: 'Share payment receipt', onPressed: () => shareReceipt(p), icon: const Icon(Icons.share_outlined)),
+            ));
+          }),
+        ]),
+      ),
+    );
+  }
+
+  Widget _summary(String label, dynamic value) => Padding(
+    padding: const EdgeInsets.symmetric(vertical: 4),
+    child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+      Expanded(child: Text(label)),
+      Text('NGN ${(value as num?)?.toStringAsFixed(2) ?? value ?? '0.00'}', style: const TextStyle(fontWeight: FontWeight.w700)),
+    ]),
+  );
+}
+
 
 class BatchesPage extends StatefulWidget {
   const BatchesPage({
@@ -1989,6 +2118,51 @@ class _BatchesPageState extends State<BatchesPage> {
     }
   }
 
+
+  Future<void> notifyBatchPaymentReminders(BuildContext context, int batchId) async {
+    try {
+      final notices = await widget.api.batchPaymentReminders(batchId);
+      if (!context.mounted) return;
+      if (notices.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('No customers with a valid phone number are ready for a reminder.')),
+        );
+        return;
+      }
+      await showModalBottomSheet<void>(
+        context: context, isScrollControlled: true,
+        builder: (sheetContext) => SafeArea(
+          child: SizedBox(
+            height: MediaQuery.of(sheetContext).size.height * .72,
+            child: ListView(
+              padding: const EdgeInsets.all(16),
+              children: [
+                Text('Pay Small Small reminders', style: Theme.of(sheetContext).textTheme.titleLarge),
+                const Text('One reminder per normalized customer phone number within this batch.'),
+                ...notices.map((raw) {
+                  final n = Map<String, dynamic>.from(raw as Map);
+                  return Card(child: ListTile(
+                    title: Text('${n['customer_name'] ?? 'Customer'}'),
+                    subtitle: Text('${n['piece_count']} pieces • Product balance NGN ${n['product_outstanding']} • Estimated shipping NGN ${n['estimated_shipping']} • Demurrage NGN ${n['daily_demurrage']}/day from day 8'),
+                    trailing: FilledButton(
+                      onPressed: () async {
+                        final url = '${n['whatsapp_url'] ?? ''}';
+                        if (url.isNotEmpty) await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
+                      },
+                      child: const Text('WhatsApp'),
+                    ),
+                  ));
+                }),
+              ],
+            ),
+          ),
+        ),
+      );
+    } catch (e) {
+      if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(userFacingError(e))));
+    }
+  }
+
   Future<void> notifyCustomer(
     BuildContext sheetContext,
     int saleId,
@@ -2166,6 +2340,8 @@ class _BatchesPageState extends State<BatchesPage> {
                                   await arriveBatch(batch['id'] as int);
                                 } else if (value == 'notify') {
                                   await notifyBatchCustomers(context, batch['id'] as int);
+                                } else if (value == 'remind') {
+                                  await notifyBatchPaymentReminders(context, batch['id'] as int);
                                 } else if (value == 'undo') {
                                   await undoArrival(batch['id'] as int);
                                 } else if (value == 'delete') {
@@ -2180,6 +2356,12 @@ class _BatchesPageState extends State<BatchesPage> {
                                   const PopupMenuItem(
                                     value: 'arrive',
                                     child: Text('Mark arrived'),
+                                  ),
+                                if (batch['status'] == 'In Transit' && batch['created_at'] != null &&
+                                    DateTime.now().difference(DateTime.tryParse('${batch['created_at']}') ?? DateTime.now()).inDays >= 45)
+                                  const PopupMenuItem(
+                                    value: 'remind',
+                                    child: Text('45-day customer payment reminders'),
                                   ),
                                 if (batch['status'] == 'Arrived - Awaiting Shipping Payment')
                                   const PopupMenuItem(

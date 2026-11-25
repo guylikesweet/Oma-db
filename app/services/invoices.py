@@ -382,7 +382,7 @@ def generate_payment_receipt_image(payment, fmt="png"):
         ("Verified at: ", False), (payment.verified_at.strftime("%d %b %Y %H:%M") if payment.verified_at else "Server verified", True),
     ], [
         ("Outstanding product balance: ", False),
-        (_money(max(0, (sale.subtotal_amount or 0) - sum((p.amount or 0 for p in sale.payments))), True)),
+        (_money(max(0, (sale.subtotal_amount or 0) - sum((p.amount or 0 for p in sale.payments)))), True),
     ], [
         ("Shipping is billed separately and is not included in this payment.", False),
     ]]
