@@ -302,8 +302,8 @@ def build_business_context(user, question):
         "which", "who", "what", "when", "where", "how", "many", "much",
         "customer", "customers", "order", "orders", "payment", "payments",
         "owe", "owes", "owing", "outstanding", "balance", "pay", "paid",
-        "still", "are", "is", "the", "our", "for", "show", "list", "find",
-        "tell", "me", "about", "have", "has", "this", "that", "with",
+        "still", "are", "is", "the", "our", "for", "of", "in", "on", "at", "show", "list", "find",
+        "tell", "me", "about", "have", "has", "this", "that", "with", "current", "available", "pieces", "piece",
     }
     lookup_terms = [
         term for term in re.findall(r"[a-z0-9-]{3,}", question_lower)
@@ -419,7 +419,7 @@ def answer_question(user, question):
         "oma", "sales", "sale", "order", "customer", "payment", "paid", "owe",
         "owing", "balance", "stock", "inventory", "product", "shipment", "batch",
         "shipping", "delivery", "deliver", "profit", "revenue", "business",
-        "staff", "team", "app", "preorder", "pre-order", "pay small", "small small", "instalment",
+        "staff", "team", "app", "preorder", "pre-order", "pay small", "small small", "money", "cash", "income", "turnover", "collected", "instalment",
         "installment", "demurrage", "receipt", "reminder", "courier", "rate",
     )
     if not any(term in lowered for term in business_terms):
@@ -479,6 +479,12 @@ def answer_question(user, question):
         )
 
     if any(word in lowered for word in ("outstanding", "owe", "owes", "owing", "unpaid", "balance")):
+        if "shipping" in lowered or "demurrage" in lowered:
+            return (
+                "Shipping charges and demurrage are separate from product-payment balances. "
+                "I won't mix those figures. Open the relevant shipment batch in Oma to see "
+                "the current shipping settlement and demurrage details."
+            )
         rows = context.get("matching_customer_orders") or context.get("largest_outstanding_orders_recent_500") or []
         header = (
             "Outstanding product balances from Oma's 500 most recent active orders:"
@@ -502,13 +508,13 @@ def answer_question(user, question):
         status_counts = context.get("shipment_batch_status_counts", {})
         wanted = None
         if "transit" in lowered:
-            wanted = "in_transit"
+            wanted = "In Transit"
         elif "arrived" in lowered:
-            wanted = "arrived"
+            wanted = "Arrived - Awaiting Shipping Payment"
         if wanted:
-            matching = [row for row in rows if str(row.get("status", "")).casefold() in {wanted, wanted.replace("_", " ")}]
-            count = status_counts.get(wanted, status_counts.get(wanted.replace("_", " "), len(matching)))
-            label = "in transit" if wanted == "in_transit" else "arrived"
+            matching = [row for row in rows if str(row.get("status", "")).casefold() == wanted.casefold()]
+            count = status_counts.get(wanted, len(matching))
+            label = "in transit" if wanted == "In Transit" else "arrived and awaiting shipping payment"
             return (
                 f"Oma has {count} shipment batch(es) marked {label}. "
                 + list_lines(matching[:10], lambda row: f"{row['name']} — {row['transport_mode']}, {row['orders']} order(s), {row['pieces']} pieces", "No matching batches appear in the 20 most recent batches.")
