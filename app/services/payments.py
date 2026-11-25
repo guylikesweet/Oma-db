@@ -60,7 +60,7 @@ def build_batch_payment_reminders(batch, now=None):
                    f"Please prepare for its arrival.\n\nOrders:\n{orders}\n\n"
                    f"Outstanding product balance: NGN {outstanding:,.2f}\n"
                    f"Estimated shipping cost: NGN {estimate:,.2f} (separate from product payment).\n\n"
-                   f"After arrival, you will have 7 days to pay shipping. From day 8, demurrage is NGN 150 per piece per day "
+                   f"After arrival, you will have 5 days to pay shipping. From day 6, demurrage is NGN 150 per piece per day "
                    f"(currently {pieces} piece(s): NGN {pieces * 150:,} per day).\n"
                    f"Please use {raw_phone} as your payment narration.\n\nThank you.")
         notices.append({"phone": phone, "customer_name": name, "sale_ids": [s.id for s in sales],
