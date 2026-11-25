@@ -286,6 +286,7 @@ class SaleView(SecureModelView):
     column_editable_list = ("payment_status",)
 
     can_create = False
+    can_create = False
     can_edit = False
     can_delete = True
 
@@ -404,8 +405,8 @@ class MonthlyAirRateView(AdminOnlyModelView):
 
 
 # ---------------------------------------------------------------------------
-# SHIPMENT BATCHES — creation is simple (name/notes); adding sales and
-# transitioning status happens through the dedicated /batches/<id> page.
+# SHIPMENT BATCHES — the manifest is selected atomically on the dedicated
+# batch creation page; departed manifests are immutable.
 # ---------------------------------------------------------------------------
 class ShipmentBatchView(SecureModelView):
     column_list = ("id", "name", "transport_mode", "status", "arrived_at", "batch_link")
@@ -434,7 +435,7 @@ class ShipmentBatchView(SecureModelView):
 
     def _batch_link_formatter(view, context, model, name):
         url = url_for("batches.batch_detail", batch_id=model.id)
-        return Markup(f'<a href="{url}" class="btn btn-xs btn-primary">Manage Sales / Status</a>')
+        return Markup(f'<a href="{url}" class="btn btn-xs btn-primary">Open Batch</a>')
 
     column_formatters = {"batch_link": _batch_link_formatter}
 
@@ -472,6 +473,7 @@ def init_admin(app):
     admin.add_view(MonthlyShippingRateView(MonthlyShippingRate, db.session, name="Monthly Shipping Rates"))
     admin.add_view(MonthlyAirRateView(MonthlyAirRate, db.session, name="Monthly Air Rates", endpoint="monthlyairrate"))
     admin.add_view(ShipmentBatchView(ShipmentBatch, db.session, name="Shipment Batches", endpoint="shipmentbatch"))
+    admin.add_link(MenuLink(name="+ New Shipment Batch", url="/batches/create"))
     admin.add_view(DeliveryView(Delivery, db.session, name="Deliveries", endpoint="deliveryadmin"))
     admin.add_link(MenuLink(name="Ready for Delivery", url="/delivery/ready"))
     admin.add_link(MenuLink(name="Reports", url="/reports/"))
