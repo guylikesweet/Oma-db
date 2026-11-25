@@ -79,3 +79,25 @@ def test_same_customer_in_different_batches_gets_separate_notices():
     assert one[0]["sale_ids"] == [1]
     assert two[0]["sale_ids"] == [2]
     assert one[0]["phone"] == two[0]["phone"]
+
+
+
+def test_first_payment_minimum_uses_nearest_thousand_without_exposing_cost():
+    from app.api import _first_payment_minimum
+
+    sale = SimpleNamespace(items=[
+        SimpleNamespace(unit_cost=Decimal("5500"), qty=1),
+        SimpleNamespace(unit_cost=Decimal("2400"), qty=1),
+    ])
+    assert _first_payment_minimum(sale) == Decimal("8000")
+
+
+def test_partial_order_can_receive_server_order_receipt_after_verified_payment():
+    from app.services.invoices import receipt_block_reason
+
+    sale = SimpleNamespace(
+        order_status="New",
+        payment_status="Partially Paid",
+        payments=[SimpleNamespace(amount=Decimal("5000"))],
+    )
+    assert receipt_block_reason(sale) is None
