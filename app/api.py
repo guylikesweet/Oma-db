@@ -1631,18 +1631,6 @@ def mobile_arrival_notice(sale_id):
 
 
 
-@api_bp.route("/v1/batches/<int:batch_id>/payment-reminders", methods=("GET",))
-@require_api_token
-def mobile_batch_payment_reminders(batch_id):
-    """Return 45-day shipping-cost reminder messages, grouped by phone within this batch."""
-    from app.services.payments import build_batch_payment_reminders, PaymentError
-    batch = ShipmentBatch.query.get_or_404(batch_id)
-    try:
-        return jsonify(build_batch_payment_reminders(batch))
-    except PaymentError as e:
-        return jsonify({"error": str(e)}), 400
-
-
 @api_bp.route("/v1/batches/<int:batch_id>/arrival-notices", methods=("GET",))
 @require_api_token
 def mobile_batch_arrival_notices(batch_id):
