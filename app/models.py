@@ -298,6 +298,7 @@ class Sale(db.Model):
     items = db.relationship("SaleItem", backref="sale", lazy=True, cascade="all, delete-orphan")
     shipping = db.relationship("Shipping", backref="sale", uselist=False, cascade="all, delete-orphan")
     journey_events = db.relationship("SaleJourneyEvent", backref="sale", lazy=True, cascade="all, delete-orphan", order_by="SaleJourneyEvent.created_at")
+    payments = db.relationship("SalePayment", backref="sale", lazy=True, order_by="SalePayment.received_at")
 
     @property
     def is_stock_sale(self):
