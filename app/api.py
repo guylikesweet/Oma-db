@@ -16,7 +16,7 @@ import json
 import re
 import secrets
 from datetime import date, datetime, timedelta
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from functools import wraps
 
 from flask import Blueprint, request, jsonify, g, current_app
@@ -31,7 +31,7 @@ from app import db, limiter
 from app.services.journey import journey_public, flow_for, manual_stages_for, stage_label, set_manual_stage_bulk, JourneyError
 from app.access import require_admin_api
 from app.models import (
-    User, Product, Sale, SaleItem, Shipping, Delivery, ShipmentBatch,
+    User, Product, Sale, SaleItem, SalePayment, Shipping, Delivery, ShipmentBatch,
     CourierRate, MonthlyShippingRate, MonthlyAirRate, StockLog, MobileOperation, MobileChange, AuditLog, PushDevice,
     ChatMessage, ChatMention, ChatReaction, NotificationOutbox,
 )
@@ -367,6 +367,15 @@ def _sale_json(s):
         "journey_description": journey["current_description"],
         "journey_mode": journey["mode"],
         "payment_status": s.payment_status,
+        "amount_paid": float(sum((p.amount or Decimal("0")) for p in s.payments)),
+        "product_balance": float(max(Decimal("0"), (s.subtotal_amount or Decimal("0")) - sum((p.amount or Decimal("0")) for p in s.payments))),
+        "payments": [
+            {"id": p.id, "amount": float(p.amount), "received_at": p.received_at.isoformat() if p.received_at else None,
+             "transaction_reference": p.transaction_reference, "session_id": p.session_id,
+             "payment_method": p.payment_method, "verified_at": p.verified_at.isoformat() if p.verified_at else None,
+             "verified_by": p.verified_by.username if p.verified_by else None, "is_legacy": bool(p.is_legacy)}
+            for p in s.payments
+        ],
         "subtotal_amount": float(s.subtotal_amount) if s.subtotal_amount is not None else None,
         "estimated_shipping_cost": float(s.estimated_shipping_cost) if s.estimated_shipping_cost is not None else None,
         "actual_shipping_cost": float(s.actual_shipping_cost) if s.actual_shipping_cost is not None else None,
@@ -854,6 +863,16 @@ def _create_sale_api(require_operation_id):
             client_operation_id=operation_id or None,
         )
 
+        db.session.flush()
+        # A sale explicitly created as Paid is a full-payment transaction.
+        # Pending orders remain unpaid and can enter the installment ledger later.
+        if (sale.payment_status or "").lower() == "paid" and not sale.payments:
+            db.session.add(SalePayment(
+                sale_id=sale.id, amount=Decimal(str(sale.subtotal_amount or 0)),
+                received_at=datetime.utcnow(), transaction_reference=f"SALE-{sale.order_id or sale.id}",
+                payment_method="sale_creation", verified_at=datetime.utcnow(),
+                verified_by_user_id=g.api_user.id, created_by_user_id=g.api_user.id,
+            ))
         payload = _sale_json(sale)
         if operation_id:
             db.session.add(MobileOperation(
@@ -873,6 +892,118 @@ def _create_sale_api(require_operation_id):
     except Exception:
         db.session.rollback()
         raise
+
+
+
+# ---------------------------------------------------------------------------
+# PAY SMALL SMALL — verified product-payment ledger (shipping stays separate)
+# ---------------------------------------------------------------------------
+def _payment_totals(sale):
+    paid = sum((p.amount or Decimal("0")) for p in sale.payments)
+    total = Decimal(str(sale.subtotal_amount or 0))
+    return paid, max(Decimal("0"), total - paid)
+
+
+def _payment_json(payment):
+    return {
+        "id": payment.id, "sale_id": payment.sale_id, "amount": float(payment.amount),
+        "received_at": payment.received_at.isoformat(), "transaction_reference": payment.transaction_reference,
+        "session_id": payment.session_id, "payment_method": payment.payment_method,
+        "verified_at": payment.verified_at.isoformat(), "verified_by": payment.verified_by.username if payment.verified_by else None,
+        "is_legacy": bool(payment.is_legacy),
+    }
+
+
+def _first_payment_minimum(sale):
+    cost = sum((Decimal(str(item.unit_cost or 0)) * int(item.qty or 0) for item in sale.items), Decimal("0"))
+    if cost <= 0:
+        return Decimal("0")
+    return (cost / Decimal("1000")).quantize(Decimal("1"), rounding=ROUND_HALF_UP) * Decimal("1000")
+
+
+@api_bp.route("/v1/sales/<int:sale_id>/payments", methods=("GET",))
+@require_api_token
+def mobile_sale_payments(sale_id):
+    sale = Sale.query.get_or_404(sale_id)
+    paid, balance = _payment_totals(sale)
+    return jsonify({
+        "sale_id": sale.id, "order_id": sale.order_id, "total": float(sale.subtotal_amount or 0),
+        "amount_paid": float(paid), "outstanding": float(balance),
+        "minimum_first_payment": float(_first_payment_minimum(sale)) if paid <= 0 else None,
+        "payments": [_payment_json(p) for p in sale.payments],
+    })
+
+
+@api_bp.route("/v1/sales/<int:sale_id>/payments", methods=("POST",))
+@limiter.limit("30 per minute")
+@require_api_token
+def mobile_record_sale_payment(sale_id):
+    data = request.get_json(silent=True) or {}
+    sale = Sale.query.filter_by(id=sale_id).with_for_update().first_or_404()
+    if sale.is_stock_sale or sale.order_status == "Cancelled" or sale.payment_status == "Refunded":
+        return jsonify({"error": "Installment payments are only available for active preorder sales."}), 400
+    if data.get("verification_confirmed") is not True:
+        return jsonify({"error": "Confirm that the bank transfer has been checked before recording it."}), 400
+    try:
+        amount = Decimal(str(data.get("amount")))
+    except (InvalidOperation, TypeError, ValueError):
+        return jsonify({"error": "Enter a valid payment amount."}), 400
+    if not amount.is_finite() or amount <= 0 or amount.quantize(Decimal("0.01")) != amount:
+        return jsonify({"error": "Payment must be a positive amount with no more than two decimal places."}), 400
+    reference = str(data.get("transaction_reference") or "").strip()
+    session_id = str(data.get("session_id") or "").strip() or None
+    if not reference or len(reference) > 160:
+        return jsonify({"error": "Enter the bank transaction reference."}), 400
+    if session_id and len(session_id) > 160:
+        return jsonify({"error": "Session ID is too long."}), 400
+    duplicate = SalePayment.query.filter(
+        db.or_(SalePayment.transaction_reference == reference,
+               SalePayment.session_id == session_id if session_id else db.false())
+    ).first()
+    if duplicate:
+        if duplicate.sale_id == sale.id and duplicate.amount == amount:
+            paid, balance = _payment_totals(sale)
+            return jsonify({"payment": _payment_json(duplicate), "amount_paid": float(paid), "outstanding": float(balance), "duplicate": True})
+        return jsonify({"error": "This transaction reference or session ID has already been used."}), 409
+    paid, balance = _payment_totals(sale)
+    if amount > balance:
+        return jsonify({"error": "Payment cannot exceed the outstanding product balance."}), 400
+    if paid <= 0:
+        minimum = _first_payment_minimum(sale)
+        if amount < minimum:
+            return jsonify({"error": f"The first payment must be at least ₦{minimum:,.0f}."}), 400
+    now = datetime.utcnow()
+    payment = SalePayment(
+        sale_id=sale.id, amount=amount, received_at=now, transaction_reference=reference,
+        session_id=session_id, payment_method="bank_transfer", verified_at=now,
+        verified_by_user_id=g.api_user.id, created_by_user_id=g.api_user.id,
+        notes=str(data.get("notes") or "").strip()[:500] or None,
+    )
+    db.session.add(payment)
+    paid += amount
+    balance -= amount
+    sale.payment_status = "Paid" if balance <= 0 else "Partially Paid"
+    record_audit("sale.payment.verified", target_type="sale", target_id=sale.id,
+        details={"payment_id": None, "amount": str(amount), "reference": reference, "outstanding": str(balance)},
+        user=g.api_user)
+    try:
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        raise
+    return jsonify({"payment": _payment_json(payment), "amount_paid": float(paid),
+                    "outstanding": float(balance), "payment_status": sale.payment_status}), 201
+
+
+@api_bp.route("/v1/batches/<int:batch_id>/payment-reminders", methods=("GET",))
+@require_api_token
+def mobile_batch_payment_reminders(batch_id):
+    from app.services.payments import build_batch_payment_reminders, PaymentError
+    batch = ShipmentBatch.query.get_or_404(batch_id)
+    try:
+        return jsonify(build_batch_payment_reminders(batch))
+    except PaymentError as exc:
+        return jsonify({"error": str(exc)}), 400
 
 
 # ---------------------------------------------------------------------------
