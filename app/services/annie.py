@@ -398,7 +398,7 @@ def build_business_context(user, question):
             "After the first payment, the plan allows up to two further settlements. Every payment must be verified by a handler before it is recorded.",
             "Each verified payment has its own server-generated receipt. The order receipt lists payment history and remaining product balance.",
             "Product payments and shipping charges are separate balances.",
-            "Customer reminder actions become available 45 days after a shipment batch is created.",
+            "Customer reminder actions become available 35 days after a shipment batch is created.",
             "After a batch arrives, customers have 7 days to settle shipping; demurrage starts on day 8 at NGN 150 per piece per day.",
             "Customers are consolidated by normalized phone number within one shipment batch only; the same phone in another batch remains a separate customer group.",
             "A sale becomes ready for delivery after its shipping payment is settled, or when it is a stocked sale.",
@@ -520,7 +520,7 @@ def answer_question(user, question):
             "installment": ("instalment", "installment", "payment"),
             "receipt": ("receipt", "payment"),
             "demurrage": ("demurrage", "shipping", "arrival"),
-            "reminder": ("reminder", "45 days", "batch"),
+            "reminder": ("reminder", "35 days", "batch"),
             "shipping": ("shipping", "demurrage", "arrival"),
             "delivery": ("delivery", "shipping"),
             "batch": ("batch", "shipping", "reminder"),
@@ -724,9 +724,9 @@ def process_pending_annie_replies(limit=1):
 
 
 def process_due_payment_reminders(now=None):
-    """Post one idempotent Annie team update per batch once its 45-day reminder is due."""
+    """Post one idempotent Annie team update per batch once its 35-day reminder is due."""
     now = now or datetime.utcnow()
-    cutoff = now - timedelta(days=45)
+    cutoff = now - timedelta(days=35)
     batches = ShipmentBatch.query.filter(
         ShipmentBatch.status == ShipmentBatch.STATUS_IN_TRANSIT,
         ShipmentBatch.created_at <= cutoff,
@@ -735,7 +735,7 @@ def process_due_payment_reminders(now=None):
     from app.services.payments import build_batch_payment_reminders, PaymentError
     posted = 0
     for batch in batches:
-        event_key = f"annie-reminder-batch-{batch.id}-45d"
+        event_key = f"annie-reminder-batch-{batch.id}-35d"
         if ChatMessage.query.filter_by(client_operation_id=event_key).first():
             continue
         try:
@@ -748,7 +748,7 @@ def process_due_payment_reminders(now=None):
         shipping = sum(Decimal(str(item["estimated_shipping"])) for item in notices)
         pieces = sum(int(item["piece_count"]) for item in notices)
         body = (
-            f"45-day customer reminders are due for {batch.name}. "
+            f"35-day customer reminders are due for {batch.name}. "
             f"{len(notices)} consolidated customer reminder(s), {pieces} pieces. "
             f"Outstanding product balance: {_money(outstanding)}. "
             f"Estimated shipping: {_money(shipping)} (separate from product payments). "
@@ -759,7 +759,7 @@ def process_due_payment_reminders(now=None):
         _, created = post_annie_message(
             body, event_key=event_key, recipient_user_ids=_active_staff_ids(),
             push_type="chat_message",
-            push_data={"event": "45_day_payment_reminder", "batch_id": str(batch.id)},
+            push_data={"event": "35_day_payment_reminder", "batch_id": str(batch.id)},
         )
         if created:
             posted += 1
