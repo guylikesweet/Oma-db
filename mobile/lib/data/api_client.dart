@@ -801,13 +801,6 @@ class ApiClient {
     );
   }
 
-  Future<List<dynamic>> batchPaymentReminders(int batchId) {
-    return _list(
-      'GET',
-      '/v1/batches/$batchId/payment-reminders',
-    );
-  }
-
   Future<Map<String, dynamic>> createDelivery(
     Map<String, dynamic> payload,
   ) {
