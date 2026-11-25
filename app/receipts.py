@@ -2,8 +2,9 @@
 Receipt downloads for the mobile app: the same receipt as a PNG or JPG photo
 (for WhatsApp) or as a small 80 mm PDF.
 
-Only PAID, non-cancelled orders get one; anything else answers 400 with a
-plain explanation (the app shows it). See app/services/invoices.py.
+Only orders with a verified payment and not cancelled/refunded get an overall
+receipt. Each verified payment also has its own server-generated receipt.
+See app/services/invoices.py.
 """
 import base64
 

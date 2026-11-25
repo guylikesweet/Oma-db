@@ -7,8 +7,9 @@ PNG is the preferred photo, JPG is a smaller alternative, and PDF is a small
 80 mm page carrying the same picture, so all three always match exactly.
 
 Rules for what a customer may be sent:
-  * Only PAID orders get a receipt. Pending / refunded / cancelled orders are
-    refused (a refund gets its own separate note, never this document).
+  * An order gets its overall receipt after its first verified payment.
+    The receipt lists every verified instalment and the remaining product balance.
+  * Refunded and cancelled orders are refused (a refund gets its own separate note).
   * No "N/A" placeholders and no "Generated ..." timestamp: a missing business
     address or Instagram handle is simply left out.
   * Internal order notes are never printed.
