@@ -33,8 +33,8 @@ Amount Paid: {{4}}
 Total Shipping Cost Due: {{5}}
 Outstanding Product Balance: {{11}}
 Total Pieces: {{12}}
-Demurrage: NGN 150 per piece per day from day 8
-Daily Demurrage From Day 8: {{13}}
+Demurrage: NGN 150 per piece per day from day 6
+Daily Demurrage From Day 6: {{13}}
 
 Payment Details:
 Bank Name: {{6}}
@@ -146,12 +146,12 @@ def build_batch_arrival_notices(batch):
         message = (
             f"Hello {customer_name},\n\n"
             f"Your goods have arrived. Please settle the shipping balance so we can prepare your delivery. "
-            f"You have 7 days from arrival to pay shipping; demurrage starts on day 8 at NGN 150 per piece per day.\n\n"
+            f"You have 5 days from arrival to pay shipping; demurrage starts on day 6 at NGN 150 per piece per day.\n\n"
             f"Orders:\n" + "\n".join(lines) + "\n\n"
             f"Total product payments received: {format_ngn(total_paid)}\n"
             f"Outstanding product balance: {format_ngn(product_balance)}\n"
             f"Total shipping due: {format_ngn(total_shipping)} (separate from product balance)\n"
-            f"Pieces: {piece_count} • Daily demurrage from day 8: {format_ngn(daily_demurrage)}\n\n"
+            f"Pieces: {piece_count} • Daily demurrage from day 6: {format_ngn(daily_demurrage)}\n\n"
             f"Payment: {settings.bank_name.strip()} — "
             f"{settings.bank_account_number.strip()} ({settings.bank_account_name.strip()})\n"
             f"Use your phone number {raw_phone} as narration.\n\n"
