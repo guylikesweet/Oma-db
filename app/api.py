@@ -1244,7 +1244,6 @@ def mobile_product_cost_calculator():
 
 @api_bp.route("/v1/products", methods=("POST",))
 @require_api_token
-@require_admin_api
 def mobile_create_product():
     data = request.get_json(silent=True) or {}
     try:
@@ -1252,6 +1251,8 @@ def mobile_create_product():
         if existing: return _mobile_replay(existing)
         name = str(data.get("name") or "").strip()
         if not name: raise ValueError("Product name is required.")
+        if not g.api_user.is_admin and any(key in data for key in ("cost", "landed_cost", "supplier_cost", "inbound_shipping_cost")):
+            raise ValueError("Only an admin can set internal product costs.")
         p = Product(name=name, sku=(str(data.get("sku") or "").strip() or None),
                     cost=Decimal(str(data.get("cost") or data.get("landed_cost") or "0")),
                     supplier_cost=Decimal(str(data.get("supplier_cost") or data.get("cost") or "0")),
@@ -1272,7 +1273,6 @@ def mobile_create_product():
 
 @api_bp.route("/v1/products/<int:product_id>", methods=("PUT", "PATCH"))
 @require_api_token
-@require_admin_api
 def mobile_update_product(product_id):
     data = request.get_json(silent=True) or {}
     try:
@@ -1284,6 +1284,8 @@ def mobile_update_product(product_id):
             "markup_percent", "selling_price",
             "length_cm", "width_cm", "height_cm", "actual_weight_kg",
         }
+        if not g.api_user.is_admin and {"cost", "supplier_cost", "inbound_shipping_cost"}.intersection(data):
+            raise ValueError("Only an admin can change internal product costs.")
         for f in ("name", "sku", *numeric_fields):
             if f not in data:
                 continue
@@ -1307,7 +1309,6 @@ def mobile_update_product(product_id):
 
 @api_bp.route("/v1/products/<int:product_id>", methods=("DELETE",))
 @require_api_token
-@require_admin_api
 def mobile_delete_product(product_id):
     data = request.get_json(silent=True) or {}
     try:
