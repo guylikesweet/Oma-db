@@ -1749,7 +1749,7 @@ class _BatchesPageState extends State<BatchesPage> {
               const SizedBox(height: 14),
               if (inTransit) ...[
                 FilledButton.icon(
-                  onPressed: reminderDue ? () => remindBatchCustomers(sheetContext, batch['id'] as int) : null,
+                  onPressed: reminderDue ? () => notifyBatchPaymentReminders(sheetContext, batch['id'] as int) : null,
                   icon: const Icon(Icons.notifications_active_outlined),
                   label: Text(reminderDue ? 'Remind customers of shipping cost' : remindAt == null ? 'Shipping reminder unavailable' : 'Reminder available ${MaterialLocalizations.of(sheetContext).formatMediumDate(remindAt)}'),
                 ),
@@ -1950,8 +1950,8 @@ class _BatchesPageState extends State<BatchesPage> {
             child: ListView(
               padding: const EdgeInsets.all(16),
               children: [
-                Text('Pay Small Small reminders', style: Theme.of(sheetContext).textTheme.titleLarge),
-                const Text('One reminder per normalized customer phone number within this batch.'),
+                Text('Shipping cost reminders', style: Theme.of(sheetContext).textTheme.titleLarge),
+                const Text('One WhatsApp reminder per normalized customer phone number in this batch. Each message includes estimated shipping, outstanding product balance and the post-arrival payment deadline.'),
                 ...notices.map((raw) {
                   final n = Map<String, dynamic>.from(raw as Map);
                   return Card(child: ListTile(
@@ -1962,7 +1962,7 @@ class _BatchesPageState extends State<BatchesPage> {
                         final url = '${n['whatsapp_url'] ?? ''}';
                         if (url.isNotEmpty) await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
                       },
-                      child: const Text('WhatsApp'),
+                      child: const Text('Remind'),
                     ),
                   ));
                 }),
@@ -1981,55 +1981,6 @@ class _BatchesPageState extends State<BatchesPage> {
     int saleId,
   ) =>
       openArrivalNotice(sheetContext, widget.api, saleId);
-
-  Future<void> remindBatchCustomers(BuildContext context, int batchId) async {
-    try {
-      final notices = await widget.api.batchPaymentReminders(batchId);
-      if (!context.mounted) return;
-      if (notices.isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('No customer shipping reminders are ready for this batch.')));
-        return;
-      }
-      await showModalBottomSheet<void>(
-        context: context,
-        isScrollControlled: true,
-        builder: (sheetContext) => SafeArea(
-          child: SizedBox(
-            height: MediaQuery.of(sheetContext).size.height * .72,
-            child: ListView(
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
-              children: [
-                Text('Remind customers', style: Theme.of(sheetContext).textTheme.titleLarge),
-                const SizedBox(height: 6),
-                const Text('One WhatsApp reminder per normalized phone number in this batch. The message includes estimated shipping and outstanding product balance.', style: TextStyle(color: Colors.grey)),
-                const SizedBox(height: 12),
-                ...notices.map((raw) {
-                  final notice = Map<String, dynamic>.from(raw as Map);
-                  final estimate = notice['estimated_shipping'];
-                  final balance = notice['product_outstanding'];
-                  return Card(child: ListTile(
-                    title: Text('${notice['customer_name'] ?? 'Customer'}'),
-                    subtitle: Text('Estimated shipping NGN ${estimate is num ? estimate.toStringAsFixed(2) : estimate} • Product balance NGN ${balance is num ? balance.toStringAsFixed(2) : balance}'),
-                    trailing: FilledButton(
-                      onPressed: () async {
-                        final url = '${notice['whatsapp_url'] ?? ''}';
-                        if (url.isEmpty) return;
-                        final opened = await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
-                        if (!opened && sheetContext.mounted) ScaffoldMessenger.of(sheetContext).showSnackBar(const SnackBar(content: Text('Could not open WhatsApp on this device.')));
-                      },
-                      child: const Text('Remind'),
-                    ),
-                  ));
-                }),
-              ],
-            ),
-          ),
-        ),
-      );
-    } catch (e) {
-      if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(userFacingError(e))));
-    }
-  }
 
   Future<void> notifyBatchCustomers(BuildContext context, int batchId) async {
     try {
@@ -2212,7 +2163,7 @@ class _BatchesPageState extends State<BatchesPage> {
                         itemBuilder: (_) => [
                           if (batch['status'] == 'In Transit' && batch['created_at'] != null &&
                               DateTime.now().difference(DateTime.tryParse('${batch['created_at']}') ?? DateTime.now()).inDays >= 45)
-                            const PopupMenuItem(value: 'remind', child: Text('45-day customer payment reminders')),
+                            const PopupMenuItem(value: 'remind', child: Text('Remind customers of shipping cost')),
                           if (widget.isAdmin && batch['status'] == 'In Transit')
                             const PopupMenuItem(value: 'arrive', child: Text('Mark arrived')),
                           if (widget.isAdmin && batch['status'] == 'Arrived - Awaiting Shipping Payment')
