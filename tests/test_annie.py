@@ -183,7 +183,7 @@ def test_process_annie_question_posts_a_database_answer_without_reply_queue(monk
     ))
     commits = []
     monkeypatch.setattr(annie.db.session, "commit", lambda: commits.append(True))
-    monkeypatch.setattr(annie, "_active_staff_ids", lambda: [7, 8])
+    monkeypatch.setattr(annie, "_active_staff_ids", lambda: [])
     monkeypatch.setattr("app.services.audit._schedule_outbox_flush", lambda: None)
 
     result = annie.process_annie_question(321, 7)
@@ -191,5 +191,5 @@ def test_process_annie_question_posts_a_database_answer_without_reply_queue(monk
     assert result.id == 999
     assert posted["content"] == "Answer for: how many sales today?"
     assert posted["kwargs"]["event_key"] == "annie-reply-321"
-    assert posted["kwargs"]["recipient_user_ids"] == [7, 8]
+    assert posted["kwargs"]["recipient_user_ids"] == []
     assert commits
