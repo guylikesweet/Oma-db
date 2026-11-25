@@ -2116,7 +2116,7 @@ class _BatchesPageState extends State<BatchesPage> {
                             await notifyBatchCustomers(context, batch['id'] as int);
                           } else if (value == 'undo' && widget.isAdmin) {
                             await undoArrival(batch['id'] as int);
-
+                          }
                         },
                         itemBuilder: (_) => [
                           if (batch['status'] == 'In Transit' && batch['created_at'] != null &&
