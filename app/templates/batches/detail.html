@@ -25,7 +25,11 @@
       {% if reminders_available %}
       <a href="{{ url_for('batches.remind_customers', batch_id=batch.id) }}" class="btn btn-success btn-sm">Remind customers of shipping cost</a>
       {% else %}
-      <button type="button" class="btn btn-default btn-sm" disabled>Remind customers (available {{ reminders_available_at.strftime('%d %b %Y') }})</button>
+        {% if reminders_available_at %}
+        <button type="button" class="btn btn-default btn-sm" disabled>Remind customers (available {{ reminders_available_at.strftime('%d %b %Y') }})</button>
+        {% else %}
+        <button type="button" class="btn btn-default btn-sm" disabled>Shipping reminder unavailable</button>
+        {% endif %}
       {% endif %}
       <form method="post" action="{{ url_for('batches.mark_arrived_route', batch_id=batch.id) }}" style="display:inline-block;">
         <button type="submit" class="btn btn-primary btn-sm">Mark Arrived</button>
