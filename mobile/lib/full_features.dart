@@ -1642,7 +1642,11 @@ class _BatchesPageState extends State<BatchesPage> {
                 children: [
                   const Text('Creating this batch means it has departed. Select its complete sales manifest now; sales cannot be added or removed afterwards.', style: TextStyle(color: Colors.grey)),
                   const SizedBox(height: 14),
-                  TextField(controller: name, decoration: const InputDecoration(labelText: 'Batch name')),
+                  TextField(
+                    controller: name,
+                    onChanged: (_) => setDialogState(() {}),
+                    decoration: const InputDecoration(labelText: 'Batch name'),
+                  ),
                   const SizedBox(height: 14),
                   const Text('Travels by'),
                   const SizedBox(height: 6),
