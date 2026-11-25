@@ -274,7 +274,7 @@ class Sale(db.Model):
     total_amount = db.Column(db.Numeric(12, 2), default=0.00)
     profit = db.Column(db.Numeric(12, 2))  # Stage 8: NULL until shipping is settled (see services/sales.py)
 
-    payment_status = db.Column(db.String(50), default="Paid")  # Paid, Pending, Refunded
+    payment_status = db.Column(db.String(50), default="Paid")  # Paid, Pending, Partially Paid, Refunded
     notes = db.Column(db.Text)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 

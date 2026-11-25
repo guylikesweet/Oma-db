@@ -1402,10 +1402,11 @@ class _WebSalesPageState extends State<WebSalesPage> {
                               'Update status',
                             ),
                           ),
-                          const PopupMenuItem(
-                            value: 'payments',
-                            child: Text('Pay Small Small / Payment history'),
-                          ),
+                          if ((sale['sale_type'] ?? 'preorder') != 'stock')
+                            const PopupMenuItem(
+                              value: 'payments',
+                              child: Text('Pay Small Small / Payment history'),
+                            ),
                           if (sale['batch_id'] != null &&
                               sale['shipping_payment_settled'] !=
                                   true)
@@ -1526,7 +1527,11 @@ class _SalePaymentsPageState extends State<SalePaymentsPage> {
     final payments = (data?['payments'] as List?) ?? const [];
     return Scaffold(
       appBar: AppBar(title: const Text('Pay Small Small'), actions: [IconButton(onPressed: load, icon: const Icon(Icons.refresh))]),
-      floatingActionButton: FloatingActionButton.extended(onPressed: data == null ? null : addPayment, icon: const Icon(Icons.add), label: const Text('Record payment')),
+      floatingActionButton: data != null &&
+              (data!['outstanding'] as num? ?? 0) > 0 &&
+              payments.length < 3
+          ? FloatingActionButton.extended(onPressed: addPayment, icon: const Icon(Icons.add), label: const Text('Record payment'))
+          : null,
       body: busy ? const Center(child: BrandLoader()) : error != null ? Center(child: Text(error!)) : RefreshIndicator(
         onRefresh: load,
         child: ListView(padding: const EdgeInsets.fromLTRB(16, 12, 16, 90), children: [
