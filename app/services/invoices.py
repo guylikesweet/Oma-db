@@ -174,9 +174,10 @@ def receipt_block_reason(sale):
     """Why this sale must NOT be sent a receipt, or None if it may."""
     if (sale.order_status or "") == "Cancelled":
         return "A cancelled order does not get a receipt."
-    if (sale.payment_status or "") != "Paid":
-        return ("Receipts are only issued for paid orders. Mark the order as "
-                "Paid first. A refund gets a separate refund note, not a receipt.")
+    if (sale.payment_status or "") == "Refunded":
+        return "A refunded order does not get a sales receipt."
+    if not sale.payments and (sale.payment_status or "") != "Paid":
+        return "A receipt is available after the first verified payment is recorded."
     return None
 
 
@@ -261,6 +262,22 @@ def get_invoice_context(sale):
         })
 
     signature = invoice_signature(sale)
+    payment_rows = sorted(list(sale.payments), key=lambda p: (p.received_at or datetime.min, p.id or 0))
+    amount_paid = sum((p.amount or 0 for p in payment_rows), 0)
+    product_balance = max(0, (sale.subtotal_amount or 0) - amount_paid)
+    payment_paragraphs = []
+    if payment_rows:
+        payment_paragraphs.append([("PAYMENT HISTORY", True)])
+        for payment in payment_rows:
+            stamp = _to_wat(payment.received_at).strftime("%d %b %Y %H:%M") if payment.received_at else "Recorded by server"
+            payment_paragraphs.append([
+                (f"{stamp} — {payment.transaction_reference}: ", False),
+                (f"NGN {_money(payment.amount)}", True),
+            ])
+        payment_paragraphs.append([
+            ("Total received: ", False), (f"NGN {_money(amount_paid)}", True),
+            (" • Product balance outstanding: ", False), (f"NGN {_money(product_balance)}", True),
+        ])
     return {
         "business_name": business_name,
         "business_phone": _clean(settings.business_phone),
@@ -277,7 +294,7 @@ def get_invoice_context(sale):
         # arrives, but shipping is billed separately and never part of this figure.
         "total_text": _money(sale.subtotal_amount or 0),
         "total_note": None if sale.is_stock_sale else "(products only)",
-        "notice_paragraphs": _notice_paragraphs(sale),
+        "notice_paragraphs": _notice_paragraphs(sale) + payment_paragraphs,
         "verify_url": verify_url(sale),
         "signature": signature,
         "code_text": "-".join(signature[i:i + 5] for i in range(0, len(signature), 5)),
