@@ -46,7 +46,7 @@ def create_batch(
     if not ids:
         raise BatchValidationError("Select at least one sale before creating a shipment batch.")
 
-    sales = Sale.query.filter(Sale.id.in_(ids)).all()
+    sales = Sale.query.filter(Sale.id.in_(ids)).with_for_update().all()
     found = {sale.id for sale in sales}
     missing = [sale_id for sale_id in ids if sale_id not in found]
     if missing:
@@ -110,13 +110,6 @@ def remove_sale_from_batch(sale_id):
         "Shipment contents are locked when the batch is created. A departed sale cannot be removed."
     )
 
-
-
-def remove_sale_from_batch(sale_id):
-    """A departed batch manifest is immutable."""
-    raise BatchValidationError(
-        "Shipment contents are locked when the batch is created. A departed sale cannot be removed."
-    )
 
 
 def update_batch_sales(batch_id, *, add_sale_ids=None, remove_sale_ids=None, commit=True):
