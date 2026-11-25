@@ -27,7 +27,7 @@ def _sale(sale_id, phone, subtotal, paid, qty, estimate=0):
     )
 
 
-def test_batch_payment_reminders_require_45_days():
+def test_batch_payment_reminders_require_35_days():
     created = datetime(2026, 1, 1)
     batch = SimpleNamespace(
         status=ShipmentBatch.STATUS_IN_TRANSIT,
