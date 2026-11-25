@@ -107,3 +107,32 @@ def test_only_the_main_branch_annie_scheduler_workflow_is_trusted():
     assert not is_trusted_annie_scheduler_claims({**claims, "ref": "refs/heads/feature"})
     assert not is_trusted_annie_scheduler_claims({**claims, "workflow_ref": "other.yml"})
     assert not is_trusted_annie_scheduler_claims({**claims, "event_name": "push"})
+
+
+def test_annie_supports_yesterday_and_month_to_date_sales(monkeypatch):
+    import app.services.annie as annie
+
+    monkeypatch.setattr(annie, "build_business_context", lambda user, question: {
+        "sales_yesterday": {"orders": 2, "product_value_ngn": 40000, "verified_product_payments_ngn": 30000, "product_balance_ngn": 10000},
+        "sales_month_to_date": {"orders": 18, "product_value_ngn": 800000, "verified_product_payments_ngn": 600000, "product_balance_ngn": 200000},
+    })
+    yesterday = answer_question(SimpleNamespace(is_admin=False), "How much did we sell yesterday?")
+    month = answer_question(SimpleNamespace(is_admin=False), "Give me sales month to date")
+    assert "yesterday" in yesterday and "2 order(s)" in yesterday
+    assert "this month to date" in month and "18 order(s)" in month
+
+
+def test_annie_help_explains_scope_and_read_only_capability():
+    answer = answer_question(SimpleNamespace(is_admin=False), "What can you do?")
+    assert "live Oma records" in answer
+    assert "cannot change records" in answer
+
+
+def test_annie_lists_inventory_preview(monkeypatch):
+    import app.services.annie as annie
+
+    monkeypatch.setattr(annie, "build_business_context", lambda user, question: {
+        "inventory_preview": [{"name": "Blue Dress", "stock_pieces": 4}],
+    })
+    answer = answer_question(SimpleNamespace(is_admin=False), "List all products")
+    assert "Blue Dress: 4 piece(s)" in answer

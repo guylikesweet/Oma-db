@@ -243,11 +243,22 @@ def build_business_context(user, question):
             "product_balance_ngn": float(max(Decimal("0"), product_value - paid)),
         }
 
+    yesterday_start = day_start - timedelta(days=1)
+    month_start = day_start.replace(day=1)
+    next_month_start = (month_start.replace(day=28) + timedelta(days=4)).replace(day=1)
     today_sales = Sale.query.filter(
         Sale.created_at >= day_start, Sale.order_status != "Cancelled"
     ).all()
+    yesterday_sales = Sale.query.filter(
+        Sale.created_at >= yesterday_start, Sale.created_at < day_start,
+        Sale.order_status != "Cancelled"
+    ).all()
     week_sales = Sale.query.filter(
         Sale.created_at >= week_start, Sale.order_status != "Cancelled"
+    ).all()
+    month_sales = Sale.query.filter(
+        Sale.created_at >= month_start, Sale.created_at < next_month_start,
+        Sale.order_status != "Cancelled"
     ).all()
     active_sales = Sale.query.filter(
         Sale.order_status != "Cancelled"
@@ -366,7 +377,12 @@ def build_business_context(user, question):
         "as_of_utc": now.isoformat(),
         "staff_role": "admin" if user.is_admin else "staff",
         "sales_today": summarize_sales(today_sales),
+        "sales_yesterday": summarize_sales(yesterday_sales),
         "sales_last_7_days": summarize_sales(week_sales),
+        "sales_month_to_date": summarize_sales(month_sales),
+        "inventory_preview": [{
+            "name": p.name, "stock_pieces": int(p.stock or 0)
+        } for p in Product.query.order_by(Product.name.asc()).limit(50).all()],
         "outstanding_product_balance_recent_500_open_orders_ngn": float(all_open_balance),
         "largest_outstanding_orders_recent_500": (
             top_outstanding_orders[:15] if customer_lookup_requested else []
@@ -401,29 +417,38 @@ def build_business_context(user, question):
 
 
 def answer_question(user, question):
-    """Answer Oma questions locally from a bounded, role-aware database snapshot.
-
-    This intentionally uses no external AI provider, API key, internet search,
-    or write-capable tools. Unknown questions are handled honestly rather than
-    answered with guessed business figures.
-    """
+    """Answer Oma questions locally from a bounded, role-aware database snapshot."""
     question = (question or "").strip()
     if not question:
-        return "Hi! I'm Annie. Ask me about Oma's sales, stock, shipments, payments, customers, deliveries or app processes."
+        return "Hi! I'm Annie. Ask me about sales, stock, customers, payments, shipments, deliveries or how to use Oma."
 
-    lowered = question.casefold()
-    if re.fullmatch(r"(hi|hello|hey|good morning|good afternoon|good evening|how are you)[!.? ]*", lowered):
-        return "Hello! 😊 I'm Annie, your Oma business assistant. What would you like to check?"
+    lowered = re.sub(r"\\s+", " ", question.casefold()).strip(" ?!.")
+    if re.fullmatch(r"(hi|hello|hey|good morning|good afternoon|good evening|how are you)", lowered):
+        return "Hello! 😊 I'm Annie, your Oma business assistant. What would you like me to check?"
+
+    if any(term in lowered for term in ("what can you do", "help me", "your capabilities", "what do you know", "how can you help")):
+        return (
+            "I can check live Oma records for sales, verified payments, outstanding product balances, "
+            "products and stock, shipment batches, deliveries and admin-only profit summaries. "
+            "I can also explain Oma procedures such as Pay Small Small, receipts, shipping settlement "
+            "and demurrage. Tag me with @Annie and ask one clear question. I cannot change records."
+        )
 
     business_terms = (
-        "oma", "sales", "sale", "order", "customer", "payment", "paid", "owe",
-        "owing", "balance", "stock", "inventory", "product", "shipment", "batch",
-        "shipping", "delivery", "deliver", "profit", "revenue", "business",
-        "staff", "team", "app", "preorder", "pre-order", "pay small", "small small", "money", "cash", "income", "turnover", "collected", "instalment",
-        "installment", "demurrage", "receipt", "reminder", "courier", "rate",
+        "oma", "sales", "sale", "order", "customer", "payment", "paid", "owe", "owing",
+        "balance", "stock", "inventory", "product", "shipment", "batch", "shipping",
+        "delivery", "deliver", "profit", "margin", "revenue", "business", "staff",
+        "team", "app", "preorder", "pre-order", "pay small", "small small", "money",
+        "cash", "income", "turnover", "collected", "instalment", "installment",
+        "demurrage", "receipt", "reminder", "courier", "rate", "today", "yesterday",
+        "week", "month", "quantity", "quantities",
     )
     if not any(term in lowered for term in business_terms):
-        return "I'm Annie, Oma's business assistant. I can help with Oma's sales, customers, payments, stock, shipments, deliveries and app procedures."
+        return (
+            "I'm Annie, Oma's business assistant. I focus on Oma's records and procedures. "
+            "Try: “sales today”, “low stock”, “who owes money?”, “batches in transit”, "
+            "or “how does Pay Small Small work?”"
+        )
 
     context = build_business_context(user, question)
 
@@ -436,9 +461,19 @@ def answer_question(user, question):
     def list_lines(rows, formatter, empty):
         if not rows:
             return empty
-        return "\n".join("• " + formatter(row) for row in rows)
+        return "\\n".join("• " + formatter(row) for row in rows)
 
-    # App procedures are fixed operational rules, not model-generated guesses.
+    # Permission checks happen before using any admin-only values.
+    if "profit" in lowered or "margin" in lowered:
+        financial = context.get("admin_only_financial_summary")
+        if not financial:
+            return "I can't share profit or margin information with your staff account. Please ask an administrator."
+        return (
+            "Recorded profit for the last 7 days: "
+            f"{money(financial.get('profit_last_7_days_ngn'))}. "
+            "This is calculated from Oma's database, not estimated."
+        )
+
     process_words = (
         "how do i", "how to", "how can i", "process", "procedure", "steps",
         "what happens", "how does", "when can", "receipt", "pay small",
@@ -446,51 +481,39 @@ def answer_question(user, question):
     )
     if any(word in lowered for word in process_words):
         guide = context.get("app_process_guide", [])
-        relevant = []
-        for item in guide:
-            item_lower = item.casefold()
-            keywords = [word for word in (
-                "pay small", "instalment", "installment", "receipt", "product cost",
-                "shipping", "reminder", "45 days", "demurrage", "delivery",
-                "read-only", "phone number", "batch",
-            ) if word in lowered]
-            if not keywords or any(word in item_lower for word in keywords):
-                relevant.append(item)
+        topic_map = {
+            "pay small": ("pay small", "instalment", "installment", "payment"),
+            "instalment": ("instalment", "installment", "payment"),
+            "installment": ("instalment", "installment", "payment"),
+            "receipt": ("receipt", "payment"),
+            "demurrage": ("demurrage", "shipping", "arrival"),
+            "reminder": ("reminder", "45 days", "batch"),
+            "shipping": ("shipping", "demurrage", "arrival"),
+            "delivery": ("delivery", "shipping"),
+            "batch": ("batch", "shipping", "reminder"),
+        }
+        topics = next((terms for key, terms in topic_map.items() if key in lowered), ())
+        relevant = [item for item in guide if not topics or any(t in item.casefold() for t in topics)]
         if not relevant:
             relevant = guide[:4]
-        return "Here's how it works in Oma:\n" + list_lines(relevant[:5], str, "")
+        return "Here's the relevant Oma procedure:\\n" + list_lines(relevant[:5], str, "I don't have a verified procedure for that yet.")
 
-    if any(word in lowered for word in ("low stock", "running low", "almost out", "stock alert")):
+    if any(word in lowered for word in ("low stock", "running low", "almost out", "stock alert", "reorder")):
         rows = context.get("low_stock_products", [])
         return (
-            "Products with 5 pieces or fewer in stock:\n"
+            "Products with 5 pieces or fewer in stock:\\n"
             + list_lines(rows, lambda row: f"{row['name']}: {row['stock_pieces']} piece(s)",
                          "No products currently meet the low-stock threshold.")
-        )
-
-    if "profit" in lowered or "margin" in lowered:
-        financial = context.get("admin_only_financial_summary")
-        if not financial:
-            return "I can't share profit or margin information with your staff account. Please ask an administrator."
-        return (
-            "Based on Oma's recorded sales for the last 7 days, "
-            f"the recorded profit is {money(financial.get('profit_last_7_days_ngn'))}. "
-            "This figure is calculated from the database."
         )
 
     if any(word in lowered for word in ("outstanding", "owe", "owes", "owing", "unpaid", "balance")):
         if "shipping" in lowered or "demurrage" in lowered:
             return (
                 "Shipping charges and demurrage are separate from product-payment balances. "
-                "I won't mix those figures. Open the relevant shipment batch in Oma to see "
-                "the current shipping settlement and demurrage details."
+                "Open the relevant shipment batch in Oma to see the current shipping settlement and demurrage."
             )
         rows = context.get("matching_customer_orders") or context.get("largest_outstanding_orders_recent_500") or []
-        header = (
-            "Outstanding product balances from Oma's 500 most recent active orders:"
-            if not context.get("matching_customer_orders")
-            else "Matching customer/order balances:"
-        )
+        header = "Matching customer/order balances:" if context.get("matching_customer_orders") else "Outstanding balances in the 500 most recent active orders:"
         details = list_lines(
             rows[:10],
             lambda row: (
@@ -501,77 +524,88 @@ def answer_question(user, question):
             "I couldn't find matching unpaid orders in the available records.",
         )
         total = context.get("outstanding_product_balance_recent_500_open_orders_ngn")
-        return f"{header}\n{details}\n\nRecent-order outstanding total: {money(total)}. This is not a full-company total."
+        return f"{header}\\n{details}\\n\\nRecent-order outstanding total: {money(total)}. This is not a full-company total."
 
-    if "batch" in lowered or "shipment" in lowered or "in transit" in lowered or "arrived" in lowered:
+    if any(word in lowered for word in ("batch", "shipment", "in transit", "arrived")):
         rows = context.get("shipment_batches", [])
         status_counts = context.get("shipment_batch_status_counts", {})
-        wanted = None
-        if "transit" in lowered:
-            wanted = "In Transit"
-        elif "arrived" in lowered:
-            wanted = "Arrived - Awaiting Shipping Payment"
+        wanted = "In Transit" if "transit" in lowered else (
+            "Arrived - Awaiting Shipping Payment" if "arrived" in lowered else None
+        )
         if wanted:
             matching = [row for row in rows if str(row.get("status", "")).casefold() == wanted.casefold()]
             count = status_counts.get(wanted, len(matching))
             label = "in transit" if wanted == "In Transit" else "arrived and awaiting shipping payment"
             return (
-                f"Oma has {count} shipment batch(es) marked {label}. "
-                + list_lines(matching[:10], lambda row: f"{row['name']} — {row['transport_mode']}, {row['orders']} order(s), {row['pieces']} pieces", "No matching batches appear in the 20 most recent batches.")
+                f"Oma has {count} batch(es) marked {label}.\\n"
+                + list_lines(matching[:10], lambda row: f"{row['name']} — {row['transport_mode']}, {row['orders']} order(s), {row['pieces']} pieces",
+                             "The count includes older batches outside the 20 shown here.")
             )
-        return "Recent shipment batches:\n" + list_lines(
+        return "Recent shipment batches:\\n" + list_lines(
             rows[:12],
             lambda row: f"{row['name']} — {row['status']}, {row['transport_mode']}, {row['orders']} order(s), {row['pieces']} pieces",
-            "There are no shipment batches in the database snapshot."
+            "There are no shipment batches in the database."
         )
 
     if "deliver" in lowered:
         rows = context.get("recent_deliveries", [])
-        return "Recent deliveries:\n" + list_lines(
+        return "Recent deliveries:\\n" + list_lines(
             rows[:10],
             lambda row: f"Delivery #{row['id']} — {row['status']} ({row['method']}), {row['sales_count']} order(s)",
-            "No delivery records were found in the recent records."
+            "No delivery records were found."
         )
 
-    if any(word in lowered for word in ("product", "stock", "inventory", "quantity")):
+    if any(word in lowered for word in ("product", "stock", "inventory", "quantity", "quantities")):
+        if any(word in lowered for word in ("list", "show all", "all products", "catalogue", "catalog")):
+            rows = context.get("inventory_preview", [])
+            return "Product stock (first 50 alphabetically):\\n" + list_lines(
+                rows, lambda row: f"{row['name']}: {row['stock_pieces']} piece(s)",
+                "There are no product records."
+            )
         rows = context.get("matching_products", [])
         if rows:
-            return "Matching products and current stock:\n" + list_lines(
+            return "Matching products and current stock:\\n" + list_lines(
                 rows, lambda row: f"{row['name']}: {row['stock_pieces']} piece(s)", ""
             )
         return (
             f"Oma currently has {context.get('product_count', 0)} product record(s) "
             f"and {context.get('total_stock_pieces', 0)} pieces of stock in total. "
-            "If you want the stock for a particular item, include its product name."
+            "Include a product name if you want its exact quantity."
         )
 
-    if any(word in lowered for word in ("sale", "sales", "revenue", "today", "this week", "last 7 days", "collected", "income", "turnover", "money", "cash", "made")):
-        period = context.get("sales_today", {}) if "today" in lowered else context.get("sales_last_7_days", {})
-        label = "today" if "today" in lowered else ("this week" if "this week" in lowered else "the last 7 days")
+    if any(word in lowered for word in ("sale", "sales", "revenue", "today", "yesterday", "this week", "last 7 days", "last week", "this month", "month to date", "collected", "income", "turnover", "money", "cash", "made")):
+        if "yesterday" in lowered:
+            period, label = context.get("sales_yesterday", {}), "yesterday"
+        elif "month" in lowered:
+            period, label = context.get("sales_month_to_date", {}), "this month to date"
+        elif "today" in lowered:
+            period, label = context.get("sales_today", {}), "today"
+        else:
+            period, label = context.get("sales_last_7_days", {}), "the last 7 days"
         return (
             f"Sales summary for {label}: {period.get('orders', 0)} order(s), "
             f"recorded product value {money(period.get('product_value_ngn'))}, "
             f"verified product payments {money(period.get('verified_product_payments_ngn'))}, "
-            f"and product balance {money(period.get('product_balance_ngn'))}."
+            f"and product balance {money(period.get('product_balance_ngn'))}. "
+            "Shipping charges are tracked separately."
         )
 
-    if "customer" in lowered or "order" in lowered or "payment" in lowered or "paid" in lowered:
+    if any(word in lowered for word in ("customer", "order", "payment", "paid")):
         rows = context.get("matching_customer_orders", [])
         if rows:
-            return "Matching Oma orders:\n" + list_lines(
+            return "Matching Oma orders:\\n" + list_lines(
                 rows[:10],
                 lambda row: f"{row['customer']} — {row['order']}, {row['status']}, paid {money(row['product_paid_ngn'])}, balance {money(row['product_balance_ngn'])}",
                 ""
             )
         return (
-            "I can check customer orders and verified payments. Please include the customer's "
+            "I can check customer orders and verified payments. Include the customer's "
             "name, order number or shipment batch so I can narrow down the records."
         )
 
     return (
         "I can help with Oma's live sales, product stock, outstanding balances, shipment batches, "
-        "deliveries and app procedures. Try asking one of those directly, or include a customer, "
-        "product or order name."
+        "deliveries and app procedures. Ask about a time period or include a customer, product or order name."
     )
 
 
