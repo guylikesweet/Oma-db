@@ -1710,6 +1710,7 @@ class _BatchesPageState extends State<BatchesPage> {
       // complete manifest online in one transaction rather than queueing
       // separate, race-prone add-sale operations while offline.
       await widget.api.createBatch({
+        'operation_id': 'batch-create-${DateTime.now().microsecondsSinceEpoch}',
         'name': name.text.trim(),
         'transport_mode': mode,
         'notes': notes.text.trim(),
