@@ -1892,46 +1892,6 @@ class _BatchesPageState extends State<BatchesPage> {
     }
   }
 
-  Future<void> deleteBatch(int id, String name) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Delete shipment batch?'),
-        content: Text(
-          'Delete "$name"? Sales will not be deleted; they will be detached from this batch.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext, false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(dialogContext, true),
-            child: const Text('Delete'),
-          ),
-        ],
-      ),
-    );
-    if (confirmed != true) return;
-
-    if (!await BiometricGuard.require(
-      context,
-      reason: 'Verify your identity before deleting this shipment batch.',
-    )) return;
-
-    try {
-      await widget.api.deleteBatch(id);
-      await load();
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(userFacingError(e))),
-        );
-      }
-    }
-  }
-
-
   Future<void> notifyBatchPaymentReminders(BuildContext context, int batchId) async {
     try {
       final notices = await widget.api.batchPaymentReminders(batchId);
@@ -2156,13 +2116,11 @@ class _BatchesPageState extends State<BatchesPage> {
                             await notifyBatchCustomers(context, batch['id'] as int);
                           } else if (value == 'undo' && widget.isAdmin) {
                             await undoArrival(batch['id'] as int);
-                          } else if (value == 'delete' && widget.isAdmin) {
-                            await deleteBatch(batch['id'] as int, '${batch['name'] ?? 'Batch'}');
-                          }
+
                         },
                         itemBuilder: (_) => [
                           if (batch['status'] == 'In Transit' && batch['created_at'] != null &&
-                              DateTime.now().difference(DateTime.tryParse('${batch['created_at']}') ?? DateTime.now()).inDays >= 45)
+                              DateTime.now().difference(DateTime.tryParse('${batch['created_at']}') ?? DateTime.now()).inDays >= 35)
                             const PopupMenuItem(value: 'remind', child: Text('Remind customers of shipping cost')),
                           if (widget.isAdmin && batch['status'] == 'In Transit')
                             const PopupMenuItem(value: 'arrive', child: Text('Mark arrived')),
@@ -2170,8 +2128,6 @@ class _BatchesPageState extends State<BatchesPage> {
                             const PopupMenuItem(value: 'notify', child: Text('Notify customers on WhatsApp')),
                           if (widget.isAdmin && batch['status'] == 'Arrived - Awaiting Shipping Payment')
                             const PopupMenuItem(value: 'undo', child: Text('Undo arrival')),
-                          if (widget.isAdmin)
-                            const PopupMenuItem(value: 'delete', child: Text('Delete batch')),
                         ],
                       ),
                     ),
