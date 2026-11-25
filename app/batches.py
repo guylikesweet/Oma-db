@@ -1,5 +1,6 @@
+from datetime import datetime, timedelta
 from flask import Blueprint, render_template, request, redirect, url_for, flash
-from flask_login import login_required
+from flask_login import login_required, current_user
 
 from app.access import admin_required, password_required
 from app.models import ShipmentBatch, Sale
@@ -48,7 +49,20 @@ def create_batch_route():
 @login_required
 def batch_detail(batch_id):
     batch = ShipmentBatch.query.get_or_404(batch_id)
-    return render_template("batches/detail.html", batch=batch)
+    reminders_available_at = (
+        batch.created_at + timedelta(days=45) if batch.created_at else None
+    )
+    reminders_available = bool(
+        batch.status == ShipmentBatch.STATUS_IN_TRANSIT
+        and reminders_available_at
+        and datetime.utcnow() >= reminders_available_at
+    )
+    return render_template(
+        "batches/detail.html",
+        batch=batch,
+        reminders_available=reminders_available,
+        reminders_available_at=reminders_available_at,
+    )
 
 
 @batches_bp.route("/<int:batch_id>/remind-customers")
