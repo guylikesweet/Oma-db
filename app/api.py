@@ -147,6 +147,11 @@ def require_api_token(f):
             db.session.commit()
 
         g.api_user = user
+        try:
+            from app.services.annie import maybe_process_due_payment_reminders
+            maybe_process_due_payment_reminders()
+        except Exception:
+            current_app.logger.exception("Annie's scheduled reminder check failed")
         return f(*args, **kwargs)
     return wrapper
 

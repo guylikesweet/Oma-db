@@ -36,18 +36,6 @@ def create_app(config_object="config.Config"):
         incoming = (request.headers.get("X-Request-ID") or "").strip()
         g.request_id = incoming[:128] if incoming else uuid.uuid4().hex
 
-    @app.before_request
-    def check_annie_due_reminders():
-        # The free Oma-db web instance can sleep when idle. Check due reminders
-        # on live API traffic, with a per-process throttle to avoid querying on
-        # every Flutter polling request.
-        if request.path.startswith("/api/"):
-            try:
-                from app.services.annie import maybe_process_due_payment_reminders
-                maybe_process_due_payment_reminders()
-            except Exception:
-                app.logger.exception("Annie's scheduled reminder check failed")
-
     @app.after_request
     def expose_request_id(response):
         response.headers["X-Request-ID"] = getattr(g, "request_id", "")

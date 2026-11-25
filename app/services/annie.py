@@ -175,8 +175,7 @@ def build_audit_update(action, target_type=None, target_id=None, details=None):
             "Demurrage is ₦150 per piece per day after the 7-day grace period."
         )
     elif action == "sale.payment.verified":
-        sale = db.session.get(Sale, entity_id) if entity_id else None
-        order = (sale.order_id or f"#{sale.id}") if sale else f"order #{target_id}"
+        order = details.get("order_id") or f"sale #{target_id}"
         body = f"{_money(details.get('amount'))} received for {order}. Remaining product balance: {_money(details.get('outstanding'))}."
     elif action == "stock.adjust":
         product = db.session.get(Product, entity_id) if entity_id else None
