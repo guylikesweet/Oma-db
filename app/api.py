@@ -165,7 +165,7 @@ def _ensure_api_token(user):
 @api_bp.route("/v1/annie/scheduled-reminders", methods=("POST",))
 @limiter.limit("10 per minute")
 def annie_scheduled_reminders():
-    """GitHub Actions OIDC endpoint for the 45-day reminder scheduler."""
+    """GitHub Actions OIDC endpoint for the 35-day reminder scheduler."""
     auth = (request.headers.get("Authorization") or "").strip()
     token = auth[7:].strip() if auth.lower().startswith("bearer ") else ""
     if not token:
