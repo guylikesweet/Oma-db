@@ -422,7 +422,7 @@ def answer_question(user, question):
     if not question:
         return "Hi! I'm Annie. Ask me about sales, stock, customers, payments, shipments, deliveries or how to use Oma."
 
-    lowered = re.sub(r"\\s+", " ", question.casefold()).strip(" ?!.")
+    lowered = re.sub(r"\s+", " ", question.casefold()).strip(" ?!.")
     if re.fullmatch(r"(hi|hello|hey|good morning|good afternoon|good evening|how are you)", lowered):
         return "Hello! 😊 I'm Annie, your Oma business assistant. What would you like me to check?"
 
@@ -461,7 +461,7 @@ def answer_question(user, question):
     def list_lines(rows, formatter, empty):
         if not rows:
             return empty
-        return "\\n".join("• " + formatter(row) for row in rows)
+        return "\n".join("• " + formatter(row) for row in rows)
 
     # Permission checks happen before using any admin-only values.
     if "profit" in lowered or "margin" in lowered:
@@ -496,12 +496,12 @@ def answer_question(user, question):
         relevant = [item for item in guide if not topics or any(t in item.casefold() for t in topics)]
         if not relevant:
             relevant = guide[:4]
-        return "Here's the relevant Oma procedure:\\n" + list_lines(relevant[:5], str, "I don't have a verified procedure for that yet.")
+        return "Here's the relevant Oma procedure:\n" + list_lines(relevant[:5], str, "I don't have a verified procedure for that yet.")
 
     if any(word in lowered for word in ("low stock", "running low", "almost out", "stock alert", "reorder")):
         rows = context.get("low_stock_products", [])
         return (
-            "Products with 5 pieces or fewer in stock:\\n"
+            "Products with 5 pieces or fewer in stock:\n"
             + list_lines(rows, lambda row: f"{row['name']}: {row['stock_pieces']} piece(s)",
                          "No products currently meet the low-stock threshold.")
         )
@@ -524,7 +524,7 @@ def answer_question(user, question):
             "I couldn't find matching unpaid orders in the available records.",
         )
         total = context.get("outstanding_product_balance_recent_500_open_orders_ngn")
-        return f"{header}\\n{details}\\n\\nRecent-order outstanding total: {money(total)}. This is not a full-company total."
+        return f"{header}\n{details}\n\nRecent-order outstanding total: {money(total)}. This is not a full-company total."
 
     if any(word in lowered for word in ("batch", "shipment", "in transit", "arrived")):
         rows = context.get("shipment_batches", [])
@@ -537,11 +537,11 @@ def answer_question(user, question):
             count = status_counts.get(wanted, len(matching))
             label = "in transit" if wanted == "In Transit" else "arrived and awaiting shipping payment"
             return (
-                f"Oma has {count} batch(es) marked {label}.\\n"
+                f"Oma has {count} batch(es) marked {label}.\n"
                 + list_lines(matching[:10], lambda row: f"{row['name']} — {row['transport_mode']}, {row['orders']} order(s), {row['pieces']} pieces",
                              "The count includes older batches outside the 20 shown here.")
             )
-        return "Recent shipment batches:\\n" + list_lines(
+        return "Recent shipment batches:\n" + list_lines(
             rows[:12],
             lambda row: f"{row['name']} — {row['status']}, {row['transport_mode']}, {row['orders']} order(s), {row['pieces']} pieces",
             "There are no shipment batches in the database."
@@ -549,7 +549,7 @@ def answer_question(user, question):
 
     if "deliver" in lowered:
         rows = context.get("recent_deliveries", [])
-        return "Recent deliveries:\\n" + list_lines(
+        return "Recent deliveries:\n" + list_lines(
             rows[:10],
             lambda row: f"Delivery #{row['id']} — {row['status']} ({row['method']}), {row['sales_count']} order(s)",
             "No delivery records were found."
@@ -558,13 +558,13 @@ def answer_question(user, question):
     if any(word in lowered for word in ("product", "stock", "inventory", "quantity", "quantities")):
         if any(word in lowered for word in ("list", "show all", "all products", "catalogue", "catalog")):
             rows = context.get("inventory_preview", [])
-            return "Product stock (first 50 alphabetically):\\n" + list_lines(
+            return "Product stock (first 50 alphabetically):\n" + list_lines(
                 rows, lambda row: f"{row['name']}: {row['stock_pieces']} piece(s)",
                 "There are no product records."
             )
         rows = context.get("matching_products", [])
         if rows:
-            return "Matching products and current stock:\\n" + list_lines(
+            return "Matching products and current stock:\n" + list_lines(
                 rows, lambda row: f"{row['name']}: {row['stock_pieces']} piece(s)", ""
             )
         return (
@@ -593,7 +593,7 @@ def answer_question(user, question):
     if any(word in lowered for word in ("customer", "order", "payment", "paid")):
         rows = context.get("matching_customer_orders", [])
         if rows:
-            return "Matching Oma orders:\\n" + list_lines(
+            return "Matching Oma orders:\n" + list_lines(
                 rows[:10],
                 lambda row: f"{row['customer']} — {row['order']}, {row['status']}, paid {money(row['product_paid_ngn'])}, balance {money(row['product_balance_ngn'])}",
                 ""
