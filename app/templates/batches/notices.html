@@ -1,0 +1,34 @@
+{% extends 'base_standalone.html' %}
+{% block title %}{{ heading }} — {{ batch.name }}{% endblock %}
+{% block body %}
+<div class="container" style="max-width:900px;margin-top:20px;">
+  <h2>{{ heading }}</h2>
+  <p class="text-muted">{{ batch.name }} · {{ notices|length }} customer message(s)</p>
+  <p>{{ intro }}</p>
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% for category, message in messages %}
+      <div class="alert alert-{{ 'danger' if category == 'error' else 'success' }}">{{ message }}</div>
+    {% endfor %}
+  {% endwith %}
+  {% for notice in notices %}
+  <div class="panel panel-default" style="padding:14px;margin-bottom:12px;border:1px solid #ddd;border-radius:8px;">
+    <div style="display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;">
+      <div><strong>{{ notice.customer_name }}</strong><div class="text-muted">{{ notice.phone }} · {{ notice.sale_ids|length }} sale(s)</div></div>
+      {% if notice.estimated_shipping is defined %}
+      <strong>Estimated shipping: NGN {{ '{:,.2f}'.format(notice.estimated_shipping) }}</strong>
+      {% elif notice.total_shipping is defined %}
+      <strong>Shipping due: NGN {{ '{:,.2f}'.format(notice.total_shipping) }}</strong>
+      {% endif %}
+    </div>
+    {% if notice.product_outstanding is defined %}
+    <p class="text-muted" style="margin:8px 0 0;">Outstanding product balance: NGN {{ '{:,.2f}'.format(notice.product_outstanding) }} · {{ notice.piece_count }} piece(s)</p>
+    {% endif %}
+    <details style="margin-top:8px;"><summary>Preview message</summary><pre style="white-space:pre-wrap;margin-top:8px;">{{ notice.message }}</pre></details>
+    <a class="btn btn-success btn-sm" style="margin-top:10px;" href="{{ notice.whatsapp_url }}" target="_blank" rel="noopener">Open WhatsApp</a>
+  </div>
+  {% else %}
+  <div class="alert alert-info">No customer messages are available. Check that the batch has valid customer phone numbers and, for arrival notices, actual shipping costs.</div>
+  {% endfor %}
+  <a href="{{ url_for('batches.batch_detail', batch_id=batch.id) }}" class="btn btn-default">Back to batch</a>
+</div>
+{% endblock %}
