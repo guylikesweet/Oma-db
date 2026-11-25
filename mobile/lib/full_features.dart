@@ -1731,7 +1731,7 @@ class _BatchesPageState extends State<BatchesPage> {
     final inTransit = batch['status'] == 'In Transit';
     final arrived = batch['status'] == 'Arrived - Awaiting Shipping Payment';
     final createdAt = DateTime.tryParse('${batch['created_at'] ?? ''}')?.toLocal();
-    final remindAt = createdAt?.add(const Duration(days: 45));
+    final remindAt = createdAt?.add(const Duration(days: 35));
     final reminderDue = inTransit && remindAt != null && !DateTime.now().isBefore(remindAt);
 
     await showModalBottomSheet<void>(
@@ -1754,7 +1754,7 @@ class _BatchesPageState extends State<BatchesPage> {
                   label: Text(reminderDue ? 'Remind customers of shipping cost' : remindAt == null ? 'Shipping reminder unavailable' : 'Reminder available ${MaterialLocalizations.of(sheetContext).formatMediumDate(remindAt)}'),
                 ),
                 const SizedBox(height: 6),
-                const Text('The 45-day reminder uses estimated shipping cost and groups matching phone numbers within this batch only.', style: TextStyle(color: Colors.grey, fontSize: 12)),
+                const Text('The 35-day reminder uses estimated shipping cost and groups matching phone numbers within this batch only.', style: TextStyle(color: Colors.grey, fontSize: 12)),
               ],
               if (arrived) ...[
                 FilledButton.icon(
