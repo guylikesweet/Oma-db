@@ -1,4 +1,6 @@
-from app.services.annie import build_audit_update, is_annie_mention
+from types import SimpleNamespace
+
+from app.services.annie import answer_question, build_audit_update, is_annie_mention
 
 
 def test_annie_mention_is_case_insensitive_and_requires_a_real_tag():
@@ -33,3 +35,9 @@ def test_annie_payment_update_uses_only_payment_and_outstanding_values():
     assert "₦5,000.00" in result["body"]
     assert "₦12,000.00" in result["body"]
     assert "unit cost" not in result["body"].lower()
+
+
+def test_annie_without_provider_key_explains_configuration(monkeypatch):
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    answer = answer_question(SimpleNamespace(is_admin=False), "How many batches are in transit?")
+    assert "OPENAI_API_KEY" in answer

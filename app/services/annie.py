@@ -17,7 +17,7 @@ from decimal import Decimal
 from sqlalchemy import desc
 
 from app import db
-from app.models import ChatMessage, Delivery, Product, PushDevice, Sale, ShipmentBatch, User
+from app.models import AnnieReplyTask, ChatMessage, Delivery, Product, PushDevice, Sale, ShipmentBatch, User
 
 log = logging.getLogger(__name__)
 _ANNIE_MENTION = re.compile(r"(?<![A-Za-z0-9_])@annie\b", re.IGNORECASE)
@@ -385,7 +385,7 @@ def answer_question(user, question):
         method="POST",
     )
     try:
-        with urllib.request.urlopen(request, timeout=22) as response:
+        with urllib.request.urlopen(request, timeout=12) as response:
             result = json.loads(response.read().decode("utf-8"))
         answer = result["choices"][0]["message"]["content"]
         if isinstance(answer, list):
@@ -405,30 +405,76 @@ def answer_question(user, question):
         return "I couldn't complete that answer just now. Please try again in a moment."
 
 
-def process_annie_question(message_id, asker_user_id):
-    """Respond to one tagged question after the human chat message is committed."""
-    message = db.session.get(ChatMessage, message_id)
-    asker = db.session.get(User, asker_user_id)
-    if message is None or asker is None or not is_annie_mention(message.content):
-        return None
+def process_pending_annie_replies(limit=1):
+    """Process durable tagged questions without blocking the original chat send."""
+    now = datetime.utcnow()
+    # Recover tasks abandoned by a worker restart. A normal AI request has a
+    # 12-second provider timeout, so five minutes is ample recovery headroom.
+    AnnieReplyTask.query.filter(
+        AnnieReplyTask.status == "processing",
+        AnnieReplyTask.created_at < now - timedelta(minutes=5),
+    ).update({"status": "pending"}, synchronize_session=False)
 
-    question = _ANNIE_MENTION.sub("", message.content).strip()
-    answer = (
-        "Hi! I'm Annie. What would you like to know about Oma?"
-        if not question else answer_question(asker, question)
-    )
-    reply, created = post_annie_message(
-        answer,
-        event_key=f"annie-reply-{message.id}",
-        recipient_user_ids=_active_staff_ids(),
-        push_type="chat_message",
-        push_data={"reply_to_id": str(message.id)},
-    )
-    if created:
+    processed = 0
+    for _ in range(max(1, min(int(limit or 1), 3))):
+        task = (
+            AnnieReplyTask.query
+            .filter(AnnieReplyTask.status == "pending")
+            .order_by(AnnieReplyTask.created_at.asc(), AnnieReplyTask.id.asc())
+            .with_for_update(skip_locked=True)
+            .first()
+        )
+        if task is None:
+            break
+
+        task.status = "processing"
+        task.attempts = (task.attempts or 0) + 1
+        task_id = task.id
         db.session.commit()
-        from app.services.audit import _schedule_outbox_flush
-        _schedule_outbox_flush()
-    return reply
+
+        try:
+            task = db.session.get(AnnieReplyTask, task_id)
+            message = task.message if task else None
+            asker = task.asker if task else None
+            if message is None or asker is None:
+                if task:
+                    task.status = "failed"
+                    task.last_error = "The original message or asking user no longer exists."
+                    task.processed_at = datetime.utcnow()
+                    db.session.commit()
+                continue
+
+            question = _ANNIE_MENTION.sub("", message.content or "").strip()
+            answer = (
+                "Hi! I'm Annie. What would you like to know about Oma?"
+                if not question else answer_question(asker, question)
+            )
+            reply, created = post_annie_message(
+                answer,
+                event_key=f"annie-reply-{message.id}",
+                recipient_user_ids=_active_staff_ids(),
+                push_type="chat_message",
+                push_data={"reply_to_id": str(message.id)},
+            )
+            task.status = "completed"
+            task.processed_at = datetime.utcnow()
+            task.last_error = None
+            db.session.commit()
+            if created:
+                from app.services.audit import _schedule_outbox_flush
+                _schedule_outbox_flush()
+            processed += 1
+        except Exception as exc:
+            db.session.rollback()
+            task = db.session.get(AnnieReplyTask, task_id)
+            if task is not None:
+                task.status = "failed" if (task.attempts or 0) >= 3 else "pending"
+                task.last_error = str(exc)[:1000]
+                if task.status == "failed":
+                    task.processed_at = datetime.utcnow()
+                db.session.commit()
+            log.exception("Annie reply task %s failed", task_id)
+    return processed
 
 
 def process_due_payment_reminders(now=None):

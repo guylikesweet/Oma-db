@@ -148,10 +148,14 @@ def require_api_token(f):
 
         g.api_user = user
         try:
-            from app.services.annie import maybe_process_due_payment_reminders
+            from app.services.annie import (
+                maybe_process_due_payment_reminders,
+                process_pending_annie_replies,
+            )
             maybe_process_due_payment_reminders()
+            process_pending_annie_replies(limit=1)
         except Exception:
-            current_app.logger.exception("Annie's scheduled reminder check failed")
+            current_app.logger.exception("Annie's scheduled task processing failed")
         return f(*args, **kwargs)
     return wrapper
 

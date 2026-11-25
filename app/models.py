@@ -524,6 +524,32 @@ class ChatMessage(db.Model):
         return f"<ChatMessage #{self.id} by {self.sender_user_id}>"
 
 
+class AnnieReplyTask(db.Model):
+    """Durable queue entry for one tagged question in team chat."""
+    __tablename__ = "annie_reply_tasks"
+
+    id = db.Column(db.Integer, primary_key=True)
+    message_id = db.Column(
+        db.Integer,
+        db.ForeignKey("chat_messages.id", ondelete="CASCADE"),
+        nullable=False,
+        unique=True,
+    )
+    asker_user_id = db.Column(
+        db.Integer,
+        db.ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    status = db.Column(db.String(20), nullable=False, default="pending", server_default="pending", index=True)
+    attempts = db.Column(db.Integer, nullable=False, default=0, server_default="0")
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, index=True)
+    processed_at = db.Column(db.DateTime, nullable=True)
+    last_error = db.Column(db.Text, nullable=True)
+
+    message = db.relationship("ChatMessage", backref=db.backref("annie_reply_task", uselist=False))
+    asker = db.relationship("User")
+
+
 class ChatReaction(db.Model):
     __tablename__ = "chat_reactions"
 
