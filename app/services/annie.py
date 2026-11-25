@@ -189,7 +189,7 @@ def build_audit_update(action, target_type=None, target_id=None, details=None):
             f"{name} has arrived ({mode}). {len(sales)} orders, {pieces} pieces. "
             f"Outstanding product balance: {_money(outstanding)}. "
             f"Daily demurrage at the current piece count: {_money(pieces * 150)}. "
-            "Customers have 7 days after arrival to settle shipping; demurrage starts on day 8."
+            "Customers have 5 days after arrival to settle shipping; demurrage starts on day 6."
         )
     elif action == "sale.payment.verified":
         order = details.get("order_id") or f"sale #{target_id}"
