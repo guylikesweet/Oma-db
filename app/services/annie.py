@@ -286,26 +286,42 @@ def build_business_context(user, question):
     deliveries = Delivery.query.order_by(desc(Delivery.created_at)).limit(15).all()
 
     question_lower = (question or "").casefold()
+    customer_lookup_requested = bool(re.search(
+        r"\b(owe|owes|owing|outstanding|balance|customer|customers|order|orders|payment|payments|pay|paid)\b",
+        question_lower,
+    ))
+    stop_words = {
+        "which", "who", "what", "when", "where", "how", "many", "much",
+        "customer", "customers", "order", "orders", "payment", "payments",
+        "owe", "owes", "owing", "outstanding", "balance", "pay", "paid",
+        "still", "are", "is", "the", "our", "for", "show", "list", "find",
+        "tell", "me", "about", "have", "has", "this", "that", "with",
+    }
+    lookup_terms = [
+        term for term in re.findall(r"[a-z0-9-]{3,}", question_lower)
+        if term not in stop_words
+    ]
     matching_sales = []
-    for sale in active_sales:
-        searchable = " ".join([
-            sale.customer_name or "", sale.order_id or "", str(sale.id),
-            sale.batch.name if sale.batch else "",
-        ]).casefold()
-        if any(term and term in searchable for term in re.findall(r"[a-z0-9-]{3,}", question_lower)):
-            paid = sum((Decimal(str(p.amount or 0)) for p in sale.payments), Decimal("0"))
-            matching_sales.append({
-                "order": sale.order_id or f"#{sale.id}",
-                "customer": sale.customer_name or "Customer",
-                "status": sale.order_status,
-                "payment_status": sale.payment_status,
-                "product_paid_ngn": float(paid),
-                "product_balance_ngn": float(max(Decimal("0"), Decimal(str(sale.subtotal_amount or 0)) - paid)),
-                "batch": sale.batch.name if sale.batch else None,
-                "pieces": sum(int(item.qty or 0) for item in sale.items),
-            })
-        if len(matching_sales) >= 12:
-            break
+    if customer_lookup_requested and lookup_terms:
+        for sale in active_sales:
+            searchable = " ".join([
+                sale.customer_name or "", sale.order_id or "", str(sale.id),
+                sale.batch.name if sale.batch else "",
+            ]).casefold()
+            if any(term in searchable for term in lookup_terms):
+                paid = sum((Decimal(str(p.amount or 0)) for p in sale.payments), Decimal("0"))
+                matching_sales.append({
+                    "order": sale.order_id or f"#{sale.id}",
+                    "customer": sale.customer_name or "Customer",
+                    "status": sale.order_status,
+                    "payment_status": sale.payment_status,
+                    "product_paid_ngn": float(paid),
+                    "product_balance_ngn": float(max(Decimal("0"), Decimal(str(sale.subtotal_amount or 0)) - paid)),
+                    "batch": sale.batch.name if sale.batch else None,
+                    "pieces": sum(int(item.qty or 0) for item in sale.items),
+                })
+            if len(matching_sales) >= 12:
+                break
 
     context = {
         "business": "Oma Group", "currency": "NGN",
@@ -326,7 +342,9 @@ def build_business_context(user, question):
         "sales_today": summarize_sales(today_sales),
         "sales_last_7_days": summarize_sales(week_sales),
         "outstanding_product_balance_recent_500_open_orders_ngn": float(all_open_balance),
-        "largest_outstanding_orders_recent_500": top_outstanding_orders[:15],
+        "largest_outstanding_orders_recent_500": (
+            top_outstanding_orders[:15] if customer_lookup_requested else []
+        ),
         "shipment_batches": batch_rows,
         "low_stock_products": [{"name": p.name, "stock_pieces": int(p.stock or 0)} for p in low_stock],
         "recent_deliveries": [{
@@ -517,7 +535,9 @@ def process_due_payment_reminders(now=None):
             f"{len(notices)} consolidated customer reminder(s), {pieces} pieces. "
             f"Outstanding product balance: {_money(outstanding)}. "
             f"Estimated shipping: {_money(shipping)} (separate from product payments). "
-            "Open the batch's customer reminder actions to prepare each WhatsApp message."
+            "Once arrived, customers have 7 days to settle shipping; demurrage starts on day 8 "
+            "at ₦150 per piece per day. Open the batch's customer reminder actions to prepare "
+            "each WhatsApp message."
         )
         _, created = post_annie_message(
             body, event_key=event_key, recipient_user_ids=_active_staff_ids(),
