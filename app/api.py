@@ -148,15 +148,8 @@ def require_api_token(f):
             db.session.commit()
 
         g.api_user = user
-        # Keep optional reminder processing isolated from normal API requests.
-        # Tagged Annie questions are answered synchronously by the chat POST path;
-        # they do not depend on the optional AnnieReplyTask migration.
-        try:
-            from app.services.annie import maybe_process_due_payment_reminders
-            maybe_process_due_payment_reminders()
-        except Exception:
-            db.session.rollback()
-            current_app.logger.exception("Annie's scheduled reminder processing failed")
+        # Reminder announcements run only through the dedicated authenticated
+        # scheduler endpoint. Do not query optional task tables on every API call.
         return f(*args, **kwargs)
     return wrapper
 
