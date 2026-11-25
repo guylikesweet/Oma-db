@@ -21,12 +21,12 @@ const RESOURCES = {"canvaskit/canvaskit.js.symbols": "48c83a2ce573d9692e8d970e28
 "version.json": "eae70c93f89d5649a07e84d80eb48f3d",
 "firebase-messaging-sw.js": "345b6867599672c9127244aeda7bb1a3",
 "sqlite3.wasm": "fa7637a49a0e434f2a98f9981856d118",
-"main.dart.js": "c44dbf2b67cbcece2d3cee96187ee377",
+"main.dart.js": "dfc7d7840ef1b0367dbb7ab344774cb8",
 "index.html": "fe78b0f42c0ddb06782288229b5cce21",
 "/": "fe78b0f42c0ddb06782288229b5cce21",
 "favicon.png": "27358c7d43ca62c86662c53e56e3f9ab",
 "assets/AssetManifest.bin.json": "eed2e49fee6a4dceccdda6bd446da59b",
-"assets/fonts/MaterialIcons-Regular.otf": "5632c4a41e9f42712549d59d1b2cc328",
+"assets/fonts/MaterialIcons-Regular.otf": "977a19dc5b894b9c4572e30f3e4c7ca1",
 "assets/shaders/ink_sparkle.frag": "ecc85a2e95f5e9f53123dcaf8cb9b6ce",
 "assets/FontManifest.json": "dc3d03800ccca4601324923c0b1d6d57",
 "assets/assets/images/app_icon_legacy.png": "164c185a7c3de5a3be4b0eadcacfb515",
@@ -39,7 +39,7 @@ const RESOURCES = {"canvaskit/canvaskit.js.symbols": "48c83a2ce573d9692e8d970e28
 "assets/packages/record_web/assets/js/record.fixwebmduration.js": "1f0108ea80c8951ba702ced40cf8cdce",
 "assets/AssetManifest.bin": "bdb32636716ec09dfee3486fc4c0f88e",
 "assets/NOTICES": "166368de5b903b0f4c77ca96845b7068",
-"flutter_bootstrap.js": "a49f775fd351b56d6761cfdcd7bc4e77",
+"flutter_bootstrap.js": "ce2bf336d3eb61c3aa8ceb49671fb4fa",
 "flutter.js": "f393d3c16b631f36852323de8e583132",
 "manifest.json": "b5f92a96a3cc94fd9c95e39c6a8a0f91"};
 // The application shell files that are downloaded before a service worker can
