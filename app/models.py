@@ -752,3 +752,24 @@ def _record_mobile_sync_changes(session, flush_context):
             ))
     finally:
         session.info["_recording_sync_changes"] = False
+
+
+# Append-only verified installment ledger. Shipping payments remain separate.
+class SalePayment(db.Model):
+    __tablename__ = "sale_payments"
+    id = db.Column(db.Integer, primary_key=True)
+    sale_id = db.Column(db.Integer, db.ForeignKey("sales.id", ondelete="RESTRICT"), nullable=False, index=True)
+    amount = db.Column(db.Numeric(12, 2), nullable=False)
+    received_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, index=True)
+    transaction_reference = db.Column(db.String(160), nullable=False, unique=True)
+    session_id = db.Column(db.String(160), nullable=True, unique=True)
+    payment_method = db.Column(db.String(40), nullable=False, default="bank_transfer", server_default="bank_transfer")
+    verified_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    verified_by_user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True)
+    created_by_user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True)
+    is_legacy = db.Column(db.Boolean, nullable=False, default=False, server_default="false")
+    notes = db.Column(db.String(500), nullable=True)
+    verified_by = db.relationship("User", foreign_keys=[verified_by_user_id])
+    created_by = db.relationship("User", foreign_keys=[created_by_user_id])
+    def __repr__(self):
+        return f"<SalePayment #{self.id} sale={self.sale_id} amount={self.amount}>"
