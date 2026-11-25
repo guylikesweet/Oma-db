@@ -244,8 +244,11 @@ def build_business_context(user, question):
         }
 
     yesterday_start = day_start - timedelta(days=1)
+    this_week_start = day_start - timedelta(days=day_start.weekday())
+    last_week_start = this_week_start - timedelta(days=7)
     month_start = day_start.replace(day=1)
     next_month_start = (month_start.replace(day=28) + timedelta(days=4)).replace(day=1)
+    last_month_start = (month_start - timedelta(days=1)).replace(day=1)
     today_sales = Sale.query.filter(
         Sale.created_at >= day_start, Sale.order_status != "Cancelled"
     ).all()
@@ -255,6 +258,18 @@ def build_business_context(user, question):
     ).all()
     week_sales = Sale.query.filter(
         Sale.created_at >= week_start, Sale.order_status != "Cancelled"
+    ).all()
+    this_week_sales = Sale.query.filter(
+        Sale.created_at >= this_week_start, Sale.created_at < this_week_start + timedelta(days=7),
+        Sale.order_status != "Cancelled"
+    ).all()
+    last_week_sales = Sale.query.filter(
+        Sale.created_at >= last_week_start, Sale.created_at < this_week_start,
+        Sale.order_status != "Cancelled"
+    ).all()
+    last_month_sales = Sale.query.filter(
+        Sale.created_at >= last_month_start, Sale.created_at < month_start,
+        Sale.order_status != "Cancelled"
     ).all()
     month_sales = Sale.query.filter(
         Sale.created_at >= month_start, Sale.created_at < next_month_start,
@@ -379,7 +394,10 @@ def build_business_context(user, question):
         "sales_today": summarize_sales(today_sales),
         "sales_yesterday": summarize_sales(yesterday_sales),
         "sales_last_7_days": summarize_sales(week_sales),
+        "sales_this_week": summarize_sales(this_week_sales),
+        "sales_last_week": summarize_sales(last_week_sales),
         "sales_month_to_date": summarize_sales(month_sales),
+        "sales_last_month": summarize_sales(last_month_sales),
         "inventory_preview": [{
             "name": p.name, "stock_pieces": int(p.stock or 0)
         } for p in Product.query.order_by(Product.name.asc()).limit(50).all()],
@@ -576,8 +594,14 @@ def answer_question(user, question):
     if any(word in lowered for word in ("sale", "sales", "revenue", "today", "yesterday", "this week", "last 7 days", "last week", "this month", "month to date", "collected", "income", "turnover", "money", "cash", "made")):
         if "yesterday" in lowered:
             period, label = context.get("sales_yesterday", {}), "yesterday"
-        elif "month" in lowered:
+        elif "last month" in lowered or "previous month" in lowered:
+            period, label = context.get("sales_last_month", {}), "last calendar month"
+        elif "this month" in lowered or "month to date" in lowered:
             period, label = context.get("sales_month_to_date", {}), "this month to date"
+        elif "last week" in lowered or "previous week" in lowered:
+            period, label = context.get("sales_last_week", {}), "last calendar week"
+        elif "this week" in lowered:
+            period, label = context.get("sales_this_week", {}), "this calendar week"
         elif "today" in lowered:
             period, label = context.get("sales_today", {}), "today"
         else:

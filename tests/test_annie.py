@@ -136,3 +136,24 @@ def test_annie_lists_inventory_preview(monkeypatch):
     })
     answer = answer_question(SimpleNamespace(is_admin=False), "List all products")
     assert "Blue Dress: 4 piece(s)" in answer
+
+
+def test_annie_distinguishes_calendar_week_and_month_periods(monkeypatch):
+    import app.services.annie as annie
+
+    def summary(count):
+        return {"orders": count, "product_value_ngn": count * 1000,
+                "verified_product_payments_ngn": count * 500,
+                "product_balance_ngn": count * 500}
+
+    monkeypatch.setattr(annie, "build_business_context", lambda user, question: {
+        "sales_this_week": summary(3),
+        "sales_last_week": summary(4),
+        "sales_last_month": summary(12),
+    })
+    this_week = answer_question(SimpleNamespace(is_admin=False), "Sales this week")
+    last_week = answer_question(SimpleNamespace(is_admin=False), "Sales last week")
+    last_month = answer_question(SimpleNamespace(is_admin=False), "Sales last month")
+    assert "this calendar week" in this_week and "3 order(s)" in this_week
+    assert "last calendar week" in last_week and "4 order(s)" in last_week
+    assert "last calendar month" in last_month and "12 order(s)" in last_month
