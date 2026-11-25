@@ -48,6 +48,7 @@ from app.services.push_notifications import (
 )
 from app.services.dashboard import get_kpis, get_sales_last_30_days
 from app.services.shipment_batches import (
+    create_batch,
     mark_arrived,
     mark_unarrived,
     update_batch_sales,
@@ -1630,6 +1631,18 @@ def mobile_arrival_notice(sale_id):
 
 
 
+@api_bp.route("/v1/batches/<int:batch_id>/payment-reminders", methods=("GET",))
+@require_api_token
+def mobile_batch_payment_reminders(batch_id):
+    """Return 45-day shipping-cost reminder messages, grouped by phone within this batch."""
+    from app.services.payments import build_batch_payment_reminders, PaymentError
+    batch = ShipmentBatch.query.get_or_404(batch_id)
+    try:
+        return jsonify(build_batch_payment_reminders(batch))
+    except PaymentError as e:
+        return jsonify({"error": str(e)}), 400
+
+
 @api_bp.route("/v1/batches/<int:batch_id>/arrival-notices", methods=("GET",))
 @require_api_token
 def mobile_batch_arrival_notices(batch_id):
@@ -1670,29 +1683,20 @@ def mobile_create_batch():
     data = request.get_json(silent=True) or {}
     try:
         op, existing = _mobile_operation(data)
-        if existing: return _mobile_replay(existing)
-        name = str(data.get("name") or "").strip()
-        if not name: raise ValueError("Batch needs a name.")
-        transport_mode = str(data.get("transport_mode") or ShipmentBatch.MODE_SEA).strip().lower()
-        if transport_mode not in ShipmentBatch.MODES:
-            raise ValueError("Choose how this batch travels: Air or Sea.")
-        b = ShipmentBatch(
-            name=name,
+        if existing:
+            return _mobile_replay(existing)
+        batch = create_batch(
+            str(data.get("name") or "").strip(),
             notes=str(data.get("notes") or "").strip() or None,
-            status=ShipmentBatch.STATUS_IN_TRANSIT,
-            transport_mode=transport_mode,
-        )
-        db.session.add(b); db.session.flush()
-        record_audit(
-            "batch.create",
-            target_type="shipment_batch",
-            target_id=b.id,
-            details={"name": b.name, "transport_mode": b.transport_mode, "source": "api"},
+            transport_mode=str(data.get("transport_mode") or ShipmentBatch.MODE_SEA).strip().lower(),
+            sale_ids=data.get("sale_ids") or [],
             user=g.api_user,
+            commit=False,
         )
-        return _mobile_finish(op, "create_batch", 201, _batch_json(b))
-    except ValueError as e:
-        db.session.rollback(); return jsonify({"error": str(e)}), 400
+        return _mobile_finish(op, "create_batch", 201, _batch_json(batch))
+    except (ValueError, BatchValidationError) as e:
+        db.session.rollback()
+        return jsonify({"error": str(e)}), 400
 
 
 @api_bp.route("/v1/batches/<int:batch_id>/sales/<int:sale_id>", methods=("POST",))
@@ -1701,40 +1705,16 @@ def mobile_batch_sale(batch_id, sale_id):
     data = request.get_json(silent=True) or {}
     try:
         op, existing = _mobile_operation(data)
-        if existing: return _mobile_replay(existing)
-        b, s = ShipmentBatch.query.get_or_404(batch_id), Sale.query.get_or_404(sale_id)
-        action = str(data.get("action") or "add")
-        if action == "remove":
-            if s.batch_id != b.id: raise ValueError("Sale is not in this batch.")
-            s.batch_id = None
-            s.batch_assigned_at = None
-            record_audit(
-                "batch.remove_sale",
-                target_type="sale",
-                target_id=s.id,
-                details={"batch_id": b.id, "source": "api"},
-                user=g.api_user,
-            )
-        else:
-            if s.is_stock_sale: raise ValueError("Stocked sales are not shipped in batches.")
-            if b.status != ShipmentBatch.STATUS_IN_TRANSIT: raise ValueError("Batch is no longer in transit.")
-            if s.order_status == "Cancelled": raise ValueError("Cancelled sales cannot be added.")
-            if s.shipping_payment_settled or s.delivery_id:
-                raise ValueError("A settled or delivered sale cannot be added to a batch.")
-            if s.batch_id is not None and s.batch_id != b.id:
-                raise ValueError("Sale already belongs to another shipment batch.")
-            s.batch_id = b.id
-            s.batch_assigned_at = datetime.utcnow()
-            record_audit(
-                "batch.add_sale",
-                target_type="sale",
-                target_id=s.id,
-                details={"batch_id": b.id, "transport_mode": b.transport_mode, "source": "api"},
-                user=g.api_user,
-            )
-        return _mobile_finish(op, "batch_sale", 200, _batch_json(b))
-    except ValueError as e:
-        db.session.rollback(); return jsonify({"error": str(e)}), 400
+        if existing:
+            return _mobile_replay(existing)
+        batch = ShipmentBatch.query.get_or_404(batch_id)
+        Sale.query.get_or_404(sale_id)
+        raise BatchValidationError(
+            "Shipment contents are locked when the batch is created. Sales must be selected at creation."
+        )
+    except (ValueError, BatchValidationError) as e:
+        db.session.rollback()
+        return jsonify({"error": str(e)}), 400
 
 
 @api_bp.route("/v1/batches/<int:batch_id>/sales/bulk", methods=("POST",))
