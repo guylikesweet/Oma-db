@@ -66,7 +66,15 @@ def create_app(config_object="config.Config"):
     # revisions as applied while the physical schema was missing columns.
     # Repair the small set of critical runtime columns before ORM-backed
     # routes are registered. The guard is idempotent and production-only.
-    if os.environ.get("RENDER") and os.environ.get("DATABASE_URL"):
+    # Run the defensive repair once in the actual web process, not every
+    # time Flask CLI starts (db upgrade/current/seed-admin). Re-running it for
+    # each CLI command needlessly acquires database locks during deploy builds.
+    is_flask_cli = os.environ.get("FLASK_RUN_FROM_CLI", "").lower() == "true"
+    if (
+        os.environ.get("RENDER")
+        and os.environ.get("DATABASE_URL")
+        and not is_flask_cli
+    ):
         from scripts.repair_runtime_schema import repair as repair_runtime_schema
 
         repair_runtime_schema()
