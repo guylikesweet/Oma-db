@@ -545,9 +545,9 @@ def answer_question(user, question):
             "If you want the stock for a particular item, include its product name."
         )
 
-    if any(word in lowered for word in ("sale", "sales", "revenue", "today", "this week", "last 7 days")):
+    if any(word in lowered for word in ("sale", "sales", "revenue", "today", "this week", "last 7 days", "collected", "income", "turnover", "money", "cash", "made")):
         period = context.get("sales_today", {}) if "today" in lowered else context.get("sales_last_7_days", {})
-        label = "today" if "today" in lowered else "the last 7 days"
+        label = "today" if "today" in lowered else ("this week" if "this week" in lowered else "the last 7 days")
         return (
             f"Sales summary for {label}: {period.get('orders', 0)} order(s), "
             f"recorded product value {money(period.get('product_value_ngn'))}, "
