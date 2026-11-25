@@ -327,14 +327,14 @@ def _product_json(p):
         "has_image": bool(p.image_data),
         "image_url": f"/api/v1/products/{p.id}/image" if p.image_data else None,
         "sku": p.sku,
-        "cost": float(p.cost) if p.cost is not None else None,
-        "supplier_cost": float(p.supplier_cost) if p.supplier_cost is not None else None,
-        "inbound_shipping_cost": float(p.inbound_shipping_cost) if p.inbound_shipping_cost is not None else None,
-        "landed_cost": float(p.cost) if p.cost is not None else None,
+        "cost": float(p.cost) if g.api_user.is_admin and p.cost is not None else None,
+        "supplier_cost": float(p.supplier_cost) if g.api_user.is_admin and p.supplier_cost is not None else None,
+        "inbound_shipping_cost": float(p.inbound_shipping_cost) if g.api_user.is_admin and p.inbound_shipping_cost is not None else None,
+        "landed_cost": float(p.cost) if g.api_user.is_admin and p.cost is not None else None,
         "markup_percent": float(p.markup_percent) if p.markup_percent is not None else None,
         "selling_price": float(p.selling_price) if p.selling_price is not None else None,
-        "gross_profit": float((p.selling_price or Decimal('0')) - (p.cost or Decimal('0'))),
-        "gross_margin_percent": float((((p.selling_price or Decimal('0')) - (p.cost or Decimal('0'))) / p.selling_price * Decimal('100')) if p.selling_price else Decimal('0')),
+        "gross_profit": float((p.selling_price or Decimal('0')) - (p.cost or Decimal('0'))) if g.api_user.is_admin else None,
+        "gross_margin_percent": float((((p.selling_price or Decimal('0')) - (p.cost or Decimal('0'))) / p.selling_price * Decimal('100')) if p.selling_price else Decimal('0')) if g.api_user.is_admin else None,
         "length_cm": float(p.length_cm) if p.length_cm is not None else None,
         "width_cm": float(p.width_cm) if p.width_cm is not None else None,
         "height_cm": float(p.height_cm) if p.height_cm is not None else None,
@@ -371,7 +371,7 @@ def _sale_json(s):
         "estimated_shipping_cost": float(s.estimated_shipping_cost) if s.estimated_shipping_cost is not None else None,
         "actual_shipping_cost": float(s.actual_shipping_cost) if s.actual_shipping_cost is not None else None,
         "total_amount": float(s.total_amount) if s.total_amount is not None else None,
-        "profit": float(s.profit) if s.profit is not None else None,
+        "profit": float(s.profit) if g.api_user.is_admin and s.profit is not None else None,
         "shipping_payment_settled": bool(s.shipping_payment_settled),
         "shipping_payment_settled_at": s.shipping_payment_settled_at.isoformat() if s.shipping_payment_settled_at else None,
         "estimated_arrival_start": s.estimated_arrival_start.isoformat() if s.estimated_arrival_start else None,
@@ -389,7 +389,7 @@ def _sale_json(s):
                 "product_id": item.product_id,
                 "product_name": item.product.name if item.product else None,
                 "qty": item.qty,
-                "unit_cost": float(item.unit_cost) if item.unit_cost is not None else None,
+                "unit_cost": float(item.unit_cost) if g.api_user.is_admin and item.unit_cost is not None else None,
                 "unit_price": float(item.unit_price) if item.unit_price is not None else None,
                 "line_cbm": float(item.line_cbm) if item.line_cbm is not None else None,
                 "line_weight_kg": float(item.line_weight_kg) if item.line_weight_kg is not None else None,
@@ -1170,6 +1170,7 @@ def mobile_stock_log():
 
 @api_bp.route("/v1/products/cost-calculator", methods=("POST",))
 @require_api_token
+@require_admin_api
 def mobile_product_cost_calculator():
     """Calculate true unit landed cost and suggested selling price using Oma's
     existing inbound shipping formulas. This endpoint never changes inventory."""
@@ -1230,6 +1231,7 @@ def mobile_product_cost_calculator():
 
 @api_bp.route("/v1/products", methods=("POST",))
 @require_api_token
+@require_admin_api
 def mobile_create_product():
     data = request.get_json(silent=True) or {}
     try:
@@ -1257,6 +1259,7 @@ def mobile_create_product():
 
 @api_bp.route("/v1/products/<int:product_id>", methods=("PUT", "PATCH"))
 @require_api_token
+@require_admin_api
 def mobile_update_product(product_id):
     data = request.get_json(silent=True) or {}
     try:
@@ -1291,6 +1294,7 @@ def mobile_update_product(product_id):
 
 @api_bp.route("/v1/products/<int:product_id>", methods=("DELETE",))
 @require_api_token
+@require_admin_api
 def mobile_delete_product(product_id):
     data = request.get_json(silent=True) or {}
     try:
