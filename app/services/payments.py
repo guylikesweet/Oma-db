@@ -43,7 +43,16 @@ def build_batch_payment_reminders(batch, now=None):
         sales.sort(key=lambda s: s.id)
         name = next(((s.customer_name or "").strip() for s in sales if (s.customer_name or "").strip()), "Customer")
         raw_phone = next(((s.customer_phone or "").strip() for s in sales if (s.customer_phone or "").strip()), phone)
-        estimate = sum((Decimal(str(s.estimated_shipping_cost or 0)) for s in sales), Decimal("0"))
+        def sale_estimate(sale):
+            mode_estimate = (
+                sale.estimated_shipping_air if batch.is_air
+                else sale.estimated_shipping_sea
+            )
+            if mode_estimate is None:
+                mode_estimate = sale.estimated_shipping_cost
+            return Decimal(str(mode_estimate or 0))
+
+        estimate = sum((sale_estimate(s) for s in sales), Decimal("0"))
         outstanding = sum((_balance(s) for s in sales), Decimal("0"))
         pieces = sum((_pieces(s) for s in sales), 0)
         orders = "\n".join(f"• {s.order_id or '#'+str(s.id)} — {', '.join((i.product.name if i.product else 'Product') + (' x'+str(i.qty) if i.qty > 1 else '') for i in s.items)}" for s in sales)
