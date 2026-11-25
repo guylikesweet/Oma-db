@@ -245,6 +245,19 @@ def build_business_context(user, question):
         )
         for s in active_sales
     ), Decimal("0"))
+    top_outstanding_orders = []
+    for sale in active_sales:
+        paid = sum((Decimal(str(p.amount or 0)) for p in sale.payments), Decimal("0"))
+        balance = max(Decimal("0"), Decimal(str(sale.subtotal_amount or 0)) - paid)
+        if balance > 0:
+            top_outstanding_orders.append({
+                "order": sale.order_id or f"#{sale.id}",
+                "customer": sale.customer_name or "Customer",
+                "product_balance_ngn": float(balance),
+                "batch": sale.batch.name if sale.batch else None,
+                "pieces": sum(int(item.qty or 0) for item in sale.items),
+            })
+    top_outstanding_orders.sort(key=lambda row: row["product_balance_ngn"], reverse=True)
 
     batches = ShipmentBatch.query.order_by(desc(ShipmentBatch.created_at)).limit(20).all()
     batch_rows = []
@@ -305,6 +318,7 @@ def build_business_context(user, question):
         "sales_today": summarize_sales(today_sales),
         "sales_last_7_days": summarize_sales(week_sales),
         "outstanding_product_balance_recent_500_open_orders_ngn": float(all_open_balance),
+        "largest_outstanding_orders_recent_500": top_outstanding_orders[:15],
         "shipment_batches": batch_rows,
         "low_stock_products": [{"name": p.name, "stock_pieces": int(p.stock or 0)} for p in low_stock],
         "recent_deliveries": [{

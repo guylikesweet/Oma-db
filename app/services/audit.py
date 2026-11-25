@@ -127,7 +127,9 @@ def record_audit(
                 notification.get("recipient_user_ids")
                 if notification is not None else None
             ),
-            exclude_user_id=getattr(actor, "id", None),
+            exclude_user_id=(
+                getattr(actor, "id", None) if str(action) == "batch.arrive" else None
+            ),
             push_type=event_type,
             push_data=push_data,
         )
