@@ -34,22 +34,62 @@ def normalize_mode(value):
     return mode
 
 
-def create_batch(name, notes=None, transport_mode=ShipmentBatch.MODE_SEA):
-    if not name or not name.strip():
+def create_batch(
+    name, notes=None, transport_mode=ShipmentBatch.MODE_SEA, *,
+    sale_ids=None, user=None, commit=True,
+):
+    """Create a departed batch and lock its complete sale manifest atomically."""
+    if not name or not str(name).strip():
         raise BatchValidationError("Batch needs a name.")
+
+    ids = list(dict.fromkeys(int(value) for value in (sale_ids or [])))
+    if not ids:
+        raise BatchValidationError("Select at least one sale before creating a shipment batch.")
+
+    sales = Sale.query.filter(Sale.id.in_(ids)).all()
+    found = {sale.id for sale in sales}
+    missing = [sale_id for sale_id in ids if sale_id not in found]
+    if missing:
+        raise BatchValidationError("Sales not found: " + ", ".join(map(str, missing)) + ".")
+
+    for sale in sales:
+        if sale.order_status == "Cancelled":
+            raise BatchValidationError(f"Sale #{sale.id} is cancelled and cannot be shipped.")
+        if sale.is_stock_sale:
+            raise BatchValidationError(f"Sale #{sale.id} is a stock sale and cannot be shipped in a batch.")
+        if sale.batch_id is not None:
+            raise BatchValidationError(f"Sale #{sale.id} already belongs to a shipment batch.")
+        if sale.shipping_payment_settled or sale.delivery_id:
+            raise BatchValidationError(f"Sale #{sale.id} is already settled or assigned to delivery.")
+
+    now = datetime.utcnow()
     batch = ShipmentBatch(
-        name=name.strip(), notes=notes, status=ShipmentBatch.STATUS_IN_TRANSIT,
+        name=str(name).strip(), notes=notes,
+        status=ShipmentBatch.STATUS_IN_TRANSIT,
         transport_mode=normalize_mode(transport_mode),
+        created_at=now, departed_at=now,
     )
     db.session.add(batch)
     db.session.flush()
+
+    for sale in sales:
+        sale.batch_id = batch.id
+        sale.batch_assigned_at = now
+
     record_audit(
         "batch.create",
         target_type="shipment_batch",
         target_id=batch.id,
-        details={"name": batch.name, "transport_mode": batch.transport_mode},
+        details={
+            "name": batch.name,
+            "transport_mode": batch.transport_mode,
+            "sale_ids": ids,
+            "sale_count": len(ids),
+        },
+        user=user,
     )
-    db.session.commit()
+    if commit:
+        db.session.commit()
     return batch
 
 
@@ -57,8 +97,9 @@ def add_sale_to_batch(batch_id, sale_id):
     batch = ShipmentBatch.query.get(batch_id)
     if not batch:
         raise BatchValidationError("Batch not found.")
-    if batch.status != ShipmentBatch.STATUS_IN_TRANSIT:
-        raise BatchValidationError("Can only add sales to a batch that is still In Transit.")
+    raise BatchValidationError(
+        "Shipment contents are locked when the batch is created. Select all sales before creating the batch."
+    )
 
     sale = Sale.query.get(sale_id)
     if not sale:
@@ -86,99 +127,22 @@ def remove_sale_from_batch(sale_id):
     sale = Sale.query.get(sale_id)
     if not sale:
         raise BatchValidationError("Sale not found.")
-    batch_id = sale.batch_id
-    sale.batch_id = None
-    sale.batch_assigned_at = None
-    record_audit(
-        "batch.remove_sale",
-        target_type="sale",
-        target_id=sale.id,
-        details={"batch_id": batch_id},
+    if sale.batch_id is None:
+        raise BatchValidationError("This sale is not assigned to a shipment batch.")
+    raise BatchValidationError(
+        "Shipment contents are locked when the batch is created. A departed sale cannot be removed."
     )
-    db.session.commit()
 
 
 def update_batch_sales(batch_id, *, add_sale_ids=None, remove_sale_ids=None, commit=True):
-    """Atomically add and/or remove multiple sales from an In Transit batch."""
+    """Legacy compatibility endpoint: a departed batch manifest is immutable."""
     batch = ShipmentBatch.query.get(batch_id)
     if not batch:
         raise BatchValidationError("Batch not found.")
-    if batch.status != ShipmentBatch.STATUS_IN_TRANSIT:
-        raise BatchValidationError("Sales can only be changed while the batch is In Transit.")
-
-    add_ids = list(dict.fromkeys(int(x) for x in (add_sale_ids or [])))
-    remove_ids = list(dict.fromkeys(int(x) for x in (remove_sale_ids or [])))
-
-    overlap = set(add_ids) & set(remove_ids)
-    if overlap:
-        raise BatchValidationError("A sale cannot be added and removed in the same request.")
-
-    if remove_ids:
-        remove_sales = Sale.query.filter(Sale.id.in_(remove_ids)).all()
-        found = {sale.id for sale in remove_sales}
-        missing = [sale_id for sale_id in remove_ids if sale_id not in found]
-        if missing:
-            raise BatchValidationError(
-                "Sales not found: " + ", ".join(str(x) for x in missing) + "."
-            )
-        for sale in remove_sales:
-            if sale.batch_id != batch.id:
-                raise BatchValidationError(
-                    f"Sale #{sale.id} is not in this batch."
-                )
-
-    if add_ids:
-        add_sales = Sale.query.filter(Sale.id.in_(add_ids)).all()
-        found = {sale.id for sale in add_sales}
-        missing = [sale_id for sale_id in add_ids if sale_id not in found]
-        if missing:
-            raise BatchValidationError(
-                "Sales not found: " + ", ".join(str(x) for x in missing) + "."
-            )
-        for sale in add_sales:
-            if sale.order_status == "Cancelled":
-                raise BatchValidationError(
-                    f"Sale #{sale.id} is cancelled and cannot be added."
-                )
-            if sale.shipping_payment_settled or sale.delivery_id:
-                raise BatchValidationError(
-                    f"Sale #{sale.id} is already settled or assigned to delivery."
-                )
-            if sale.is_stock_sale:
-                raise BatchValidationError(
-                    f"Sale #{sale.id} is a stock sale and cannot be shipped in a batch."
-                )
-            if sale.batch_id is not None and sale.batch_id != batch.id:
-                raise BatchValidationError(
-                    f"Sale #{sale.id} already belongs to another shipment batch."
-                )
-
-    for sale in remove_sales if remove_ids else []:
-        sale.batch_id = None
-        sale.batch_assigned_at = None
-        record_audit(
-            "batch.remove_sale",
-            target_type="sale",
-            target_id=sale.id,
-            details={"batch_id": batch.id, "source": "bulk"},
+    if add_sale_ids or remove_sale_ids:
+        raise BatchValidationError(
+            "Shipment contents are locked when the batch is created. Sales cannot be added or removed."
         )
-
-    for sale in add_sales if add_ids else []:
-        sale.batch_id = batch.id
-        sale.batch_assigned_at = datetime.utcnow()
-        record_audit(
-            "batch.add_sale",
-            target_type="sale",
-            target_id=sale.id,
-            details={
-                "batch_id": batch.id,
-                "transport_mode": batch.transport_mode,
-                "source": "bulk",
-            },
-        )
-
-    if commit:
-        db.session.commit()
     return batch
 
 
