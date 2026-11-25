@@ -1916,7 +1916,7 @@ class _BatchesPageState extends State<BatchesPage> {
                   final n = Map<String, dynamic>.from(raw as Map);
                   return Card(child: ListTile(
                     title: Text('${n['customer_name'] ?? 'Customer'}'),
-                    subtitle: Text('${n['piece_count']} pieces • Product balance NGN ${n['product_outstanding']} • Estimated shipping NGN ${n['estimated_shipping']} • Demurrage NGN ${n['daily_demurrage']}/day from day 8'),
+                    subtitle: Text('${n['piece_count']} pieces • Product balance NGN ${n['product_outstanding']} • Estimated shipping NGN ${n['estimated_shipping']} • Demurrage NGN ${n['daily_demurrage']}/day from day 6'),
                     trailing: FilledButton(
                       onPressed: () async {
                         final url = '${n['whatsapp_url'] ?? ''}';
