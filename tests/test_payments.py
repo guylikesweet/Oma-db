@@ -60,8 +60,8 @@ def test_batch_payment_reminders_merge_normalized_phone_within_one_batch():
     assert notice["product_outstanding"] == 15000
     assert notice["estimated_shipping"] == 2200
     assert notice["daily_demurrage"] == 450
-    assert "7 days" in notice["message"]
-    assert "day 8" in notice["message"]
+    assert "5 days" in notice["message"]
+    assert "day 6" in notice["message"]
 
 
 def test_same_customer_in_different_batches_gets_separate_notices():
