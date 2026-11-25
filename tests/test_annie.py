@@ -122,6 +122,13 @@ def test_annie_supports_yesterday_and_month_to_date_sales(monkeypatch):
     assert "this month to date" in month and "18 order(s)" in month
 
 
+def test_annie_business_context_has_lagos_timezone_support():
+    import app.services.annie as annie
+
+    assert annie.timezone.utc is not None
+    assert annie.ZoneInfo("Africa/Lagos").key == "Africa/Lagos"
+
+
 def test_annie_help_explains_scope_and_read_only_capability():
     answer = answer_question(SimpleNamespace(is_admin=False), "What can you do?")
     assert "live Oma records" in answer
