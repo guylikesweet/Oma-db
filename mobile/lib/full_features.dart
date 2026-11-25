@@ -1610,373 +1610,176 @@ class _BatchesPageState extends State<BatchesPage> {
   }
 
   Future<void> create() async {
+    List<dynamic> allSales;
+    try {
+      allSales = await widget.api.sales();
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(userFacingError(e))));
+      return;
+    }
+    if (!mounted) return;
+    final available = allSales.where((sale) =>
+      sale['id'] is int && sale['batch_id'] == null &&
+      sale['order_status'] != 'Cancelled' && !isStockSale(sale) &&
+      sale['shipping_payment_settled'] != true && sale['delivery_id'] == null
+    ).toList();
     final name = TextEditingController();
     final notes = TextEditingController();
-    // How the batch travels decides how its sales are priced:
-    // sea by CBM, air by volumetric kg.
+    final selected = <int>{};
     String mode = 'sea';
 
     final ok = await showDialog<bool>(
       context: context,
-      builder: (dialogContext) {
-        return StatefulBuilder(
-          builder: (context, setDialogState) => AlertDialog(
-            title: const Text('New shipment batch'),
-            content: SingleChildScrollView(
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (dialogContext, setDialogState) => AlertDialog(
+          title: const Text('New shipment batch'),
+          content: SizedBox(
+            width: 520,
+            child: SingleChildScrollView(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  TextField(
-                    controller: name,
-                    decoration: const InputDecoration(
-                      labelText: 'Name',
-                    ),
-                  ),
-                  const SizedBox(height: 16),
+                  const Text('Creating this batch means it has departed. Select its complete sales manifest now; sales cannot be added or removed afterwards.', style: TextStyle(color: Colors.grey)),
+                  const SizedBox(height: 14),
+                  TextField(controller: name, decoration: const InputDecoration(labelText: 'Batch name')),
+                  const SizedBox(height: 14),
                   const Text('Travels by'),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 6),
                   SegmentedButton<String>(
                     segments: const [
-                      ButtonSegment(
-                        value: 'sea',
-                        label: Text('Sea'),
-                        icon: Icon(Icons.directions_boat),
-                      ),
-                      ButtonSegment(
-                        value: 'air',
-                        label: Text('Air'),
-                        icon: Icon(Icons.flight),
-                      ),
+                      ButtonSegment(value: 'sea', label: Text('Sea'), icon: Icon(Icons.directions_boat)),
+                      ButtonSegment(value: 'air', label: Text('Air'), icon: Icon(Icons.flight)),
                     ],
                     selected: {mode},
-                    onSelectionChanged: (value) {
-                      setDialogState(() => mode = value.first);
-                    },
+                    onSelectionChanged: (value) => setDialogState(() => mode = value.first),
                   ),
+                  const SizedBox(height: 12),
+                  TextField(controller: notes, decoration: const InputDecoration(labelText: 'Notes (optional)')),
+                  const SizedBox(height: 18),
+                  Text('Select sales (${selected.length} selected)', style: const TextStyle(fontWeight: FontWeight.bold)),
                   const SizedBox(height: 6),
-                  Text(
-                    mode == 'air'
-                        ? 'Priced by volumetric kg × the monthly Air rate, '
-                            'plus weight × the packing rate.'
-                        : 'Priced by CBM × the monthly Sea rate, '
-                            'plus weight × the packing rate.',
-                    style: const TextStyle(color: Colors.grey, fontSize: 12),
-                  ),
-                  const SizedBox(height: 14),
-                  TextField(
-                    controller: notes,
-                    decoration: const InputDecoration(
-                      labelText: 'Notes',
+                  if (available.isEmpty)
+                    const Text('No eligible unassigned preorder sales.', style: TextStyle(color: Colors.grey))
+                  else
+                    Container(
+                      constraints: const BoxConstraints(maxHeight: 280),
+                      decoration: BoxDecoration(border: Border.all(color: Theme.of(context).dividerColor), borderRadius: BorderRadius.circular(10)),
+                      child: ListView.builder(
+                        shrinkWrap: true,
+                        itemCount: available.length,
+                        itemBuilder: (_, index) {
+                          final sale = Map<String, dynamic>.from(available[index] as Map);
+                          final id = sale['id'] as int;
+                          return CheckboxListTile(
+                            dense: true,
+                            value: selected.contains(id),
+                            onChanged: (checked) => setDialogState(() {
+                              if (checked == true) { selected.add(id); } else { selected.remove(id); }
+                            }),
+                            title: Text('${sale['order_id'] ?? id} • ${sale['customer_name'] ?? 'Customer'}'),
+                            subtitle: Text('${sale['customer_phone'] ?? 'No phone'} • ${sale['customer_state'] ?? 'No state'}'),
+                            controlAffinity: ListTileControlAffinity.leading,
+                            contentPadding: EdgeInsets.zero,
+                          );
+                        },
+                      ),
                     ),
-                  ),
                 ],
               ),
             ),
-            actions: [
-              TextButton(
-                onPressed: () =>
-                    Navigator.pop(dialogContext, false),
-                child: const Text('Cancel'),
-              ),
-              FilledButton(
-                onPressed: () =>
-                    Navigator.pop(dialogContext, true),
-                child: const Text('Create'),
-              ),
-            ],
           ),
-        );
-      },
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('Cancel')),
+            FilledButton(
+              onPressed: name.text.trim().isNotEmpty && selected.isNotEmpty ? () => Navigator.pop(dialogContext, true) : null,
+              child: Text('Create & lock manifest (${selected.length})'),
+            ),
+          ],
+        ),
+      ),
     );
-
     if (ok != true) return;
 
     try {
-      if (kIsWeb) {
-        await widget.api.createBatch({
-          'name': name.text.trim(),
-          'transport_mode': mode,
-          'notes': notes.text.trim(),
-        });
-      } else {
-        await widget.repo.queueCreateBatch(
-          name.text.trim(),
-          notes.text.trim(),
-          transportMode: mode,
-        );
-        await widget.repo.syncOnce();
-      }
-
+      // A shipment is a server-side departure event: validate and lock the
+      // complete manifest online in one transaction rather than queueing
+      // separate, race-prone add-sale operations while offline.
+      await widget.api.createBatch({
+        'name': name.text.trim(),
+        'transport_mode': mode,
+        'notes': notes.text.trim(),
+        'sale_ids': selected.toList(),
+      });
       await load();
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Shipment batch created. Its sales manifest is now locked.')));
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(userFacingError(e))),
-        );
-      }
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(userFacingError(e))));
     }
   }
 
-  Future<void> manageBatch(
-    Map<String, dynamic> batch,
-  ) async {
+  Future<void> manageBatch(Map<String, dynamic> batch) async {
     final allSales = await widget.api.sales();
     if (!mounted) return;
-
-    final saleIds = List<int>.from(
-      (batch['sale_ids'] as List? ?? const [])
-          .map((x) => x is int ? x : int.parse('${x}')),
-    );
+    final saleIds = List<int>.from((batch['sale_ids'] as List? ?? const []).map((x) => x is int ? x : int.parse('${x}')));
+    final assigned = allSales.where((sale) => sale['id'] is int && saleIds.contains(sale['id'] as int)).toList();
+    final inTransit = batch['status'] == 'In Transit';
+    final arrived = batch['status'] == 'Arrived - Awaiting Shipping Payment';
+    final createdAt = DateTime.tryParse('${batch['created_at'] ?? ''}')?.toLocal();
+    final remindAt = createdAt?.add(const Duration(days: 45));
+    final reminderDue = inTransit && remindAt != null && !DateTime.now().isBefore(remindAt);
 
     await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
-      builder: (sheetContext) {
-        final assigned = allSales.where((sale) {
-          return sale['id'] != null &&
-              saleIds.contains(sale['id'] as int);
-        }).toList();
-
-        final available = allSales.where((sale) {
-          return sale['id'] != null &&
-              sale['batch_id'] == null &&
-              sale['order_status'] != 'Cancelled' &&
-              !isStockSale(sale);
-        }).take(100).toList();
-
-        final selectedRemove = <int>{};
-        final selectedAdd = <int>{};
-
-        return StatefulBuilder(
-          builder: (context, setSheetState) {
-            final inTransit = batch['status'] == 'In Transit';
-
-            Future<void> submitBulk({
-              required bool add,
-            }) async {
-              final ids = add ? selectedAdd : selectedRemove;
-              if (ids.isEmpty) {
-                ScaffoldMessenger.of(sheetContext).showSnackBar(
-                  SnackBar(
-                    content: Text(
-                      add
-                          ? 'Select at least one sale to add.'
-                          : 'Select at least one sale to remove.',
-                    ),
-                  ),
-                );
-                return;
-              }
-
-              try {
-                if (!kIsWeb && add) {
-                  for (final saleId in ids) {
-                    await widget.repo.queueBatchSale(
-                      batch['id'] as int,
-                      saleId,
-                    );
-                  }
-                  await widget.repo.syncOnce();
-                } else {
-                  await widget.api.updateBatchSalesBulk(
-                    batch['id'] as int,
-                    addSaleIds: add ? ids.toList() : const [],
-                    removeSaleIds: add ? const [] : ids.toList(),
-                  );
-                }
-                if (sheetContext.mounted) {
-                  Navigator.pop(sheetContext);
-                }
-                await load();
-              } catch (e) {
-                if (sheetContext.mounted) {
-                  ScaffoldMessenger.of(sheetContext).showSnackBar(
-                    SnackBar(content: Text(userFacingError(e))),
-                  );
-                }
-              }
-            }
-
-            return SafeArea(
-              child: SizedBox(
-                height: MediaQuery.of(context).size.height * .88,
-                child: Column(
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 12, 8, 8),
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              '${batch['name'] ?? 'Batch'} • ${batch['status'] ?? ''}',
-                              style: Theme.of(context).textTheme.titleLarge,
-                            ),
-                          ),
-                          IconButton(
-                            onPressed: () => Navigator.pop(sheetContext),
-                            icon: const Icon(Icons.close),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const Divider(height: 1),
-                    Expanded(
-                      child: ListView(
-                        padding: const EdgeInsets.all(16),
-                        children: [
-                          Text(
-                            'Sales in this batch (${assigned.length})',
-                            style: const TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 16,
-                            ),
-                          ),
-                          if (!inTransit)
-                            const Padding(
-                              padding: EdgeInsets.only(top: 5),
-                              child: Text(
-                                'This batch has arrived, so its sales can no longer be changed here.',
-                                style: TextStyle(color: Colors.grey),
-                              ),
-                            ),
-                          if (inTransit && assigned.isNotEmpty)
-                            ...assigned.map(
-                              (sale) => CheckboxListTile(
-                                value: selectedRemove.contains(sale['id']),
-                                onChanged: (checked) {
-                                  setSheetState(() {
-                                    if (checked == true) {
-                                      selectedRemove.add(sale['id'] as int);
-                                    } else {
-                                      selectedRemove.remove(sale['id']);
-                                    }
-                                  });
-                                },
-                                title: Text(
-                                  '${sale['order_id'] ?? sale['id']} • '
-                                  '${sale['customer_name'] ?? ''}',
-                                ),
-                                subtitle: const Text(
-                                  'Select to remove from this batch',
-                                ),
-                                controlAffinity:
-                                    ListTileControlAffinity.leading,
-                                contentPadding: EdgeInsets.zero,
-                              ),
-                            ),
-                          if (inTransit && assigned.isEmpty)
-                            const Padding(
-                              padding: EdgeInsets.symmetric(vertical: 12),
-                              child: Text('No sales assigned.'),
-                            ),
-                          if (inTransit && selectedRemove.isNotEmpty)
-                            FilledButton.tonalIcon(
-                              onPressed: () => submitBulk(add: false),
-                              icon: const Icon(Icons.remove_circle_outline),
-                              label: Text(
-                                'Remove ${selectedRemove.length} selected',
-                              ),
-                            ),
-                          if (inTransit) ...[
-                            const Divider(height: 28),
-                            Text(
-                              'Available sales (${available.length})',
-                              style: const TextStyle(
-                                fontWeight: FontWeight.bold,
-                                fontSize: 16,
-                              ),
-                            ),
-                            const SizedBox(height: 4),
-                            const Text(
-                              'Select more than one sale, then add them all at once.',
-                              style: TextStyle(color: Colors.grey),
-                            ),
-                            const SizedBox(height: 8),
-                            ...available.map(
-                              (sale) => CheckboxListTile(
-                                value: selectedAdd.contains(sale['id']),
-                                onChanged: (checked) {
-                                  setSheetState(() {
-                                    if (checked == true) {
-                                      selectedAdd.add(sale['id'] as int);
-                                    } else {
-                                      selectedAdd.remove(sale['id']);
-                                    }
-                                  });
-                                },
-                                title: Text(
-                                  '${sale['order_id'] ?? sale['id']} • '
-                                  '${sale['customer_name'] ?? ''}',
-                                ),
-                                subtitle: Text(
-                                  '${sale['customer_state'] ?? 'No state'} • '
-                                  '${sale['sale_date'] ?? ''}',
-                                ),
-                                controlAffinity:
-                                    ListTileControlAffinity.leading,
-                                contentPadding: EdgeInsets.zero,
-                              ),
-                            ),
-                            if (selectedAdd.isNotEmpty)
-                              FilledButton.icon(
-                                onPressed: () => submitBulk(add: true),
-                                icon: const Icon(Icons.add_circle_outline),
-                                label: Text(
-                                  'Add ${selectedAdd.length} selected',
-                                ),
-                              ),
-                          ],
-                          if (!inTransit) ...[
-                            const SizedBox(height: 12),
-                            FilledButton.icon(
-                              onPressed: () => notifyBatchCustomers(sheetContext, batch['id'] as int),
-                              icon: const Icon(Icons.chat_outlined),
-                              label: const Text('Notify customers on WhatsApp'),
-                            ),
-                            const SizedBox(height: 4),
-                            const Text(
-                              'One message per customer phone number; multiple sales are combined.',
-                              style: TextStyle(color: Colors.grey, fontSize: 12),
-                            ),
-                            const SizedBox(height: 16),
-                            ...assigned.map(
-                              (sale) {
-                                final settled =
-                                    sale['shipping_payment_settled'] == true;
-                                final cost = sale['actual_shipping_cost'];
-                                return ListTile(
-                                  title: Text(
-                                    '${sale['order_id'] ?? sale['id']} • '
-                                    '${sale['customer_name'] ?? ''}',
-                                  ),
-                                  subtitle: cost == null
-                                      ? null
-                                      : Text(
-                                          settled
-                                              ? 'Shipping ₦${(cost as num).toStringAsFixed(2)} — settled, ready for delivery'
-                                              : 'Shipping ₦${(cost as num).toStringAsFixed(2)}',
-                                        ),
-                                  trailing: settled
-                                      ? const Icon(
-                                          Icons.check_circle,
-                                          color: Colors.green,
-                                        )
-                                      : null,
-                                );
-                              },
-                            ),
-                          ],
-                        ],
-                      ),
-                    ),
-                  ],
+      builder: (sheetContext) => SafeArea(
+        child: SizedBox(
+          height: MediaQuery.of(sheetContext).size.height * .88,
+          child: ListView(
+            padding: const EdgeInsets.all(16),
+            children: [
+              Text('${batch['name'] ?? 'Batch'} • ${batch['status'] ?? ''}', style: Theme.of(sheetContext).textTheme.titleLarge),
+              const SizedBox(height: 8),
+              Text('This shipment departed when it was created. Its sales manifest is locked; no sales can be added or removed.', style: TextStyle(color: Theme.of(sheetContext).colorScheme.onSurfaceVariant)),
+              const SizedBox(height: 14),
+              if (inTransit) ...[
+                FilledButton.icon(
+                  onPressed: reminderDue ? () => remindBatchCustomers(sheetContext, batch['id'] as int) : null,
+                  icon: const Icon(Icons.notifications_active_outlined),
+                  label: Text(reminderDue ? 'Remind customers of shipping cost' : remindAt == null ? 'Shipping reminder unavailable' : 'Reminder available ${MaterialLocalizations.of(sheetContext).formatMediumDate(remindAt)}'),
                 ),
-              ),
-            );
-          },
-        );
-      },
+                const SizedBox(height: 6),
+                const Text('The 45-day reminder uses estimated shipping cost and groups matching phone numbers within this batch only.', style: TextStyle(color: Colors.grey, fontSize: 12)),
+              ],
+              if (arrived) ...[
+                FilledButton.icon(
+                  onPressed: () => notifyBatchCustomers(sheetContext, batch['id'] as int),
+                  icon: const Icon(Icons.chat_outlined),
+                  label: const Text('Notify customers of arrival'),
+                ),
+                const SizedBox(height: 6),
+                const Text('Arrival messages use the actual shipping cost calculated for this batch.', style: TextStyle(color: Colors.grey, fontSize: 12)),
+              ],
+              const Divider(height: 28),
+              Text('Sales in this batch (${assigned.length})', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+              const SizedBox(height: 8),
+              if (assigned.isEmpty) const Text('No sales are assigned to this batch.')
+              else ...assigned.map((raw) {
+                final sale = Map<String, dynamic>.from(raw as Map);
+                final settled = sale['shipping_payment_settled'] == true;
+                final cost = sale['actual_shipping_cost'];
+                return Card(child: ListTile(
+                  title: Text('${sale['order_id'] ?? sale['id']} • ${sale['customer_name'] ?? 'Customer'}'),
+                  subtitle: Text(arrived && cost != null ? 'Actual shipping ₦${(cost as num).toStringAsFixed(2)} • ${settled ? 'Settled' : 'Pending'}' : '${sale['customer_phone'] ?? 'No phone'} • ${sale['customer_state'] ?? 'No state'}'),
+                  trailing: arrived && !settled
+                    ? TextButton(onPressed: () => settleFromBatch(sheetContext, sale['id'] as int), child: const Text('Settle'))
+                    : settled ? const Icon(Icons.check_circle, color: Colors.green) : null,
+                ));
+              }),
+            ],
+          ),
+        ),
+      ),
     );
   }
 
@@ -2173,6 +1976,55 @@ class _BatchesPageState extends State<BatchesPage> {
     int saleId,
   ) =>
       openArrivalNotice(sheetContext, widget.api, saleId);
+
+  Future<void> remindBatchCustomers(BuildContext context, int batchId) async {
+    try {
+      final notices = await widget.api.batchPaymentReminders(batchId);
+      if (!context.mounted) return;
+      if (notices.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('No customer shipping reminders are ready for this batch.')));
+        return;
+      }
+      await showModalBottomSheet<void>(
+        context: context,
+        isScrollControlled: true,
+        builder: (sheetContext) => SafeArea(
+          child: SizedBox(
+            height: MediaQuery.of(sheetContext).size.height * .72,
+            child: ListView(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+              children: [
+                Text('Remind customers', style: Theme.of(sheetContext).textTheme.titleLarge),
+                const SizedBox(height: 6),
+                const Text('One WhatsApp reminder per normalized phone number in this batch. The message includes estimated shipping and outstanding product balance.', style: TextStyle(color: Colors.grey)),
+                const SizedBox(height: 12),
+                ...notices.map((raw) {
+                  final notice = Map<String, dynamic>.from(raw as Map);
+                  final estimate = notice['estimated_shipping'];
+                  final balance = notice['product_outstanding'];
+                  return Card(child: ListTile(
+                    title: Text('${notice['customer_name'] ?? 'Customer'}'),
+                    subtitle: Text('Estimated shipping NGN ${estimate is num ? estimate.toStringAsFixed(2) : estimate} • Product balance NGN ${balance is num ? balance.toStringAsFixed(2) : balance}'),
+                    trailing: FilledButton(
+                      onPressed: () async {
+                        final url = '${notice['whatsapp_url'] ?? ''}';
+                        if (url.isEmpty) return;
+                        final opened = await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
+                        if (!opened && sheetContext.mounted) ScaffoldMessenger.of(sheetContext).showSnackBar(const SnackBar(content: Text('Could not open WhatsApp on this device.')));
+                      },
+                      child: const Text('Remind'),
+                    ),
+                  ));
+                }),
+              ],
+            ),
+          ),
+        ),
+      );
+    } catch (e) {
+      if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(userFacingError(e))));
+    }
+  }
 
   Future<void> notifyBatchCustomers(BuildContext context, int batchId) async {
     try {
