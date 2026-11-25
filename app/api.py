@@ -916,7 +916,13 @@ def _payment_json(payment):
 
 
 def _first_payment_minimum(sale):
-    cost = sum((Decimal(str(item.unit_cost or 0)) * int(item.qty or 0) for item in sale.items), Decimal("0"))
+    def line_cost(item):
+        unit_cost = item.unit_cost
+        if unit_cost is None and item.product is not None:
+            unit_cost = item.product.cost
+        return Decimal(str(unit_cost or 0)) * int(item.qty or 0)
+
+    cost = sum((line_cost(item) for item in sale.items), Decimal("0"))
     if cost <= 0:
         return Decimal("0")
     return (cost / Decimal("1000")).quantize(Decimal("1"), rounding=ROUND_HALF_UP) * Decimal("1000")
