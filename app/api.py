@@ -966,6 +966,8 @@ def mobile_record_sale_payment(sale_id):
             return jsonify({"payment": _payment_json(duplicate), "amount_paid": float(paid), "outstanding": float(balance), "duplicate": True})
         return jsonify({"error": "This transaction reference or session ID has already been used."}), 409
     paid, balance = _payment_totals(sale)
+    if len(sale.payments) >= 3:
+        return jsonify({"error": "This order has reached the maximum of three payment stages: the first payment and up to two further settlements."}), 400
     if amount > balance:
         return jsonify({"error": "Payment cannot exceed the outstanding product balance."}), 400
     if paid <= 0:
