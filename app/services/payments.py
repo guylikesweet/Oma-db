@@ -27,8 +27,8 @@ def build_batch_payment_reminders(batch, now=None):
     now = now or datetime.utcnow()
     if not batch or batch.status != ShipmentBatch.STATUS_IN_TRANSIT:
         raise PaymentError("Payment reminders are available only while the shipment is in transit.")
-    if not batch.created_at or now < batch.created_at + timedelta(days=45):
-        raise PaymentError("Payment reminders become available 45 days after the batch was created.")
+    if not batch.created_at or now < batch.created_at + timedelta(days=35):
+        raise PaymentError("Payment reminders become available 35 days after the batch was created.")
     groups = defaultdict(list)
     for sale in batch.sales:
         if sale.is_stock_sale or sale.order_status == "Cancelled":
