@@ -213,7 +213,7 @@ class _JourneyPageState extends State<JourneyPage> {
           builder: (context, setDialogState) => AlertDialog(
             title: Text('Move ' + selectedIds.length.toString() + ' selected sale(s)'),
             content: DropdownButtonFormField<String>(
-              value: selectedStage,
+              initialValue: selectedStage,
               decoration: const InputDecoration(labelText: 'Milestone'),
               items: stages.map((stage) => DropdownMenuItem<String>(
                 value: stage['key']?.toString(),
@@ -507,7 +507,7 @@ class _JourneyEditorState extends State<_JourneyEditor> {
             )
           else
             DropdownButtonFormField<String>(
-              value: selectedStage,
+              initialValue: selectedStage,
               decoration: const InputDecoration(labelText: 'Move to milestone'),
               items: stages
                   .map(
