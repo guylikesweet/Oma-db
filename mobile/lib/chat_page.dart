@@ -351,6 +351,7 @@ class _ChatPageState extends State<ChatPage> {
         );
       }
     }
+    if (!mounted) return;
     final optimistic = <String, dynamic>{
       'id': localId, 'sender_user_id': AppSession.userId,
       'sender_username': AppSession.username.isEmpty ? 'You' : AppSession.username,
@@ -422,7 +423,7 @@ class _ChatPageState extends State<ChatPage> {
         ],
       ),
     );
-    if (accepted != true) return false;
+    if (accepted != true || !mounted) return false;
 
     final progress = ValueNotifier<double>(0);
     var cancelled = false;
