@@ -696,7 +696,7 @@ def process_pending_annie_replies(limit=1):
 
             question = _ANNIE_MENTION.sub("", message.content or "").strip()
             answer = (
-                "Hi! I'm Annie. What would you like to know about Oma?"
+                "I'm Annie, Oma's business assistant."
                 if not question else answer_question(asker, question)
             )
             reply, created = post_annie_message(
@@ -813,7 +813,7 @@ def process_annie_question(message_id, asker_user_id):
 
     question = _ANNIE_MENTION.sub("", message.content or "").strip()
     answer = (
-        "Hi! I'm Annie. What would you like to know about Oma?"
+        "I'm Annie, Oma's business assistant."
         if not question else answer_question(asker, question)
     )
     # Save the actual answer independently of Firebase/notification tables.
