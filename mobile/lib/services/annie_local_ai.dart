@@ -308,7 +308,7 @@ class AnnieLocalAi {
           0;
       return "Recorded profit for the last 7 days: ₦${profit.toStringAsFixed(2)}. This figure comes from Oma’s database.";
     }
-    if (RegExp(r'\b(cost price|supplier cost|landed cost|unit cost)\b')
+    if (RegExp(r'\b(cost price|product cost|cost of product|supplier cost|landed cost|unit cost|purchase cost)\b')
         .hasMatch(normalizedQuestion)) {
       return "Annie’s business snapshot does not expose product cost information. Please use the authorized product details screen if your role permits it.";
     }
