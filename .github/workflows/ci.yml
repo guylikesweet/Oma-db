@@ -197,6 +197,10 @@ jobs:
         working-directory: mobile
         run: flutter test test/sync_reliability_test.dart
 
+      - name: Generate adaptive launcher icons from repository artwork
+        working-directory: mobile
+        run: dart run flutter_launcher_icons
+
       - name: Prepare non-production Firebase config for Android compile test
         working-directory: mobile
         shell: bash
