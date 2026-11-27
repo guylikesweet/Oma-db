@@ -1015,7 +1015,7 @@ class _ChatPageState extends State<ChatPage> {
       margin: const EdgeInsets.only(top: 4, bottom: 5),
       padding: const EdgeInsets.fromLTRB(8, 5, 8, 5),
       decoration: BoxDecoration(
-        color: scheme.surface.withOpacity(.55),
+        color: scheme.surface.withValues(alpha: .55),
         borderRadius: BorderRadius.circular(10),
         border: Border(
           left: BorderSide(
@@ -1387,7 +1387,7 @@ class _ChatPageState extends State<ChatPage> {
                     color: Theme.of(context).colorScheme.surfaceContainerHighest,
                     borderRadius: BorderRadius.circular(12),
                     border: Border.all(
-                      color: Theme.of(context).colorScheme.outline.withOpacity(.35),
+                      color: Theme.of(context).colorScheme.outline.withValues(alpha: .35),
                     ),
                   ),
                   clipBehavior: Clip.antiAlias,
@@ -1399,7 +1399,7 @@ class _ChatPageState extends State<ChatPage> {
                       height: 1,
                       indent: 54,
                       endIndent: 8,
-                      color: Theme.of(context).colorScheme.outline.withOpacity(.12),
+                      color: Theme.of(context).colorScheme.outline.withValues(alpha: .12),
                     ),
                     itemBuilder: (context, index) {
                       final user = mentionOptions[index];
@@ -1748,7 +1748,7 @@ class _ChatPageState extends State<ChatPage> {
                   ]
                 : [
                     scheme.primary,
-                    scheme.primary.withOpacity(.78),
+                    scheme.primary.withValues(alpha: .78),
                     scheme.primaryContainer,
                   ],
           )
@@ -1811,12 +1811,12 @@ class _ChatPageState extends State<ChatPage> {
                               ),
                               border: Border.all(
                                 color: mine && !pending && !failed
-                                    ? Colors.white.withOpacity(.22)
-                                    : scheme.outline.withOpacity(.45),
+                                    ? Colors.white.withValues(alpha: .22)
+                                    : scheme.outline.withValues(alpha: .45),
                               ),
                               boxShadow: [
                                 BoxShadow(
-                                  color: Colors.black.withOpacity(
+                                  color: Colors.black.withValues(alpha: 
                                     pending || failed ? .04 : .12,
                                   ),
                                   blurRadius: pending || failed ? 5 : 14,
@@ -1824,7 +1824,7 @@ class _ChatPageState extends State<ChatPage> {
                                 ),
                                 if (mine && !pending && !failed)
                                   BoxShadow(
-                                    color: Colors.white.withOpacity(.14),
+                                    color: Colors.white.withValues(alpha: .14),
                                     blurRadius: 1,
                                     offset: const Offset(0, -1),
                                   ),
@@ -1863,7 +1863,7 @@ class _ChatPageState extends State<ChatPage> {
                                       vertical: 8,
                                     ),
                                     decoration: BoxDecoration(
-                                      color: scheme.surface.withOpacity(.75),
+                                      color: scheme.surface.withValues(alpha: .75),
                                       borderRadius: BorderRadius.circular(14),
                                     ),
                                     child: Column(
@@ -2031,7 +2031,7 @@ class _ChatPageState extends State<ChatPage> {
                                         style: TextStyle(
                                           fontSize: 10,
                                           color: mine
-                                              ? Colors.white.withOpacity(.78)
+                                              ? Colors.white.withValues(alpha: .78)
                                               : scheme.onSurfaceVariant,
                                         ),
                                       ),
@@ -2040,7 +2040,7 @@ class _ChatPageState extends State<ChatPage> {
                                         Icon(
                                           Icons.done_all_rounded,
                                           size: 13,
-                                          color: Colors.white.withOpacity(.82),
+                                          color: Colors.white.withValues(alpha: .82),
                                         ),
                                       ],
                                     ],
@@ -2072,7 +2072,7 @@ class _ChatPageState extends State<ChatPage> {
                         icon: Icon(
                           Icons.more_horiz_rounded,
                           size: 16,
-                          color: scheme.onSurfaceVariant.withOpacity(.62),
+                          color: scheme.onSurfaceVariant.withValues(alpha: .62),
                         ),
                       ),
                     ),
@@ -2208,7 +2208,7 @@ class _ChatAudioBubbleState extends State<_ChatAudioBubble> {
       width: 250,
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surface.withOpacity(.18),
+        color: Theme.of(context).colorScheme.surface.withValues(alpha: .18),
         borderRadius: BorderRadius.circular(12),
       ),
       child: Row(
