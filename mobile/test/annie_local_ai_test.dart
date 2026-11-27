@@ -21,6 +21,16 @@ void main() {
     expect(AnnieLocalAi.minimumModelBytes, greaterThan(400 * 1024 * 1024));
   });
 
+  test('greetings are answered without downloading the model', () async {
+    expect(AnnieLocalAi.canAnswerWithoutModel('hello'), isTrue);
+    expect(AnnieLocalAi.canAnswerWithoutContext('good morning'), isTrue);
+    final answer = await annie.answer(
+      question: 'hello',
+      businessContext: {'staff_role': 'staff'},
+    );
+    expect(answer, contains('Oma business assistant'));
+  });
+
   test('does not disclose profit or margin to staff', () async {
     final answer = await annie.answer(
       question: 'What is our profit this week?',
