@@ -30,6 +30,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: oma-ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   backend:
     runs-on: ubuntu-24.04
@@ -144,12 +148,32 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v7
 
+      - name: Set up Java 17
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '17'
+
       - name: Install Flutter
         uses: subosito/flutter-action@v2
         with:
           channel: stable
           flutter-version: "3.47.9"
           cache: true
+
+      - name: Install pinned Android native build tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          SDK_ROOT="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-}}"
+          test -n "$SDK_ROOT"
+          SDKMANAGER="$SDK_ROOT/cmdline-tools/latest/bin/sdkmanager"
+          if [ ! -x "$SDKMANAGER" ]; then
+            SDKMANAGER="$(find "$SDK_ROOT/cmdline-tools" -type f -name sdkmanager | sort -V | tail -n 1)"
+          fi
+          test -x "$SDKMANAGER"
+          yes | "$SDKMANAGER" --licenses >/dev/null || true
+          "$SDKMANAGER" --install "ndk;27.0.12077973" "cmake;3.22.1"
 
       - name: Get Flutter dependencies
         working-directory: mobile
@@ -172,6 +196,48 @@ jobs:
       - name: Run synchronization reliability tests
         working-directory: mobile
         run: flutter test test/sync_reliability_test.dart
+
+      - name: Prepare non-production Firebase config for Android compile test
+        working-directory: mobile
+        shell: bash
+        run: |
+          mkdir -p android/app
+          cat > android/app/google-services.json <<'JSON'
+          {
+            "project_info": {
+              "project_number": "123456789012",
+              "project_id": "oma-ci-build",
+              "storage_bucket": "oma-ci-build.appspot.com"
+            },
+            "client": [{
+              "client_info": {
+                "mobilesdk_app_id": "1:123456789012:android:0000000000000000",
+                "android_client_info": { "package_name": "com.omagroup.salesapp" }
+              },
+              "api_key": [{ "current_key": "ci-build-only-not-a-secret" }]
+            }],
+            "configuration_version": "1"
+          }
+          JSON
+
+      - name: Build Android 8+ ARM64 debug APK
+        working-directory: mobile
+        run: flutter build apk --debug --target-platform android-arm64 --dart-define=API_BASE_URL=https://oma-db.onrender.com/api
+
+      - name: Verify Android APK platform contract
+        working-directory: mobile
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK=build/app/outputs/flutter-apk/app-debug.apk
+          test -s "$APK"
+          AAPT="$(find "$ANDROID_HOME/build-tools" -type f -name aapt | sort -V | tail -n 1)"
+          test -n "$AAPT"
+          "$AAPT" dump badging "$APK" | grep -F "sdkVersion:'26'"
+          "$AAPT" dump badging "$APK" | grep -F "targetSdkVersion:'36'"
+          "$AAPT" dump badging "$APK" | grep -F "package: name='com.omagroup.salesapp'"
+          unzip -l "$APK" | grep -F "lib/arm64-v8a/libllama_jni.so"
+          unzip -l "$APK" | grep -F "res/mipmap-anydpi-v26/ic_launcher.xml"
 
       - name: Build Flutter Web
         working-directory: mobile
