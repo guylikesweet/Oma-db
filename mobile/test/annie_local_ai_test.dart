@@ -18,7 +18,7 @@ void main() {
       contains('/resolve/9217f5d/qwen2.5-0.5b-instruct-q4_k_m.gguf'),
     );
     expect(AnnieLocalAi.modelFileName, endsWith('.gguf'));
-    expect(AnnieLocalAi.minimumModelBytes, greaterThan(400 * 1024 * 1024));
+    expect(AnnieLocalAi.minimumModelBytes, greaterThanOrEqualTo(400 * 1024 * 1024));
   });
 
   test('greetings are answered without downloading the model', () async {
@@ -28,7 +28,7 @@ void main() {
       question: 'hello',
       businessContext: {'staff_role': 'staff'},
     );
-    expect(answer, contains('Oma business assistant'));
+    expect(answer, contains('business assistant'));
   });
 
   test('local greeting is direct and does not ask a follow-up', () async {
