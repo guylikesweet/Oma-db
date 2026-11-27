@@ -59,9 +59,14 @@ class AnnieLocalAi {
     Map<String, dynamic> context,
   ) async {
     if (userId.trim().isEmpty) return;
+    final safeContext = Map<String, dynamic>.from(context)
+      ..remove('admin_only_financial_summary');
     await _secureStorage.write(
       key: 'annie_business_context_$userId',
-      value: jsonEncode(context),
+      value: jsonEncode({
+        'cached_at': DateTime.now().toIso8601String(),
+        'context': safeContext,
+      }),
     );
   }
 
@@ -73,7 +78,12 @@ class AnnieLocalAi {
     if (raw == null || raw.isEmpty) return null;
     try {
       final decoded = jsonDecode(raw);
-      return decoded is Map ? Map<String, dynamic>.from(decoded) : null;
+      if (decoded is! Map || decoded['context'] is! Map) return null;
+      final cachedAt = DateTime.tryParse('${decoded['cached_at'] ?? ''}');
+      if (cachedAt == null) return null;
+      final age = DateTime.now().difference(cachedAt);
+      if (age.isNegative || age > const Duration(hours: 24)) return null;
+      return Map<String, dynamic>.from(decoded['context'] as Map);
     } catch (_) {
       return null;
     }
