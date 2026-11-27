@@ -54,21 +54,23 @@ class ThemeSettingsPage extends StatelessWidget {
               ),
               const SizedBox(height: 14),
               Card(
-                child: Column(
-                  children: OmaThemePreference.values.map((value) {
-                    return RadioListTile<OmaThemePreference>(
-                      value: value,
-                      groupValue: selected,
-                      secondary: Icon(OmaThemeController.icon(value)),
-                      title: Text(OmaThemeController.label(value)),
-                      subtitle: Text(_description(value)),
-                      onChanged: (next) {
-                        if (next != null) {
-                          OmaThemeController.setPreference(next);
-                        }
-                      },
-                    );
-                  }).toList(),
+                child: RadioGroup<OmaThemePreference>(
+                  groupValue: selected,
+                  onChanged: (next) {
+                    if (next != null) {
+                      OmaThemeController.setPreference(next);
+                    }
+                  },
+                  child: Column(
+                    children: OmaThemePreference.values.map((value) {
+                      return RadioListTile<OmaThemePreference>(
+                        value: value,
+                        secondary: Icon(OmaThemeController.icon(value)),
+                        title: Text(OmaThemeController.label(value)),
+                        subtitle: Text(_description(value)),
+                      );
+                    }).toList(),
+                  ),
                 ),
               ),
             ],
