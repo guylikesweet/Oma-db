@@ -4,6 +4,14 @@ import 'package:oma_mobile/services/annie_local_ai.dart';
 void main() {
   final annie = AnnieLocalAi.instance;
 
+  test('fixed Oma policy questions do not require a model download', () {
+    expect(AnnieLocalAi.canAnswerWithoutModel('When does demurrage start?'), isTrue);
+    expect(AnnieLocalAi.canAnswerWithoutModel('What is our profit?'), isTrue);
+    expect(AnnieLocalAi.canAnswerWithoutModel('Explain our shipment process'), isFalse);
+    expect(AnnieLocalAi.canAnswerWithoutContext('When does demurrage start?'), isTrue);
+    expect(AnnieLocalAi.canAnswerWithoutContext('What is our profit?'), isFalse);
+  });
+
   test('uses the pinned official Qwen2.5 0.5B Q4_K_M model', () {
     expect(
       AnnieLocalAi.modelUrl,
