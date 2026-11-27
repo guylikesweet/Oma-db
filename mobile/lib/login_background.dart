@@ -124,7 +124,7 @@ class _LoginBackgroundState extends State<LoginBackground>
                         item,
                         area,
                         _controller.value,
-                        scheme.primary.withOpacity(.55),
+                        scheme.primary.withValues(alpha: .55),
                       ),
                   ],
                 ),
@@ -132,7 +132,7 @@ class _LoginBackgroundState extends State<LoginBackground>
             },
           ),
           // The fade: keeps the animation soft so the form stands out.
-          ColoredBox(color: scheme.surface.withOpacity(.62)),
+          ColoredBox(color: scheme.surface.withValues(alpha: .62)),
         ],
       ),
     );
