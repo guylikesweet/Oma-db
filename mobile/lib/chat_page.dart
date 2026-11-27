@@ -500,6 +500,9 @@ class _ChatPageState extends State<ChatPage> {
       var cachedSnapshot = false;
       try {
         final snapshot = await widget.api.annieBusinessContext(question);
+        if (snapshot['user_id']?.toString() != AppSession.userId.toString()) {
+          throw ApiException(403, 'The business snapshot does not match the signed-in account.');
+        }
         final rawContext = snapshot['context'];
         if (rawContext is! Map) {
           throw StateError('Oma did not return Annie’s business information.');
@@ -509,7 +512,12 @@ class _ChatPageState extends State<ChatPage> {
           AppSession.userId.toString(),
           businessContext,
         );
-      } catch (_) {
+      } catch (error) {
+        if (error is ApiException &&
+            error.statusCode != 0 &&
+            error.statusCode < 500) {
+          rethrow;
+        }
         final cached = await ai.cachedBusinessContext(
           AppSession.userId.toString(),
         );
