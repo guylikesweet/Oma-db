@@ -24,7 +24,7 @@ class ThemeSettingsPage extends StatelessWidget {
                     children: [
                       CircleAvatar(
                         backgroundColor:
-                            Theme.of(context).colorScheme.secondary.withOpacity(.12),
+                            Theme.of(context).colorScheme.secondary.withValues(alpha: .12),
                         foregroundColor:
                             Theme.of(context).colorScheme.secondary,
                         child: const Icon(Icons.palette_outlined),
