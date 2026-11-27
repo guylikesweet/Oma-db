@@ -464,7 +464,7 @@ class _NewSalePageState extends ConsumerState<NewSalePage> {
                   ),
                   const SizedBox(height: 10),
                   DropdownButtonFormField<String>(
-                    value: payment,
+                    initialValue: payment,
                     decoration: const InputDecoration(
                       labelText: 'Payment status',
                       border: OutlineInputBorder(),
