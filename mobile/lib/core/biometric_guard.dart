@@ -123,7 +123,7 @@ class BiometricGuard {
       );
 
       if (authenticated) return true;
-      return passwordFallback();
+      return await passwordFallback();
     } catch (_) {
       return await passwordFallback();
     }
