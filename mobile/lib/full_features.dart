@@ -236,7 +236,7 @@ class _WebsiteFeaturesPageState extends State<WebsiteFeaturesPage> {
             width: 34,
             height: 34,
             decoration: BoxDecoration(
-              color: scheme.primaryContainer.withOpacity(.72),
+              color: scheme.primaryContainer.withValues(alpha: .72),
               borderRadius: BorderRadius.circular(11),
             ),
             child: Icon(icon, size: 19, color: scheme.onPrimaryContainer),
@@ -277,7 +277,7 @@ class _WebsiteFeaturesPageState extends State<WebsiteFeaturesPage> {
           width: 40,
           height: 40,
           decoration: BoxDecoration(
-            color: Theme.of(context).colorScheme.surfaceContainerHighest.withOpacity(.65),
+            color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: .65),
             borderRadius: BorderRadius.circular(12),
           ),
           child: Icon(icon, size: 21),
