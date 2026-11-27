@@ -1,7 +1,7 @@
 name: oma_mobile
 description: Offline-first mobile client for the Oma Flask application.
 publish_to: 'none'
-version: 0.3.0+30
+version: 0.4.0+31
 
 environment:
   sdk: '>=3.5.0 <4.0.0'
@@ -33,6 +33,11 @@ dependencies:
   pdf: ^3.11.3
   image: ^4.5.4
   url_launcher: ^6.3.1
+  path_provider: ^2.1.5
+  llama_flutter_android:
+    git:
+      url: https://github.com/dragneel2074/Llama-Flutter.git
+      ref: 016d80031db5b6b94fae32c80ede178e9f62c6c3
 
 dev_dependencies:
   flutter_test:
@@ -69,6 +74,6 @@ flutter_launcher_icons:
   # every other icon on the phone instead of a custom baked-in radius.
   adaptive_icon_background: "#FFFFFF"
   adaptive_icon_foreground: "assets/images/app_icon_foreground.png"
-  min_sdk_android: 21
+  min_sdk_android: 26
   web:
     generate: false
