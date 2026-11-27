@@ -288,14 +288,14 @@ class AnnieLocalAi {
     final normalizedQuestion = question.toLowerCase();
     final role = businessContext['staff_role']?.toString() ?? 'staff';
     if (role != 'admin' &&
-        RegExp(r'\\b(profit|margin)\\b').hasMatch(normalizedQuestion)) {
+        RegExp(r'\b(profit|margin)\\b').hasMatch(normalizedQuestion)) {
       return "I can’t share profit or margin information with your staff account. Please ask an administrator.";
     }
-    if (RegExp(r'\\b(cost price|supplier cost|landed cost|unit cost)\\b')
+    if (RegExp(r'\b(cost price|supplier cost|landed cost|unit cost)\\b')
         .hasMatch(normalizedQuestion)) {
       return "Annie’s business snapshot does not expose product cost information. Please use the authorized product details screen if your role permits it.";
     }
-    if (RegExp(r'\\bdemurrage\\b').hasMatch(normalizedQuestion)) {
+    if (RegExp(r'\bdemurrage\\b').hasMatch(normalizedQuestion)) {
       return "Oma gives customers 5 days after a shipment batch arrives to settle shipping. Demurrage starts on day 6 at ₦150 per piece per day.";
     }
 
