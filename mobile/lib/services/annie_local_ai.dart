@@ -26,18 +26,25 @@ class AnnieLocalAi {
   static const int expectedModelBytes = 491 * 1024 * 1024;
 
   static bool canAnswerWithoutModel(String question) {
-    final normalized = question.toLowerCase();
-    return question.trim().isEmpty ||
-        RegExp(r'^(hi|hello|hey|good morning|good afternoon|good evening|how are you)[!. ,]*
-          r'\b(demurrage|profit|margin|cost price|product cost|cost of product|supplier cost|landed cost|unit cost|purchase cost)\b',
-        ).hasMatch(normalized);
+    final normalized = question.toLowerCase().trim();
+    final greeting = RegExp(
+      r'^(hi|hello|hey|good morning|good afternoon|good evening|how are you)[!?., ]*$',
+    ).hasMatch(normalized);
+    final fixedFact = RegExp(
+      r'\b(demurrage|profit|margin|cost price|product cost|cost of product|supplier cost|landed cost|unit cost|purchase cost)\b',
+    ).hasMatch(normalized);
+    return question.trim().isEmpty || greeting || fixedFact;
   }
 
   static bool canAnswerWithoutContext(String question) {
-    final normalized = question.toLowerCase();
-    return RegExp(
+    final normalized = question.toLowerCase().trim();
+    final greeting = RegExp(
+      r'^(hi|hello|hey|good morning|good afternoon|good evening|how are you)[!?., ]*$',
+    ).hasMatch(normalized);
+    final fixedFact = RegExp(
       r'\b(demurrage|cost price|product cost|cost of product|supplier cost|landed cost|unit cost|purchase cost)\b',
     ).hasMatch(normalized);
+    return greeting || fixedFact;
   }
 
   LlamaController? _controller;
