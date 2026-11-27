@@ -1,8 +1,9 @@
-"""Annie, the role-aware, zero-API-cost Oma team-chat assistant.
+"""Annie, the role-aware, zero-provider-cost Oma team-chat assistant.
 
-Business facts are read directly from Oma's database and answered with local,
-deterministic question handling. Annie has no write tools and cannot change
-sales, payments, stock, users, or shipment records.
+Android clients generate responses with a local on-device model; the web client
+retains deterministic database-backed answers. This service supplies bounded,
+permission-filtered business context and durable chat notifications. Annie has
+no write tools and cannot change sales, payments, stock, users, or shipments.
 """
 import logging
 import re
