@@ -399,7 +399,7 @@ def build_business_context(user, question):
             "Each verified payment has its own server-generated receipt. The order receipt lists payment history and remaining product balance.",
             "Product payments and shipping charges are separate balances.",
             "Customer reminder actions become available 35 days after a shipment batch is created.",
-            "After a batch arrives, customers have 7 days to settle shipping; demurrage starts on day 8 at NGN 150 per piece per day.",
+            "After a batch arrives, customers have 5 days to settle shipping; demurrage starts on day 6 at NGN 150 per piece per day.",
             "Customers are consolidated by normalized phone number within one shipment batch only; the same phone in another batch remains a separate customer group.",
             "A sale becomes ready for delivery after its shipping payment is settled, or when it is a stocked sale.",
             "Annie is read-only. Staff must use the normal Oma workflows to create, verify, edit or settle records."
