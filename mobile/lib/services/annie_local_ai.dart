@@ -279,9 +279,20 @@ class AnnieLocalAi {
   }) async {
     final normalizedQuestion = question.toLowerCase();
     final role = businessContext['staff_role']?.toString() ?? 'staff';
-    if (role != 'admin' &&
-        RegExp(r'\b(profit|margin)\b').hasMatch(normalizedQuestion)) {
-      return "I can’t share profit or margin information with your staff account. Please ask an administrator.";
+    if (RegExp(r'\b(profit|margin)\b').hasMatch(normalizedQuestion)) {
+      if (role != 'admin') {
+        return "I can’t share profit or margin information with your staff account. Please ask an administrator.";
+      }
+      final financial = businessContext['admin_only_financial_summary'];
+      if (financial is! Map ||
+          financial['profit_last_7_days_ngn'] == null) {
+        return "I can’t confirm the profit figure from this offline snapshot. Reconnect to Oma and ask again for the latest admin financial summary.";
+      }
+      final profit = double.tryParse(
+            financial['profit_last_7_days_ngn'].toString(),
+          ) ??
+          0;
+      return "Recorded profit for the last 7 days: ₦${profit.toStringAsFixed(2)}. This figure comes from Oma’s database.";
     }
     if (RegExp(r'\b(cost price|supplier cost|landed cost|unit cost)\b')
         .hasMatch(normalizedQuestion)) {
