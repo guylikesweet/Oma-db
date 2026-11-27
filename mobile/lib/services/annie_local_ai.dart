@@ -29,6 +29,20 @@ class AnnieLocalAi {
   bool _loading = false;
   final FlutterSecureStorage _secureStorage = const FlutterSecureStorage();
 
+  /// Returns -1 when the native runtime is unavailable on this ABI.
+  Future<int> deviceFreeRamBytes() async {
+    final probe = LlamaController();
+    try {
+      return (await probe.detectGpu()).freeRamBytes;
+    } finally {
+      try {
+        await probe.dispose();
+      } catch (_) {
+        // A capability probe must never crash the host app.
+      }
+    }
+  }
+
   Future<File> _modelFile() async {
     final directory = await getApplicationSupportDirectory();
     return File('${directory.path}/annie/$modelFileName');
