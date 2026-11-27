@@ -2706,7 +2706,9 @@ def mobile_create_chat_message():
 @require_api_token
 def mobile_annie_context():
     """Return only the authenticated user's permission-filtered Oma snapshot."""
-    data = request.get_json(silent=True) or {}
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict):
+        return jsonify({"error": "Invalid request body."}), 400
     question = str(data.get("question") or "").strip()
     if not question:
         return jsonify({"error": "Ask Annie a question first."}), 400
@@ -2723,7 +2725,9 @@ def mobile_annie_context():
 @require_api_token
 def mobile_annie_local_reply():
     """Persist an on-device-generated Annie answer against its original question."""
-    data = request.get_json(silent=True) or {}
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict):
+        return jsonify({"error": "Invalid request body."}), 400
     try:
         question_message_id = int(data.get("question_message_id"))
     except (TypeError, ValueError):
