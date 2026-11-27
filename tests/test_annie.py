@@ -47,6 +47,22 @@ def test_annie_payment_update_uses_only_payment_and_outstanding_values():
     assert "unit cost" not in result["body"].lower()
 
 
+def test_annie_greeting_is_direct_and_does_not_ask_a_question():
+    answer = answer_question(SimpleNamespace(is_admin=False), "hello")
+    assert answer == "Hello! 😊 I'm Annie, your Oma business assistant."
+    assert "?" not in answer
+
+
+def test_annie_unrelated_question_gets_a_direct_limitation_without_prompting(monkeypatch):
+    import app.services.annie as annie
+
+    monkeypatch.setattr(annie, "build_business_context", lambda user, question: {})
+    answer = answer_question(SimpleNamespace(is_admin=False), "What is the weather?")
+    assert "cannot confirm this topic" in answer
+    assert "?" not in answer
+    assert "Try:" not in answer
+
+
 def test_annie_answers_from_database_snapshot_without_provider_or_api_key(monkeypatch):
     import app.services.annie as annie
 
