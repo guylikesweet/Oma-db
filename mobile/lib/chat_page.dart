@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
@@ -12,6 +13,7 @@ import 'package:share_plus/share_plus.dart';
 
 import 'brand_loader.dart';
 import 'data/api_client.dart';
+import 'services/annie_local_ai.dart';
 import 'data/app_session.dart';
 import 'core/network_errors.dart';
 
@@ -55,6 +57,8 @@ class _ChatPageState extends State<ChatPage> {
   Map<String, dynamic>? replyTo;
   bool loading = true;
   int _sendingCount = 0;
+  bool _annieBusy = false;
+  Future<void> _annieQueue = Future<void>.value();
 
   bool get sending => _sendingCount > 0;
   String? error;
@@ -311,11 +315,13 @@ class _ChatPageState extends State<ChatPage> {
     }
     final replyId = replyTo?['id'];
     final localId = 'local-${++_localSequence}';
-    final operationId = 'chat-${DateTime.now().microsecondsSinceEpoch}-${_localSequence}';
+    final operationId = 'chat-${DateTime.now().microsecondsSinceEpoch}-$_localSequence';
     final localPhoto = attachmentBytes;
     final localPhotoName = attachmentName;
     final localAudio = audioDraftBytes;
     final localAudioName = audioDraftName;
+    final asksAnnie = RegExp(r'(?<![A-Za-z0-9_])@annie\\b', caseSensitive: false).hasMatch(text);
+    final useLocalAnnie = asksAnnie && defaultTargetPlatform == TargetPlatform.android;
     final optimistic = <String, dynamic>{
       'id': localId, 'sender_user_id': AppSession.userId,
       'sender_username': AppSession.username.isEmpty ? 'You' : AppSession.username,
@@ -342,6 +348,7 @@ class _ChatPageState extends State<ChatPage> {
         audioFilename: localAudioName,
         audioMimetype: localAudio == null ? null : 'audio/wav',
         clientOperationId: operationId,
+        localAnnie: useLocalAnnie,
       );
       if (!mounted) return;
       setState(() {
@@ -350,6 +357,11 @@ class _ChatPageState extends State<ChatPage> {
         _sendingCount = _sendingCount > 0 ? _sendingCount - 1 : 0;
       });
       _scrollToBottom();
+
+      final sentId = _asInt(sent['id']);
+      if (useLocalAnnie && sentId != null) {
+        _annieQueue = _annieQueue.then((_) => _answerLocally(sentId, text));
+      }
     } catch (e) {
       if (!mounted) return;
       showNetworkError(context, e, onRetry: () => _retryFailedMessage(optimistic));
@@ -358,6 +370,136 @@ class _ChatPageState extends State<ChatPage> {
           ? <String, dynamic>{...message, '_status': 'failed'} : message).toList();
         _sendingCount = _sendingCount > 0 ? _sendingCount - 1 : 0;
       });
+    }
+  }
+
+  Future<bool> _confirmAnnieModelDownload() async {
+    final accepted = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Activate Annie AI'),
+        content: const Text(
+          'Annie needs a one-time download of about 491 MB. The model is stored on this phone and answers are generated on-device. After the download, Annie can answer without an internet connection. Mobile data charges may apply.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Not now'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Download model'),
+          ),
+        ],
+      ),
+    );
+    if (accepted != true) return false;
+
+    final progress = ValueNotifier<double>(0);
+    var cancelled = false;
+    final ai = AnnieLocalAi.instance;
+    final dialogFuture = showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Downloading Annie AI'),
+        content: ValueListenableBuilder<double>(
+          valueListenable: progress,
+          builder: (context, value, _) => Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              LinearProgressIndicator(value: value <= 0 ? null : value),
+              const SizedBox(height: 12),
+              Text('${(value * 100).toStringAsFixed(0)}% • One-time download'),
+              const SizedBox(height: 4),
+              const Text('Keep Oma open until the download finishes.'),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              cancelled = true;
+              ai.cancelDownload();
+              Navigator.pop(dialogContext);
+            },
+            child: const Text('Cancel'),
+          ),
+        ],
+      ),
+    );
+
+    var downloaded = false;
+    try {
+      await ai.downloadModel(onProgress: (value) => progress.value = value);
+      downloaded = true;
+    } catch (e) {
+      if (!cancelled && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Annie model download failed: $e. You can retry.')),
+        );
+      }
+    } finally {
+      if (!cancelled && mounted) {
+        Navigator.of(context, rootNavigator: true).pop();
+      }
+      await dialogFuture;
+      progress.dispose();
+    }
+    return downloaded && !cancelled;
+  }
+
+  Future<void> _answerLocally(int questionMessageId, String originalText) async {
+    if (!mounted) return;
+    setState(() => _annieBusy = true);
+    try {
+      final ai = AnnieLocalAi.instance;
+      if (!await ai.isModelDownloaded()) {
+        final accepted = await _confirmAnnieModelDownload();
+        if (!accepted) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Annie needs her offline model before she can answer. Tag @Annie again when you are ready to download it.')),
+            );
+          }
+          return;
+        }
+      }
+
+      final question = originalText.replaceAll(
+        RegExp(r'(?<![A-Za-z0-9_])@annie\\b', caseSensitive: false),
+        '',
+      ).trim();
+      final snapshot = await widget.api.annieBusinessContext(question);
+      final rawContext = snapshot['context'];
+      if (rawContext is! Map) {
+        throw StateError('Oma did not return Annie’s business information.');
+      }
+      final answer = await ai.answer(
+        question: question,
+        businessContext: Map<String, dynamic>.from(rawContext),
+      );
+      final reply = await widget.api.saveLocalAnnieReply(
+        questionMessageId: questionMessageId,
+        content: answer,
+      );
+      if (!mounted) return;
+      setState(() {
+        final replyId = '${reply['id']}';
+        if (!messages.any((message) => '${message['id']}' == replyId)) {
+          messages = [...messages, reply];
+        }
+      });
+      _scrollToBottom();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Annie could not answer: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _annieBusy = false);
     }
   }
 
@@ -1072,6 +1214,17 @@ class _ChatPageState extends State<ChatPage> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
+              if (_annieBusy)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 7),
+                  child: Row(
+                    children: [
+                      const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2)),
+                      const SizedBox(width: 8),
+                      Text('Annie is checking Oma’s records on this phone…', style: Theme.of(context).textTheme.bodySmall),
+                    ],
+                  ),
+                ),
               if (replyTo != null)
                 Container(
                   width: double.infinity,
