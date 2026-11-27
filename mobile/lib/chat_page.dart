@@ -421,7 +421,7 @@ class _ChatPageState extends State<ChatPage> {
           TextButton(
             onPressed: () {
               cancelled = true;
-              ai.cancelDownload();
+              unawaited(ai.cancelDownload());
               Navigator.pop(dialogContext);
             },
             child: const Text('Cancel'),
@@ -484,7 +484,7 @@ class _ChatPageState extends State<ChatPage> {
           AppSession.userId.toString(),
           businessContext,
         );
-      } catch (networkError) {
+      } catch (_) {
         final cached = await ai.cachedBusinessContext(
           AppSession.userId.toString(),
         );
