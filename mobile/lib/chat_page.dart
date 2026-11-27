@@ -1330,7 +1330,7 @@ class _ChatPageState extends State<ChatPage> {
                     children: [
                       const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2)),
                       const SizedBox(width: 8),
-                      Text('Annie is checking Oma’s records on this phone…', style: Theme.of(context).textTheme.bodySmall),
+                      Text('Annie is thinking on this phone…', style: Theme.of(context).textTheme.bodySmall),
                     ],
                   ),
                 ),
