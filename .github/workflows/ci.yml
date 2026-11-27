@@ -250,7 +250,7 @@ jobs:
           "$AAPT" dump badging "$APK" | grep -F "targetSdkVersion:'36'"
           "$AAPT" dump badging "$APK" | grep -F "package: name='com.omagroup.salesapp'"
           unzip -l "$APK" | grep -F "lib/arm64-v8a/libllama_jni.so"
-          unzip -l "$APK" | grep -F "res/mipmap-anydpi-v26/ic_launcher.xml"
+          "$AAPT" dump badging "$APK" | grep -E '^application-icon-[0-9]+:'
 
       - name: Build Flutter Web
         working-directory: mobile
