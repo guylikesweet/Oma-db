@@ -322,7 +322,31 @@ class _ChatPageState extends State<ChatPage> {
     final localAudio = audioDraftBytes;
     final localAudioName = audioDraftName;
     final asksAnnie = RegExp(r'(?<![A-Za-z0-9_])@annie\b', caseSensitive: false).hasMatch(text);
-    final useLocalAnnie = asksAnnie && defaultTargetPlatform == TargetPlatform.android;
+    var useLocalAnnie = asksAnnie && defaultTargetPlatform == TargetPlatform.android;
+    if (useLocalAnnie) {
+      try {
+        final ai = AnnieLocalAi.instance;
+        var freeRamBytes = await ai.deviceFreeRamBytes();
+        if (freeRamBytes < 1200 * 1024 * 1024) {
+          useLocalAnnie = false;
+        } else if (!await ai.isModelDownloaded()) {
+          useLocalAnnie = await _confirmAnnieModelDownload();
+          if (useLocalAnnie) {
+            freeRamBytes = await ai.deviceFreeRamBytes();
+            if (freeRamBytes < 1200 * 1024 * 1024) {
+              useLocalAnnie = false;
+            }
+          }
+        }
+      } catch (_) {
+        useLocalAnnie = false;
+      }
+      if (!useLocalAnnie && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Using Oma’s built-in Annie for this question because this phone cannot run the offline model right now.')),
+        );
+      }
+    }
     final optimistic = <String, dynamic>{
       'id': localId, 'sender_user_id': AppSession.userId,
       'sender_username': AppSession.username.isEmpty ? 'You' : AppSession.username,
@@ -473,27 +497,11 @@ class _ChatPageState extends State<ChatPage> {
       }
 
       final freeRamBytes = await ai.deviceFreeRamBytes();
-      if (freeRamBytes < 0) {
-        throw StateError(
-          'Annie’s local AI currently requires a 64-bit ARM Android phone. The rest of Oma will continue to work on this device.',
-        );
-      }
       if (freeRamBytes < 1200 * 1024 * 1024) {
-        throw StateError(
-          'This phone is low on free memory. Close other apps and try Annie again.',
-        );
+        throw StateError('This phone cannot safely load Annie’s local model right now.');
       }
-
       if (!await ai.isModelDownloaded()) {
-        final accepted = await _confirmAnnieModelDownload();
-        if (!accepted) {
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Annie needs her offline model before she can answer. Tag @Annie again when you are ready to download it.')),
-            );
-          }
-          return;
-        }
+        throw StateError('Annie’s local model is not available on this phone.');
       }
 
       Map<String, dynamic> businessContext;
@@ -553,9 +561,28 @@ class _ChatPageState extends State<ChatPage> {
       _scrollToBottom();
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Annie could not answer: $e')),
-        );
+        try {
+          final fallback = await widget.api.fallbackAnnieAnswer(
+            questionMessageId: questionMessageId,
+          );
+          if (!mounted) return;
+          setState(() {
+            final fallbackId = '${fallback['id']}';
+            if (!messages.any((message) => '${message['id']}' == fallbackId)) {
+              messages = [...messages, fallback];
+            }
+          });
+          _scrollToBottom();
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Annie used her built-in Oma answer because the on-device model could not finish this reply.')),
+          );
+        } catch (_) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('Annie could not answer: $e')),
+            );
+          }
+        }
       }
     } finally {
       if (mounted) setState(() { _annieBusy = false; _annieDraft = ''; });
