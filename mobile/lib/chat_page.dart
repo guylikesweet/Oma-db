@@ -379,7 +379,7 @@ class _ChatPageState extends State<ChatPage> {
       builder: (dialogContext) => AlertDialog(
         title: const Text('Activate Annie AI'),
         content: const Text(
-          'Annie needs a one-time download of about 491 MB. The model is stored on this phone and text generation runs on-device. Live Oma records need an internet connection; offline, Annie can use the last business snapshot securely cached for this staff account, which may be out of date. Mobile data charges may apply.',
+          'Annie uses Qwen2.5 0.5B Instruct (Apache-2.0) and needs a one-time download of about 491 MB. It requires a 64-bit ARM Android 8+ phone. The model is stored on this phone and text generation runs on-device. Live Oma records need an internet connection; offline, Annie can use the last business snapshot securely cached for this staff account, which may be out of date. Mobile data charges may apply.',
         ),
         actions: [
           TextButton(
@@ -469,6 +469,18 @@ class _ChatPageState extends State<ChatPage> {
         setState(() => messages = [...messages, reply]);
         _scrollToBottom();
         return;
+      }
+
+      final freeRamBytes = await ai.deviceFreeRamBytes();
+      if (freeRamBytes < 0) {
+        throw StateError(
+          'Annie’s local AI currently requires a 64-bit ARM Android phone. The rest of Oma will continue to work on this device.',
+        );
+      }
+      if (freeRamBytes < 1024 * 1024 * 1024) {
+        throw StateError(
+          'This phone is low on free memory. Close other apps and try Annie again.',
+        );
       }
 
       if (!await ai.isModelDownloaded()) {
