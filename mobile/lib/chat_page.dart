@@ -58,6 +58,7 @@ class _ChatPageState extends State<ChatPage> {
   bool loading = true;
   int _sendingCount = 0;
   bool _annieBusy = false;
+  String _annieDraft = '';
   Future<void> _annieQueue = Future<void>.value();
 
   bool get sending => _sendingCount > 0;
@@ -521,10 +522,14 @@ class _ChatPageState extends State<ChatPage> {
         cachedSnapshot = true;
       }
 
+      if (mounted) setState(() => _annieDraft = '');
       final answer = await ai.answer(
         question: question,
         businessContext: businessContext,
         cachedSnapshot: cachedSnapshot,
+        onToken: (token) {
+          if (mounted) setState(() => _annieDraft += token);
+        },
       );
       final reply = await widget.api.saveLocalAnnieReply(
         questionMessageId: questionMessageId,
@@ -545,7 +550,7 @@ class _ChatPageState extends State<ChatPage> {
         );
       }
     } finally {
-      if (mounted) setState(() => _annieBusy = false);
+      if (mounted) setState(() { _annieBusy = false; _annieDraft = ''; });
     }
   }
 
@@ -1269,6 +1274,19 @@ class _ChatPageState extends State<ChatPage> {
                       const SizedBox(width: 8),
                       Text('Annie is checking Oma’s records on this phone…', style: Theme.of(context).textTheme.bodySmall),
                     ],
+                  ),
+                ),
+              if (_annieBusy && _annieDraft.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 7, left: 22),
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      _annieDraft,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
                   ),
                 ),
               if (replyTo != null)
