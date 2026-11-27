@@ -110,7 +110,7 @@ class BiometricGuard {
 
     try {
       final supported = await _auth.isDeviceSupported();
-      if (!supported) return passwordFallback();
+      if (!supported) return await passwordFallback();
 
       final authenticated = await _auth.authenticate(
         localizedReason: reason,
@@ -125,7 +125,7 @@ class BiometricGuard {
       if (authenticated) return true;
       return passwordFallback();
     } catch (_) {
-      return passwordFallback();
+      return await passwordFallback();
     }
   }
 
