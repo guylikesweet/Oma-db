@@ -322,8 +322,12 @@ class _ChatPageState extends State<ChatPage> {
     final localAudio = audioDraftBytes;
     final localAudioName = audioDraftName;
     final asksAnnie = RegExp(r'(?<![A-Za-z0-9_])@annie\b', caseSensitive: false).hasMatch(text);
+    final annieQuestion = text.replaceAll(
+      RegExp(r'(?<![A-Za-z0-9_])@annie\b', caseSensitive: false),
+      '',
+    ).trim();
     var useLocalAnnie = asksAnnie && defaultTargetPlatform == TargetPlatform.android;
-    if (useLocalAnnie) {
+    if (useLocalAnnie && !AnnieLocalAi.canAnswerWithoutModel(annieQuestion)) {
       try {
         final ai = AnnieLocalAi.instance;
         var freeRamBytes = await ai.deviceFreeRamBytes();
