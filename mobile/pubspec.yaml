@@ -63,8 +63,8 @@ flutter:
 flutter_launcher_icons:
   android: "ic_launcher"
   ios: false
-  # Legacy/fallback icon (pre-Android 8 and any launcher that doesn't support
-  # adaptive icons). Must be fully opaque — a transparent legacy icon is what
+  # Legacy/fallback icon for launchers that do not apply adaptive icon masks.
+  # Must be fully opaque — a transparent legacy icon is what
   # was causing the black background, since several launchers fill transparent
   # pixels on non-adaptive icons with black instead of leaving them clear.
   image_path: "assets/images/app_icon_legacy.png"
