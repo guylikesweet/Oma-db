@@ -29,14 +29,14 @@ class AnnieLocalAi {
     final normalized = question.toLowerCase();
     return question.trim().isEmpty ||
         RegExp(
-          r'\\b(demurrage|profit|margin|cost price|product cost|cost of product|supplier cost|landed cost|unit cost|purchase cost)\\b',
+          r'\b(demurrage|profit|margin|cost price|product cost|cost of product|supplier cost|landed cost|unit cost|purchase cost)\b',
         ).hasMatch(normalized);
   }
 
   static bool canAnswerWithoutContext(String question) {
     final normalized = question.toLowerCase();
     return RegExp(
-      r'\\b(demurrage|cost price|product cost|cost of product|supplier cost|landed cost|unit cost|purchase cost)\\b',
+      r'\b(demurrage|cost price|product cost|cost of product|supplier cost|landed cost|unit cost|purchase cost)\b',
     ).hasMatch(normalized);
   }
 
