@@ -4,4 +4,7 @@
          to allow setting breakpoints, to provide hot reload, etc.
     -->
     <uses-permission android:name="android.permission.INTERNET"/>
+    <!-- Local emulator development uses http://10.0.2.2. This exception is
+         debug-only; release builds retain Android's cleartext-off default. -->
+    <application android:usesCleartextTraffic="true" />
 </manifest>
