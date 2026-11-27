@@ -342,7 +342,7 @@ For demurrage, the current Oma rule is five days to pay after arrival; demurrage
           ChatMessage(role: 'system', content: systemPrompt),
           ChatMessage(
             role: 'user',
-            content: 'Oma business context (JSON):\\n$contextJson\\n\\nCached/offline snapshot: $cachedSnapshot\\nQuestion: $question',
+            content: 'Oma business context (JSON):\n$contextJson\n\nCached/offline snapshot: $cachedSnapshot\nQuestion: $question',
           ),
         ],
         template: 'chatml',
