@@ -477,7 +477,7 @@ class _ChatPageState extends State<ChatPage> {
           'Annie’s local AI currently requires a 64-bit ARM Android phone. The rest of Oma will continue to work on this device.',
         );
       }
-      if (freeRamBytes < 1024 * 1024 * 1024) {
+      if (freeRamBytes < 1200 * 1024 * 1024) {
         throw StateError(
           'This phone is low on free memory. Close other apps and try Annie again.',
         );
