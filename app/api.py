@@ -2715,7 +2715,7 @@ def mobile_annie_context():
 
     from app.services.annie import build_business_context
     context = build_business_context(g.api_user, question)
-    return jsonify({"assistant": "Annie", "context": context, "read_only": True})
+    return jsonify({"assistant": "Annie", "user_id": g.api_user.id, "context": context, "read_only": True})
 
 
 @api_bp.route("/v1/annie/local-reply", methods=("POST",))
