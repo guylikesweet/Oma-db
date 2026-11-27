@@ -3,6 +3,16 @@ from types import SimpleNamespace
 from app.services.annie import answer_question, build_audit_update, is_annie_mention
 
 
+
+def test_annie_uses_the_current_day_six_demurrage_policy():
+    from app.services.annie import DEMURRAGE_POLICY_GUIDANCE
+
+    assert "5 days" in DEMURRAGE_POLICY_GUIDANCE
+    assert "day 6" in DEMURRAGE_POLICY_GUIDANCE
+    assert "day 8" not in DEMURRAGE_POLICY_GUIDANCE
+    assert "₦150 per piece per day" in DEMURRAGE_POLICY_GUIDANCE
+
+
 def test_annie_mention_is_case_insensitive_and_requires_a_real_tag():
     assert is_annie_mention("@Annie how many batches are in transit?")
     assert is_annie_mention("Hi @ANNIE, what's our sales total?")
