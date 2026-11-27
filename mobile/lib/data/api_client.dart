@@ -1244,6 +1244,7 @@ class ApiClient {
     String? audioFilename,
     String? audioMimetype,
     String? clientOperationId,
+    bool localAnnie = false,
   }) {
     return _map(
       'POST',
@@ -1257,6 +1258,29 @@ class ApiClient {
         if (audioFilename != null) 'audio_filename': audioFilename,
         if (audioMimetype != null) 'audio_mimetype': audioMimetype,
         if (clientOperationId != null) 'client_operation_id': clientOperationId,
+        if (localAnnie) 'local_annie': true,
+      },
+    );
+  }
+
+  Future<Map<String, dynamic>> annieBusinessContext(String question) {
+    return _map(
+      'POST',
+      '/v1/annie/context',
+      body: {'question': question},
+    );
+  }
+
+  Future<Map<String, dynamic>> saveLocalAnnieReply({
+    required int questionMessageId,
+    required String content,
+  }) {
+    return _map(
+      'POST',
+      '/v1/annie/local-reply',
+      body: {
+        'question_message_id': questionMessageId,
+        'content': content,
       },
     );
   }
