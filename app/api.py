@@ -2720,6 +2720,45 @@ def mobile_annie_context():
     return jsonify({"assistant": "Annie", "user_id": g.api_user.id, "context": context, "read_only": True})
 
 
+
+@api_bp.route("/v1/annie/fallback", methods=("POST",))
+@limiter.limit("10 per minute")
+@require_api_token
+def mobile_annie_fallback():
+    """Use the existing database-backed Annie answer if local inference is unavailable."""
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict):
+        return jsonify({"error": "Invalid request body."}), 400
+    try:
+        question_message_id = int(data.get("question_message_id"))
+    except (TypeError, ValueError):
+        return jsonify({"error": "A valid question message is required."}), 400
+
+    source = db.session.get(ChatMessage, question_message_id)
+    if (
+        source is None or source.deleted_at is not None
+        or source.sender_user_id != g.api_user.id or not source.content
+    ):
+        return jsonify({"error": "The original Annie question is unavailable."}), 404
+
+    from app.services.annie import is_annie_mention, process_annie_question
+    if not is_annie_mention(source.content):
+        return jsonify({"error": "The selected message does not mention Annie."}), 400
+
+    try:
+        reply = process_annie_question(source.id, g.api_user.id)
+        if reply is None:
+            return jsonify({"error": "Annie could not answer this message."}), 409
+        return jsonify(_chat_message_json(reply))
+    except Exception:
+        db.session.rollback()
+        current_app.logger.exception(
+            "Database-backed Annie fallback failed for message %s",
+            source.id,
+        )
+        return jsonify({"error": "Annie's fallback answer could not be created."}), 503
+
+
 @api_bp.route("/v1/annie/local-reply", methods=("POST",))
 @limiter.limit("10 per minute")
 @require_api_token
