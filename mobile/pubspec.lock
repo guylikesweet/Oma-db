@@ -584,6 +584,15 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "4.0.0"
+  llama_flutter_android:
+    dependency: "direct main"
+    description:
+      path: "."
+      ref: 016d80031db5b6b94fae32c80ede178e9f62c6c3
+      resolved-ref: 016d80031db5b6b94fae32c80ede178e9f62c6c3
+      url: "https://github.com/dragneel2074/Llama-Flutter.git"
+    source: git
+    version: "0.2.6"
   local_auth:
     dependency: "direct main"
     description:
