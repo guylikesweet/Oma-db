@@ -92,8 +92,8 @@ class AnnieLocalAi {
           ? null
           : int.tryParse(contentRange.split('/').last);
       final totalBytes = rangeTotal ??
-          (response.contentLength > 0
-              ? response.contentLength + existingBytes
+          ((response.contentLength ?? 0) > 0
+              ? (response.contentLength ?? 0) + existingBytes
               : expectedModelBytes);
 
       var receivedBytes = existingBytes;
