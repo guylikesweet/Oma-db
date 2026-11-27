@@ -2679,7 +2679,7 @@ def mobile_create_chat_message():
         # delivery is attempted by the response callback after this commit.
         db.session.commit()
 
-        if re.search(r"(?<![A-Za-z0-9_])@annie\b", content, re.IGNORECASE):
+        if re.search(r"(?<![A-Za-z0-9_])@annie\b", content, re.IGNORECASE) and data.get("local_annie") is not True:
             try:
                 from app.services.annie import process_annie_question
                 process_annie_question(message.id, g.api_user.id)
@@ -2698,6 +2698,102 @@ def mobile_create_chat_message():
             "error": "Team chat message could not be saved.",
             "diagnostic": detail,
         }), 503
+
+
+
+@api_bp.route("/v1/annie/context", methods=("POST",))
+@limiter.limit("20 per minute")
+@require_api_token
+def mobile_annie_context():
+    """Return only the authenticated user's permission-filtered Oma snapshot."""
+    data = request.get_json(silent=True) or {}
+    question = str(data.get("question") or "").strip()
+    if not question:
+        return jsonify({"error": "Ask Annie a question first."}), 400
+    if len(question) > 1000:
+        return jsonify({"error": "Annie questions are limited to 1,000 characters."}), 400
+
+    from app.services.annie import build_business_context
+    context = build_business_context(g.api_user, question)
+    return jsonify({"assistant": "Annie", "context": context, "read_only": True})
+
+
+@api_bp.route("/v1/annie/local-reply", methods=("POST",))
+@limiter.limit("10 per minute")
+@require_api_token
+def mobile_annie_local_reply():
+    """Persist an on-device-generated Annie answer against its original question."""
+    data = request.get_json(silent=True) or {}
+    try:
+        question_message_id = int(data.get("question_message_id"))
+    except (TypeError, ValueError):
+        return jsonify({"error": "A valid question message is required."}), 400
+
+    content = str(data.get("content") or "").strip()
+    if not content:
+        return jsonify({"error": "Annie's answer cannot be empty."}), 400
+    if len(content) > 4000:
+        return jsonify({"error": "Annie's answer is too long."}), 400
+
+    source = db.session.get(ChatMessage, question_message_id)
+    if (
+        source is None or source.deleted_at is not None
+        or source.sender_user_id != g.api_user.id or not source.content
+    ):
+        return jsonify({"error": "The original Annie question is unavailable."}), 404
+
+    from app.services.annie import _active_staff_ids, is_annie_mention, post_annie_message
+    if not is_annie_mention(source.content):
+        return jsonify({"error": "The selected message does not mention Annie."}), 400
+    if (
+        g.api_user.created_at is not None and source.created_at is not None
+        and source.created_at < g.api_user.created_at
+    ):
+        return jsonify({"error": "You cannot ask Annie about conversations from before your account was created."}), 403
+
+    event_key = f"annie-local-reply-{source.id}"
+    try:
+        reply, created = post_annie_message(
+            content, event_key=event_key, recipient_user_ids=[],
+            push_type="chat_message",
+            push_data={"reply_to_id": str(source.id), "source": "on_device_ai"},
+        )
+        if created:
+            db.session.commit()
+            try:
+                bot = User.query.filter_by(is_system=True).first()
+                preview = " ".join(reply.content.split())
+                if len(preview) > 180:
+                    preview = preview[:177].rstrip() + "..."
+                for user_id in _active_staff_ids():
+                    if not PushDevice.query.filter_by(user_id=user_id, enabled=True).first():
+                        continue
+                    queue_user_notification(
+                        user_id, event_type="chat_message", title="Annie",
+                        body=preview,
+                        data={
+                            "type": "chat_message",
+                            "chat_message_id": str(reply.id),
+                            "sender_user_id": str(bot.id if bot else ""),
+                            "sender_username": "Annie",
+                            "message_content": preview,
+                            "sound": "chat_message",
+                            "reply_to_id": str(source.id),
+                        },
+                    )
+                db.session.commit()
+                _schedule_outbox_flush()
+            except Exception:
+                db.session.rollback()
+                current_app.logger.exception(
+                    "Local Annie answer %s was saved, but push delivery could not be queued",
+                    reply.id,
+                )
+        return jsonify(_chat_message_json(reply)), 201 if created else 200
+    except Exception:
+        db.session.rollback()
+        current_app.logger.exception("Could not save local Annie answer for message %s", source.id)
+        return jsonify({"error": "Annie's answer could not be saved. Please try again."}), 503
 
 
 @api_bp.route("/v1/chat/messages/<int:message_id>", methods=("PUT", "PATCH", "DELETE"))
