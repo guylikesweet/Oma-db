@@ -336,29 +336,32 @@ For demurrage, the current Oma rule is five days to pay after arrival; demurrage
 ''';
 
     final buffer = StringBuffer();
-    await for (final token in controller.generateChat(
-      messages: [
-        ChatMessage(role: 'system', content: systemPrompt),
-        ChatMessage(
-          role: 'user',
-          content: 'Oma business context (JSON):\n$contextJson\n\nCached/offline snapshot: $cachedSnapshot\nQuestion: $question',
-        ),
-      ],
-      template: 'chatml',
-      maxTokens: 384,
-      temperature: 0.2,
-      topP: 0.85,
-      topK: 40,
-      repeatPenalty: 1.12,
-    )) {
-      buffer.write(token);
+    try {
+      await for (final token in controller.generateChat(
+        messages: [
+          ChatMessage(role: 'system', content: systemPrompt),
+          ChatMessage(
+            role: 'user',
+            content: 'Oma business context (JSON):\\n$contextJson\\n\\nCached/offline snapshot: $cachedSnapshot\\nQuestion: $question',
+          ),
+        ],
+        template: 'chatml',
+        maxTokens: 384,
+        temperature: 0.2,
+        topP: 0.85,
+        topK: 40,
+        repeatPenalty: 1.12,
+      )) {
+        buffer.write(token);
+      }
+    } finally {
+      _scheduleIdleUnload();
     }
 
     final answer = buffer.toString().trim();
     if (answer.isEmpty) {
       throw StateError('Annie could not generate an answer. Please try again.');
     }
-    _scheduleIdleUnload();
     return answer.length > 4000 ? answer.substring(0, 3997).trimRight() + '...' : answer;
   }
 
