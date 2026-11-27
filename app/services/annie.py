@@ -752,7 +752,7 @@ def process_due_payment_reminders(now=None):
             f"{len(notices)} consolidated customer reminder(s), {pieces} pieces. "
             f"Outstanding product balance: {_money(outstanding)}. "
             f"Estimated shipping: {_money(shipping)} (separate from product payments). "
-            "Once arrived, customers have 7 days to settle shipping; demurrage starts on day 8 "
+            "Once arrived, customers have 5 days to settle shipping; demurrage starts on day 6 "
             "at ₦150 per piece per day. Open the batch's customer reminder actions to prepare "
             "each WhatsApp message."
         )
