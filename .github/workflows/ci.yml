@@ -173,7 +173,7 @@ jobs:
           fi
           test -x "$SDKMANAGER"
           yes | "$SDKMANAGER" --licenses >/dev/null || true
-          "$SDKMANAGER" --install "ndk;27.0.12077973" "cmake;3.22.1"
+          "$SDKMANAGER" --install "ndk;28.2.13676358" "cmake;3.22.1"
 
       - name: Get Flutter dependencies
         working-directory: mobile
