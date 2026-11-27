@@ -1271,6 +1271,16 @@ class ApiClient {
     );
   }
 
+  Future<Map<String, dynamic>> fallbackAnnieAnswer({
+    required int questionMessageId,
+  }) {
+    return _map(
+      'POST',
+      '/v1/annie/fallback',
+      body: {'question_message_id': questionMessageId},
+    );
+  }
+
   Future<Map<String, dynamic>> saveLocalAnnieReply({
     required int questionMessageId,
     required String content,
