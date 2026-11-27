@@ -469,7 +469,7 @@ class _WebProductsPageState extends State<WebProductsPage> {
                         ),
                         const SizedBox(height: 10),
                         DropdownButtonFormField<String>(
-                          value: shippingMode,
+                          initialValue: shippingMode,
                           decoration: const InputDecoration(labelText: 'Inbound shipping mode'),
                           items: const [
                             DropdownMenuItem(value: 'sea', child: Text('Sea')),
@@ -1124,7 +1124,7 @@ class _WebSalesPageState extends State<WebSalesPage> {
             return AlertDialog(
               title: const Text('Update status'),
               content: DropdownButtonFormField<String>(
-                value: selected,
+                initialValue: selected,
                 items: const [
                   'New',
                   'Packed',
@@ -1197,7 +1197,7 @@ class _WebSalesPageState extends State<WebSalesPage> {
             return AlertDialog(
               title: const Text('Update payment status'),
               content: DropdownButtonFormField<String>(
-                value: selected,
+                initialValue: selected,
                 items: const [
                   'Paid',
                   'Pending',
@@ -4226,7 +4226,7 @@ class _SettingsPageState
         builder: (context, setState) => AlertDialog(
           title: const Text('Delete selected sale'),
           content: DropdownButtonFormField<int>(
-            value: selected,
+            initialValue: selected,
             decoration: const InputDecoration(labelText: 'Sale'),
             items: sales.whereType<Map>().map((raw) {
               final sale = Map<String, dynamic>.from(raw);
