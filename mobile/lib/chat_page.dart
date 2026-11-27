@@ -500,12 +500,30 @@ class _ChatPageState extends State<ChatPage> {
         return;
       }
 
-      final freeRamBytes = await ai.deviceFreeRamBytes();
-      if (freeRamBytes < 1200 * 1024 * 1024) {
-        throw StateError('This phone cannot safely load Annie’s local model right now.');
+      final needsModel = !AnnieLocalAi.canAnswerWithoutModel(question);
+      if (needsModel) {
+        final freeRamBytes = await ai.deviceFreeRamBytes();
+        if (freeRamBytes < 1200 * 1024 * 1024) {
+          throw StateError('This phone cannot safely load Annie’s local model right now.');
+        }
+        if (!await ai.isModelDownloaded()) {
+          throw StateError('Annie’s local model is not available on this phone.');
+        }
       }
-      if (!await ai.isModelDownloaded()) {
-        throw StateError('Annie’s local model is not available on this phone.');
+
+      if (AnnieLocalAi.canAnswerWithoutContext(question)) {
+        final quickAnswer = await ai.answer(
+          question: question,
+          businessContext: const {'staff_role': 'staff'},
+        );
+        final quickReply = await widget.api.saveLocalAnnieReply(
+          questionMessageId: questionMessageId,
+          content: quickAnswer,
+        );
+        if (!mounted) return;
+        setState(() => messages = [...messages, quickReply]);
+        _scrollToBottom();
+        return;
       }
 
       Map<String, dynamic> businessContext;
