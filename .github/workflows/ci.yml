@@ -177,7 +177,7 @@ jobs:
 
       - name: Get Flutter dependencies
         working-directory: mobile
-        run: flutter pub get --enforce-lockfile
+        run: flutter pub get
 
       - name: Analyze Flutter
         working-directory: mobile
