@@ -151,6 +151,11 @@ jobs:
 
           APK="build/app/outputs/flutter-apk/app-release.apk"
           test -s "$APK"
+          AAPT="$(find "$ANDROID_HOME/build-tools" -type f -name aapt | sort -V | tail -n 1)"
+          test -n "$AAPT"
+          "$AAPT" dump badging "$APK" | grep -F "sdkVersion:'26'"
+          "$AAPT" dump badging "$APK" | grep -F "package: name='com.omagroup.salesapp'"
+          unzip -l "$APK" | grep -F "lib/arm64-v8a/libllama_jni.so"
           mkdir -p build/named
           cp "$APK" build/named/OmaSales-Mobile.apk
           sha256sum build/named/OmaSales-Mobile.apk | tee build/named/SHA256SUMS.txt
