@@ -2,9 +2,9 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 
-import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:just_audio/just_audio.dart';
@@ -12,10 +12,10 @@ import 'package:record/record.dart';
 import 'package:share_plus/share_plus.dart';
 
 import 'brand_loader.dart';
-import 'data/api_client.dart';
-import 'services/annie_local_ai.dart';
-import 'data/app_session.dart';
 import 'core/network_errors.dart';
+import 'data/api_client.dart';
+import 'data/app_session.dart';
+import 'services/annie_local_ai.dart';
 
 class ChatPage extends StatefulWidget {
   const ChatPage({super.key, required this.api, this.initialMessageId});
