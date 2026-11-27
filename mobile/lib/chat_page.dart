@@ -380,7 +380,7 @@ class _ChatPageState extends State<ChatPage> {
       builder: (dialogContext) => AlertDialog(
         title: const Text('Activate Annie AI'),
         content: const Text(
-          'Annie uses Qwen2.5 0.5B Instruct (Apache-2.0) and needs a one-time download of about 491 MB. It requires a 64-bit ARM Android 8+ phone. The model is stored on this phone and text generation runs on-device. Live Oma records need an internet connection; offline, Annie can use the last business snapshot securely cached for this staff account, which may be out of date. Mobile data charges may apply.',
+          'Annie uses Qwen2.5 0.5B Instruct (Apache-2.0) and needs a one-time download of about 491 MB. It requires a 64-bit ARM Android 8+ phone. The model is stored on this phone and text generation runs on-device. Live Oma records and saving replies to team chat need an internet connection. If a connection drops, Annie may use the last securely cached snapshot for this staff account (up to 24 hours), which may be out of date. Mobile data charges may apply.',
         ),
         actions: [
           TextButton(
