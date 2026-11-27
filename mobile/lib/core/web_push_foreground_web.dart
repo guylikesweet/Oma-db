@@ -1,13 +1,20 @@
-import 'dart:html' as html;
+import 'dart:js_interop';
+
+import 'package:web/web.dart' as web;
 
 Future<void> showWebForegroundPush(Map<String, dynamic> data) async {
-  if (html.Notification.permission != 'granted') return;
+  if (web.Notification.permission != 'granted') return;
   final title = data['title']?.toString() ?? 'OmaSales';
   final body = data['body']?.toString() ?? '';
   final messageId = data['chat_message_id']?.toString() ?? '';
-  final notification = html.Notification(title, body: body);
-  notification.onClick.listen((_) {
-    final query = messageId.isNotEmpty ? '?chat_message_id='+Uri.encodeComponent(messageId) : '';
-    html.window.location.assign('/webapp/'+query);
-  });
+  final notification = web.Notification(
+    title,
+    web.NotificationOptions(body: body),
+  );
+  notification.addEventListener('click', ((web.Event _) {
+    final query = messageId.isNotEmpty
+        ? '?chat_message_id=${Uri.encodeComponent(messageId)}'
+        : '';
+    web.window.location.assign('/webapp/' + query);
+  }).toJS);
 }
