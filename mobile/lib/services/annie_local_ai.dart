@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -19,7 +18,7 @@ class AnnieLocalAi {
   static final AnnieLocalAi instance = AnnieLocalAi._();
 
   static const String modelUrl =
-      'https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct-GGUF/resolve/main/qwen2.5-0.5b-instruct-q4_k_m.gguf';
+      'https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct-GGUF/resolve/9217f5d/qwen2.5-0.5b-instruct-q4_k_m.gguf';
   static const String modelFileName =
       'qwen2.5-0.5b-instruct-q4_k_m.gguf';
   static const int minimumModelBytes = 400 * 1024 * 1024;
