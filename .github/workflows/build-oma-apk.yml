@@ -39,7 +39,7 @@ jobs:
         uses: subosito/flutter-action@v2
         with:
           channel: stable
-          flutter-version: '3.35.7'
+          flutter-version: '3.47.9'
           cache: true
 
       - name: Install pinned Android native build tools
@@ -58,6 +58,9 @@ jobs:
 
       - name: Install locked Flutter dependencies
         run: flutter pub get --enforce-lockfile
+
+      - name: Analyze Flutter code
+        run: flutter analyze --no-pub --no-fatal-infos
 
       - name: Run Flutter tests
         run: flutter test --no-pub
@@ -168,8 +171,10 @@ jobs:
           AAPT="$(find "$ANDROID_HOME/build-tools" -type f -name aapt | sort -V | tail -n 1)"
           test -n "$AAPT"
           "$AAPT" dump badging "$APK" | grep -F "sdkVersion:'26'"
+          "$AAPT" dump badging "$APK" | grep -F "targetSdkVersion:'36'"
           "$AAPT" dump badging "$APK" | grep -F "package: name='com.omagroup.salesapp'"
           unzip -l "$APK" | grep -F "lib/arm64-v8a/libllama_jni.so"
+          unzip -l "$APK" | grep -F "res/mipmap-anydpi-v26/ic_launcher.xml"
           mkdir -p build/named
           cp "$APK" build/named/OmaSales-Mobile.apk
           sha256sum build/named/OmaSales-Mobile.apk | tee build/named/SHA256SUMS.txt
