@@ -19,6 +19,10 @@ from app.models import AnnieReplyTask, ChatMessage, Delivery, Product, PushDevic
 log = logging.getLogger(__name__)
 _ANNIE_MENTION = re.compile(r"(?<![A-Za-z0-9_])@annie\b", re.IGNORECASE)
 _PRIVATE_ACTIONS = {"user.update", "username.change", "password.change"}
+DEMURRAGE_POLICY_GUIDANCE = (
+    "After a batch arrives, customers have 5 days to settle shipping; "
+    "demurrage starts on day 6 at ₦150 per piece per day."
+)
 
 
 def is_annie_mention(content):
@@ -399,7 +403,7 @@ def build_business_context(user, question):
             "Each verified payment has its own server-generated receipt. The order receipt lists payment history and remaining product balance.",
             "Product payments and shipping charges are separate balances.",
             "Customer reminder actions become available 35 days after a shipment batch is created.",
-            "After a batch arrives, customers have 5 days to settle shipping; demurrage starts on day 6 at NGN 150 per piece per day.",
+            DEMURRAGE_POLICY_GUIDANCE,
             "Customers are consolidated by normalized phone number within one shipment batch only; the same phone in another batch remains a separate customer group.",
             "A sale becomes ready for delivery after its shipping payment is settled, or when it is a stocked sale.",
             "Annie is read-only. Staff must use the normal Oma workflows to create, verify, edit or settle records."
@@ -752,8 +756,7 @@ def process_due_payment_reminders(now=None):
             f"{len(notices)} consolidated customer reminder(s), {pieces} pieces. "
             f"Outstanding product balance: {_money(outstanding)}. "
             f"Estimated shipping: {_money(shipping)} (separate from product payments). "
-            "Once arrived, customers have 5 days to settle shipping; demurrage starts on day 6 "
-            "at ₦150 per piece per day. Open the batch's customer reminder actions to prepare "
+            f"{DEMURRAGE_POLICY_GUIDANCE} Open the batch's customer reminder actions to prepare "
             "each WhatsApp message."
         )
         _, created = post_annie_message(
