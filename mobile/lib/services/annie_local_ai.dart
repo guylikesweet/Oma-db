@@ -104,7 +104,7 @@ class AnnieLocalAi {
         await for (final chunk in response.stream) {
           sink.add(chunk);
           receivedBytes += chunk.length;
-          onProgress((receivedBytes / totalBytes).clamp(0.0, 1.0));
+          onProgress((receivedBytes / totalBytes).clamp(0.0, 1.0).toDouble());
         }
         await sink.flush();
       } finally {
