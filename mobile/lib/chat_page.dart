@@ -320,7 +320,7 @@ class _ChatPageState extends State<ChatPage> {
     final localPhotoName = attachmentName;
     final localAudio = audioDraftBytes;
     final localAudioName = audioDraftName;
-    final asksAnnie = RegExp(r'(?<![A-Za-z0-9_])@annie\\b', caseSensitive: false).hasMatch(text);
+    final asksAnnie = RegExp(r'(?<![A-Za-z0-9_])@annie\b', caseSensitive: false).hasMatch(text);
     final useLocalAnnie = asksAnnie && defaultTargetPlatform == TargetPlatform.android;
     final optimistic = <String, dynamic>{
       'id': localId, 'sender_user_id': AppSession.userId,
@@ -468,7 +468,7 @@ class _ChatPageState extends State<ChatPage> {
       }
 
       final question = originalText.replaceAll(
-        RegExp(r'(?<![A-Za-z0-9_])@annie\\b', caseSensitive: false),
+        RegExp(r'(?<![A-Za-z0-9_])@annie\b', caseSensitive: false),
         '',
       ).trim();
       final snapshot = await widget.api.annieBusinessContext(question);
