@@ -148,7 +148,7 @@ jobs:
         uses: subosito/flutter-action@v2
         with:
           channel: stable
-          flutter-version: "3.35.7"
+          flutter-version: "3.47.9"
           cache: true
 
       - name: Get Flutter dependencies
@@ -157,7 +157,7 @@ jobs:
 
       - name: Analyze Flutter
         working-directory: mobile
-        # Flutter 3.35 reports legacy deprecations as infos. Keep CI strict on
+        # Flutter 3.47 reports legacy deprecations as infos. Keep CI strict on
         # warnings/errors without failing solely on non-blocking migration notices.
         run: flutter analyze --no-fatal-infos
 
