@@ -55,6 +55,15 @@ class AnnieLocalAi {
 
   /// Returns -1 when the native runtime is unavailable on this ABI.
   Future<int> deviceFreeRamBytes() async {
+    final current = _controller;
+    if (current != null) {
+      try {
+        return (await current.detectGpu()).freeRamBytes;
+      } catch (_) {
+        return -1;
+      }
+    }
+
     final probe = LlamaController();
     try {
       return (await probe.detectGpu()).freeRamBytes;
