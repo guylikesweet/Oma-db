@@ -458,18 +458,18 @@ def answer_question(user, question):
     """Answer Oma questions locally from a bounded, role-aware database snapshot."""
     question = (question or "").strip()
     if not question:
-        return "Hi! I'm Annie. Ask me about sales, stock, customers, payments, shipments, deliveries or how to use Oma."
+        return "I'm Annie, Oma's business assistant. I answer questions about Oma records and procedures."
 
     lowered = re.sub(r"\s+", " ", question.casefold()).strip(" ?!.")
     if re.fullmatch(r"(hi|hello|hey|good morning|good afternoon|good evening|how are you)", lowered):
-        return "Hello! 😊 I'm Annie, your Oma business assistant. What would you like me to check?"
+        return "Hello! 😊 I'm Annie, your Oma business assistant."
 
     if any(term in lowered for term in ("what can you do", "help me", "your capabilities", "what do you know", "how can you help")):
         return (
             "I can check live Oma records for sales, verified payments, outstanding product balances, "
             "products and stock, shipment batches, deliveries and admin-only profit summaries. "
             "I can also explain Oma procedures such as Pay Small Small, receipts, shipping settlement "
-            "and demurrage. Tag me with @Annie and ask one clear question. I cannot change records."
+            "and demurrage. I provide information only and cannot change records."
         )
 
     business_terms = (
@@ -483,9 +483,8 @@ def answer_question(user, question):
     )
     if not any(term in lowered for term in business_terms):
         return (
-            "I'm Annie, Oma's business assistant. I focus on Oma's records and procedures. "
-            "Try: “sales today”, “low stock”, “who owes money?”, “batches in transit”, "
-            "or “how does Pay Small Small work?”"
+            "I'm Annie, Oma's business assistant. I can only answer questions about Oma records and procedures. "
+            "I cannot confirm this topic from the available Oma information."
         )
 
     context = build_business_context(user, question)
