@@ -319,7 +319,13 @@ class AnnieLocalAi {
     ValueChanged<String>? onToken,
   }) async {
     final normalizedQuestion = question.toLowerCase().trim();
-    if (RegExp(r'^(hi|hello|hey|good morning|good afternoon|good evening|how are you)[!. ,]*
+    final greeting = RegExp(
+      r'^(hi|hello|hey|good morning|good afternoon|good evening|how are you)[!?., ]*$',
+    );
+    if (greeting.hasMatch(normalizedQuestion)) {
+      return "Hello! 😊 I’m Annie, your Oma business assistant. What would you like to know?";
+    }
+
     final role = businessContext['staff_role']?.toString() ?? 'staff';
     if (RegExp(r'\bmargin\b').hasMatch(normalizedQuestion)) {
       if (role != 'admin') {
@@ -342,8 +348,9 @@ class AnnieLocalAi {
           0;
       return "Recorded profit for the last 7 days: ₦${profit.toStringAsFixed(2)}. This figure comes from Oma’s database.";
     }
-    if (RegExp(r'\b(cost price|product cost|cost of product|supplier cost|landed cost|unit cost|purchase cost)\b')
-        .hasMatch(normalizedQuestion)) {
+    if (RegExp(
+      r'\b(cost price|product cost|cost of product|supplier cost|landed cost|unit cost|purchase cost)\b',
+    ).hasMatch(normalizedQuestion)) {
       return "Annie’s business snapshot does not expose product cost information. Please use the authorized product details screen if your role permits it.";
     }
     if (RegExp(r'\bdemurrage\b').hasMatch(normalizedQuestion)) {
@@ -395,7 +402,9 @@ For demurrage, the current Oma rule is five days to pay after arrival; demurrage
     if (answer.isEmpty) {
       throw StateError('Annie could not generate an answer. Please try again.');
     }
-    return answer.length > 4000 ? answer.substring(0, 3997).trimRight() + '...' : answer;
+    return answer.length > 4000
+        ? answer.substring(0, 3997).trimRight() + '...'
+        : answer;
   }
 
   void _scheduleIdleUnload() {
