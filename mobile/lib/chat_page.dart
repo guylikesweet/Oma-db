@@ -379,7 +379,7 @@ class _ChatPageState extends State<ChatPage> {
       builder: (dialogContext) => AlertDialog(
         title: const Text('Activate Annie AI'),
         content: const Text(
-          'Annie needs a one-time download of about 491 MB. The model is stored on this phone and answers are generated on-device. After the download, Annie can answer without an internet connection. Mobile data charges may apply.',
+          'Annie needs a one-time download of about 491 MB. The model is stored on this phone and text generation runs on-device. Live Oma records need an internet connection; offline, Annie can use the last business snapshot securely cached for this staff account, which may be out of date. Mobile data charges may apply.',
         ),
         actions: [
           TextButton(
@@ -471,14 +471,36 @@ class _ChatPageState extends State<ChatPage> {
         RegExp(r'(?<![A-Za-z0-9_])@annie\b', caseSensitive: false),
         '',
       ).trim();
-      final snapshot = await widget.api.annieBusinessContext(question);
-      final rawContext = snapshot['context'];
-      if (rawContext is! Map) {
-        throw StateError('Oma did not return Annie’s business information.');
+      Map<String, dynamic> businessContext;
+      var cachedSnapshot = false;
+      try {
+        final snapshot = await widget.api.annieBusinessContext(question);
+        final rawContext = snapshot['context'];
+        if (rawContext is! Map) {
+          throw StateError('Oma did not return Annie’s business information.');
+        }
+        businessContext = Map<String, dynamic>.from(rawContext);
+        await ai.cacheBusinessContext(
+          AppSession.userId.toString(),
+          businessContext,
+        );
+      } catch (networkError) {
+        final cached = await ai.cachedBusinessContext(
+          AppSession.userId.toString(),
+        );
+        if (cached == null) {
+          throw StateError(
+            'Connect to Oma once so Annie can load your permitted business records. Her AI model itself runs on this phone.',
+          );
+        }
+        businessContext = cached;
+        cachedSnapshot = true;
       }
+
       final answer = await ai.answer(
         question: question,
-        businessContext: Map<String, dynamic>.from(rawContext),
+        businessContext: businessContext,
+        cachedSnapshot: cachedSnapshot,
       );
       final reply = await widget.api.saveLocalAnnieReply(
         questionMessageId: questionMessageId,
