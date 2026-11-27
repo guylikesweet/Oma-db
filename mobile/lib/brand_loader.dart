@@ -67,7 +67,7 @@ class _BrandLoaderState extends State<BrandLoader>
                 child: CircularProgressIndicator(
                   strokeWidth: 2.5,
                   valueColor: const AlwaysStoppedAnimation(_ringColor),
-                  backgroundColor: _ringColor.withOpacity(0.12),
+                  backgroundColor: _ringColor.withValues(alpha: 0.12),
                 ),
               ),
               FadeTransition(
@@ -92,7 +92,7 @@ class _BrandLoaderState extends State<BrandLoader>
                   color: Theme.of(context)
                       .colorScheme
                       .onSurface
-                      .withOpacity(0.65),
+                      .withValues(alpha: 0.65),
                 ),
           ),
         ],
@@ -125,7 +125,7 @@ class BrandLoadingOverlay extends StatelessWidget {
   Widget build(BuildContext context) {
     return Positioned.fill(
       child: ColoredBox(
-        color: Colors.black.withOpacity(0.15),
+        color: Colors.black.withValues(alpha: 0.15),
         child: Center(child: BrandLoader(label: label)),
       ),
     );
