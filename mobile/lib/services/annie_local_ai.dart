@@ -25,6 +25,21 @@ class AnnieLocalAi {
   static const int minimumModelBytes = 400 * 1024 * 1024;
   static const int expectedModelBytes = 491 * 1024 * 1024;
 
+  static bool canAnswerWithoutModel(String question) {
+    final normalized = question.toLowerCase();
+    return question.trim().isEmpty ||
+        RegExp(
+          r'\\b(demurrage|profit|margin|cost price|product cost|cost of product|supplier cost|landed cost|unit cost|purchase cost)\\b',
+        ).hasMatch(normalized);
+  }
+
+  static bool canAnswerWithoutContext(String question) {
+    final normalized = question.toLowerCase();
+    return RegExp(
+      r'\\b(demurrage|cost price|product cost|cost of product|supplier cost|landed cost|unit cost|purchase cost)\\b',
+    ).hasMatch(normalized);
+  }
+
   LlamaController? _controller;
   http.Client? _downloadClient;
   bool _loading = false;
