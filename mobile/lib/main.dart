@@ -2574,7 +2574,7 @@ class _ProductDialogState extends State<ProductDialog> {
                 ),
                 const SizedBox(height: 10),
                 DropdownButtonFormField<String>(
-                  value: shippingMode,
+                  initialValue: shippingMode,
                   decoration: const InputDecoration(labelText: 'Inbound shipping mode'),
                   items: const [
                     DropdownMenuItem(value: 'sea', child: Text('Sea')),
