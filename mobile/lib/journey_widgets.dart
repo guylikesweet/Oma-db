@@ -109,7 +109,7 @@ class _JourneyCardState extends State<JourneyCard> {
                   vertical: 6,
                 ),
                 decoration: BoxDecoration(
-                  color: scheme.primary.withOpacity(.10),
+                  color: scheme.primary.withValues(alpha: .10),
                   borderRadius: BorderRadius.circular(20),
                 ),
                 child: Text(
