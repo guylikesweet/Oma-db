@@ -455,6 +455,22 @@ class _ChatPageState extends State<ChatPage> {
     setState(() => _annieBusy = true);
     try {
       final ai = AnnieLocalAi.instance;
+      final question = originalText.replaceAll(
+        RegExp(r'(?<![A-Za-z0-9_])@annie\b', caseSensitive: false),
+        '',
+      ).trim();
+
+      if (question.isEmpty) {
+        final reply = await widget.api.saveLocalAnnieReply(
+          questionMessageId: questionMessageId,
+          content: 'Hi! I’m Annie, your Oma business assistant. What would you like to know?',
+        );
+        if (!mounted) return;
+        setState(() => messages = [...messages, reply]);
+        _scrollToBottom();
+        return;
+      }
+
       if (!await ai.isModelDownloaded()) {
         final accepted = await _confirmAnnieModelDownload();
         if (!accepted) {
@@ -467,10 +483,6 @@ class _ChatPageState extends State<ChatPage> {
         }
       }
 
-      final question = originalText.replaceAll(
-        RegExp(r'(?<![A-Za-z0-9_])@annie\b', caseSensitive: false),
-        '',
-      ).trim();
       Map<String, dynamic> businessContext;
       var cachedSnapshot = false;
       try {
