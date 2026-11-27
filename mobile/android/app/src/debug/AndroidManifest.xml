@@ -1,4 +1,4 @@
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" xmlns:tools="http://schemas.android.com/tools">
     <!-- The INTERNET permission is required for development. Specifically,
          the Flutter tool needs it to communicate with the running application
          to allow setting breakpoints, to provide hot reload, etc.
@@ -6,5 +6,5 @@
     <uses-permission android:name="android.permission.INTERNET"/>
     <!-- Local emulator development uses http://10.0.2.2. This exception is
          debug-only; release builds retain Android's cleartext-off default. -->
-    <application android:usesCleartextTraffic="true" />
+    <application android:usesCleartextTraffic="true" tools:replace="android:usesCleartextTraffic" />
 </manifest>
