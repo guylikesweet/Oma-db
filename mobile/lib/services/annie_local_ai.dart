@@ -296,7 +296,13 @@ class AnnieLocalAi {
   }) async {
     final normalizedQuestion = question.toLowerCase();
     final role = businessContext['staff_role']?.toString() ?? 'staff';
-    if (RegExp(r'\b(profit|margin)\b').hasMatch(normalizedQuestion)) {
+    if (RegExp(r'\\bmargin\\b').hasMatch(normalizedQuestion)) {
+      if (role != 'admin') {
+        return "I can’t share profit or margin information with your staff account. Please ask an administrator.";
+      }
+      return "Oma’s current admin summary contains a recorded 7-day profit amount, but not a verified profit-margin percentage. I won’t estimate a margin.";
+    }
+    if (RegExp(r'\\bprofit\\b').hasMatch(normalizedQuestion)) {
       if (role != 'admin') {
         return "I can’t share profit or margin information with your staff account. Please ask an administrator.";
       }
