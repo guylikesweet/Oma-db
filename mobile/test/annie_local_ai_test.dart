@@ -31,6 +31,15 @@ void main() {
     expect(answer, contains('Oma business assistant'));
   });
 
+  test('local greeting is direct and does not ask a follow-up', () async {
+    final answer = await annie.answer(
+      question: 'hello',
+      businessContext: {'staff_role': 'staff'},
+    );
+    expect(answer, "Hello! 😊 I’m Annie, Oma’s business assistant.");
+    expect(answer, isNot(contains('?')));
+  });
+
   test('does not disclose profit or margin to staff', () async {
     final answer = await annie.answer(
       question: 'What is our profit this week?',
