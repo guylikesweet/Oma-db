@@ -266,14 +266,14 @@ ThemeData brandTheme(Brightness brightness) {
       ),
       shape: Border(
         bottom: BorderSide(
-          color: brandGreen.withOpacity(.55),
+          color: brandGreen.withValues(alpha: .55),
           width: 2,
         ),
       ),
     ),
     navigationBarTheme: NavigationBarThemeData(
       backgroundColor: scheme.surface,
-      indicatorColor: brandGreen.withOpacity(.16),
+      indicatorColor: brandGreen.withValues(alpha: .16),
       labelTextStyle: WidgetStatePropertyAll(
         TextStyle(
           fontWeight: FontWeight.w700,
@@ -283,15 +283,15 @@ ThemeData brandTheme(Brightness brightness) {
     ),
     inputDecorationTheme: InputDecorationTheme(
       filled: true,
-      fillColor: scheme.surfaceContainerHighest.withOpacity(.55),
+      fillColor: scheme.surfaceContainerHighest.withValues(alpha: .55),
       floatingLabelBehavior: FloatingLabelBehavior.always,
       labelStyle: TextStyle(
-        color: scheme.onSurface.withOpacity(.78),
+        color: scheme.onSurface.withValues(alpha: .78),
         fontSize: 13,
         fontWeight: FontWeight.w600,
       ),
       floatingLabelStyle: TextStyle(
-        color: scheme.onSurface.withOpacity(.82),
+        color: scheme.onSurface.withValues(alpha: .82),
         fontSize: 13,
         fontWeight: FontWeight.w700,
       ),
@@ -837,7 +837,7 @@ class _GlobalChatLauncherState extends State<GlobalChatLauncher>
       context: context,
       barrierDismissible: true,
       barrierLabel: 'Close team chat',
-      barrierColor: Colors.black.withOpacity(.35),
+      barrierColor: Colors.black.withValues(alpha: .35),
       transitionDuration: const Duration(milliseconds: 220),
       pageBuilder: (context, animation, secondaryAnimation) {
         final mobile = MediaQuery.sizeOf(context).width < 700;
@@ -912,7 +912,7 @@ class _GlobalChatLauncherState extends State<GlobalChatLauncher>
                 boxShadow: unreadCount > 0
                     ? [
                         BoxShadow(
-                          color: scheme.primary.withOpacity(.28 + pulse * .30),
+                          color: scheme.primary.withValues(alpha: .28 + pulse * .30),
                           blurRadius: 12 + pulse * 14,
                           spreadRadius: 2 + pulse * 3,
                         ),
@@ -954,7 +954,7 @@ class _GlobalChatLauncherState extends State<GlobalChatLauncher>
                       ),
                       boxShadow: [
                         BoxShadow(
-                          color: scheme.secondary.withOpacity(.35),
+                          color: scheme.secondary.withValues(alpha: .35),
                           blurRadius: 8,
                         ),
                       ],
@@ -1355,12 +1355,12 @@ class _OmaBottomNavigation extends StatelessWidget {
                               stops: [0.0, 0.48, 1.0],
                             ),
                             border: Border.all(
-                              color: Colors.white.withOpacity(.42),
+                              color: Colors.white.withValues(alpha: .42),
                               width: 1.5,
                             ),
                             boxShadow: [
                               BoxShadow(
-                                color: brandGreen.withOpacity(.28),
+                                color: brandGreen.withValues(alpha: .28),
                                 blurRadius: 20,
                                 spreadRadius: 1,
                                 offset: const Offset(0, 7),
@@ -1389,9 +1389,9 @@ class _OmaBottomNavigation extends StatelessWidget {
                                         begin: Alignment.topCenter,
                                         end: Alignment.bottomCenter,
                                         colors: [
-                                          Colors.white.withOpacity(.58),
-                                          Colors.white.withOpacity(.22),
-                                          Colors.white.withOpacity(.015),
+                                          Colors.white.withValues(alpha: .58),
+                                          Colors.white.withValues(alpha: .22),
+                                          Colors.white.withValues(alpha: .015),
                                           Colors.transparent,
                                         ],
                                         stops: const [0, .24, .72, 1],
@@ -1406,7 +1406,7 @@ class _OmaBottomNavigation extends StatelessWidget {
                                   height: 2,
                                   child: DecoratedBox(
                                     decoration: BoxDecoration(
-                                      color: Colors.white.withOpacity(.62),
+                                      color: Colors.white.withValues(alpha: .62),
                                       borderRadius: BorderRadius.circular(99),
                                     ),
                                   ),
@@ -1439,7 +1439,7 @@ class _OmaBottomNavigation extends StatelessWidget {
                           selected ? item.$2 : item.$1,
                           color: selected
                               ? scheme.primary
-                              : scheme.onSurface.withOpacity(.58),
+                              : scheme.onSurface.withValues(alpha: .58),
                           size: 23,
                         ),
                         const SizedBox(height: 4),
@@ -1451,7 +1451,7 @@ class _OmaBottomNavigation extends StatelessWidget {
                                 selected ? FontWeight.w800 : FontWeight.w600,
                             color: selected
                                 ? scheme.primary
-                                : scheme.onSurface.withOpacity(.62),
+                                : scheme.onSurface.withValues(alpha: .62),
                           ),
                         ),
                       ],
@@ -3278,9 +3278,9 @@ class _SaleDetailPageState extends State<SaleDetailPage> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: color.withOpacity(.10),
+        color: color.withValues(alpha: .10),
         borderRadius: BorderRadius.circular(30),
-        border: Border.all(color: color.withOpacity(.22)),
+        border: Border.all(color: color.withValues(alpha: .22)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -3420,7 +3420,7 @@ class _SaleDetailPageState extends State<SaleDetailPage> {
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.all(13),
       decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surfaceContainerHighest.withOpacity(.45),
+        color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: .45),
         borderRadius: BorderRadius.circular(14),
       ),
       child: Row(
@@ -3430,7 +3430,7 @@ class _SaleDetailPageState extends State<SaleDetailPage> {
             height: 44,
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(11),
-              color: Theme.of(context).colorScheme.primary.withOpacity(.09),
+              color: Theme.of(context).colorScheme.primary.withValues(alpha: .09),
             ),
             child: Icon(
               Icons.inventory_2_outlined,
@@ -3613,7 +3613,7 @@ class _SaleDetailPageState extends State<SaleDetailPage> {
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
                     colors: [
-                      Theme.of(context).colorScheme.primary.withOpacity(.12),
+                      Theme.of(context).colorScheme.primary.withValues(alpha: .12),
                       Theme.of(context).colorScheme.surface,
                     ],
                     begin: Alignment.topLeft,
