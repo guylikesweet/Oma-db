@@ -347,7 +347,7 @@ class _ChatPageState extends State<ChatPage> {
       }
       if (!useLocalAnnie && mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Using Oma’s built-in Annie for this question because this phone cannot run the offline model right now.')),
+          const SnackBar(content: Text('Using Oma’s built-in Annie for this question because the offline model isn’t ready on this phone.')),
         );
       }
     }
