@@ -68,6 +68,10 @@ jobs:
       - name: Generate Oma launcher icons from repository artwork
         run: dart run flutter_launcher_icons
 
+      - name: Verify adaptive launcher icon source
+        shell: bash
+        run: test -s android/app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml
+
       - name: Configure Firebase and release signing
         env:
           FIREBASE_GOOGLE_SERVICES_JSON: ${{ secrets.FIREBASE_GOOGLE_SERVICES_JSON }}
@@ -174,7 +178,7 @@ jobs:
           "$AAPT" dump badging "$APK" | grep -F "targetSdkVersion:'36'"
           "$AAPT" dump badging "$APK" | grep -F "package: name='com.omagroup.salesapp'"
           unzip -l "$APK" | grep -F "lib/arm64-v8a/libllama_jni.so"
-          unzip -l "$APK" | grep -F "res/mipmap-anydpi-v26/ic_launcher.xml"
+          "$AAPT" dump badging "$APK" | grep -E '^application-icon-[0-9]+:'
           mkdir -p build/named
           cp "$APK" build/named/OmaSales-Mobile.apk
           sha256sum build/named/OmaSales-Mobile.apk | tee build/named/SHA256SUMS.txt
