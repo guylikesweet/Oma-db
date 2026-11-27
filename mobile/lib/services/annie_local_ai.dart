@@ -204,6 +204,8 @@ class AnnieLocalAi {
   }
 
   Future<void> _ensureLoaded() async {
+    _idleUnloadTimer?.cancel();
+    _idleUnloadTimer = null;
     if (_loading) {
       throw StateError('Annie is already preparing her local model.');
     }
