@@ -3,10 +3,10 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
-import 'package:http/http.dart' as http;
-import 'package:path_provider/path_provider.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:http/http.dart' as http;
 import 'package:llama_flutter_android/llama_flutter_android.dart';
+import 'package:path_provider/path_provider.dart';
 
 /// Runs Annie's language model entirely on the Android device.
 ///
