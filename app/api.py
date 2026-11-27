@@ -2755,7 +2755,7 @@ def mobile_annie_local_reply():
     ):
         return jsonify({"error": "You cannot ask Annie about conversations from before your account was created."}), 403
 
-    event_key = f"annie-local-reply-{source.id}"
+    event_key = f"annie-reply-{source.id}"
     try:
         reply, created = post_annie_message(
             content, event_key=event_key, recipient_user_ids=[],
