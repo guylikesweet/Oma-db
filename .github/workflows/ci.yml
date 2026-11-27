@@ -202,6 +202,15 @@ jobs:
         shell: bash
         run: |
           mkdir -p android/app
+          # The Gradle script configures a release signing block even for debug
+          # builds. Dummy values satisfy configuration only; this CI job never
+          # signs or publishes a release APK.
+          cat > android/key.properties <<'PROPS'
+          keyAlias=ci-only
+          keyPassword=ci-only
+          storeFile=ci-only.jks
+          storePassword=ci-only
+          PROPS
           cat > android/app/google-services.json <<'JSON'
           {
             "project_info": {
