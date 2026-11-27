@@ -201,34 +201,26 @@ class AnnieLocalAi {
     _loading = true;
     final controller = LlamaController();
     try {
-      var gpuLayers = 0;
+      var freeRamBytes = -1;
       try {
-        final gpu = await controller.detectGpu();
-        // Only try Vulkan offload when the runtime confirms support and the
-        // device has comfortable free memory. CPU inference remains the safe
-        // fallback on older or memory-constrained Android 8 devices.
-        if (gpu.vulkanSupported &&
-            gpu.freeRamBytes > 2 * 1024 * 1024 * 1024) {
-          gpuLayers = gpu.recommendedGpuLayers;
-        }
-        if (gpu.freeRamBytes > 0 &&
-            gpu.freeRamBytes < 1024 * 1024 * 1024) {
-          throw StateError(
-            'This phone is low on free memory. Close other apps and try Annie again.',
-          );
-        }
-      } on StateError {
-        rethrow;
+        freeRamBytes = (await controller.detectGpu()).freeRamBytes;
       } catch (_) {
-        // GPU probing is optional. Let the native runtime attempt CPU loading.
+        // RAM telemetry is optional; native model loading remains authoritative.
+      }
+      if (freeRamBytes > 0 && freeRamBytes < 1024 * 1024 * 1024) {
+        throw StateError(
+          'This phone is low on free memory. Close other apps and try Annie again.',
+        );
       }
 
       final file = await _modelFile();
       await controller.loadModel(
         modelPath: file.path,
         threads: 3,
-        contextSize: 2048,
-        gpuLayers: gpuLayers,
+        contextSize: 3072,
+        // The pinned native build is ARM64 NEON/DOTPROD optimized with Vulkan
+        // disabled, so CPU inference is the verified, predictable path.
+        gpuLayers: 0,
       );
       _controller = controller;
     } catch (_) {
