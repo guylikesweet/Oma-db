@@ -292,6 +292,7 @@ class AnnieLocalAi {
     required String question,
     required Map<String, dynamic> businessContext,
     bool cachedSnapshot = false,
+    ValueChanged<String>? onToken,
   }) async {
     final normalizedQuestion = question.toLowerCase();
     final role = businessContext['staff_role']?.toString() ?? 'staff';
@@ -353,6 +354,7 @@ For demurrage, the current Oma rule is five days to pay after arrival; demurrage
         repeatPenalty: 1.12,
       )) {
         buffer.write(token);
+        onToken?.call(token);
       }
     } finally {
       _scheduleIdleUnload();
